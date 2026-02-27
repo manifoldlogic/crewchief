@@ -135,7 +135,7 @@ describe('Search error handling integration (SRCHTRN-1005)', () => {
     const errorData = JSON.parse(result.content[0].text)
     expect(errorData.error).toBe('BINARY_NOT_FOUND')
     expect(errorData.message).toBe('Binary not found')
-    expect(errorData.hint).toContain('crewchief-maproom')
+    expect(errorData.hint).toContain('maproom')
   })
 
   it('should handle generic Error (fallback)', () => {

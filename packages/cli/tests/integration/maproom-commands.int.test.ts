@@ -94,7 +94,7 @@ describe('Maproom validation integration', () => {
     // Could be validation error OR binary not found in CI environment
     const output = stderr + stdout
     const hasValidationError = output.includes('database') || output.includes('MAPROOM_DATABASE_URL')
-    const hasBinaryError = output.includes('crewchief-maproom') || output.includes('not found')
+    const hasBinaryError = output.includes('maproom') || output.includes('not found')
     expect(hasValidationError || hasBinaryError).toBe(true)
   })
 
@@ -103,7 +103,7 @@ describe('Maproom validation integration', () => {
     expect(exitCode).toBe(1)
     const output = stderr + stdout
     const hasValidationError = output.includes('MAPROOM_DATABASE_URL')
-    const hasBinaryError = output.includes('crewchief-maproom') || output.includes('not found')
+    const hasBinaryError = output.includes('maproom') || output.includes('not found')
     expect(hasValidationError || hasBinaryError).toBe(true)
   })
 
@@ -122,7 +122,7 @@ describe('Maproom validation integration', () => {
       // Should NOT be a validation error
       expect(output).not.toContain('MAPROOM_DATABASE_URL is required')
       // Should be either binary not found or database connection error
-      const isBinaryError = output.includes('crewchief-maproom') || output.includes('not found')
+      const isBinaryError = output.includes('maproom') || output.includes('not found')
       const isConnectionError = output.includes('Connection refused') || output.includes('error connecting')
       expect(isBinaryError || isConnectionError).toBe(true)
     }
@@ -145,7 +145,7 @@ describe('Maproom validation integration', () => {
     expect(exitCode).toBe(1)
     const output = stderr + stdout
     const hasValidationError = output.includes('database') || output.includes('MAPROOM_DATABASE_URL')
-    const hasBinaryError = output.includes('crewchief-maproom') || output.includes('not found')
+    const hasBinaryError = output.includes('maproom') || output.includes('not found')
     expect(hasValidationError || hasBinaryError).toBe(true)
   })
 

@@ -16,7 +16,7 @@
  *
  * Prerequisites:
  * - SQLite test database with crewchief indexed
- * - crewchief-maproom binary built and available
+ * - maproom binary built and available
  * - MAPROOM_DATABASE_URL environment variable set
  */
 

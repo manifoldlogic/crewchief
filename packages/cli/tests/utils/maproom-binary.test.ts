@@ -22,6 +22,7 @@ describe('findMaproomBinary', () => {
     vi.clearAllMocks()
 
     // Clean environment variables
+    delete process.env.MAPROOM_BIN
     delete process.env.CREWCHIEF_MAPROOM_BIN
 
     // Mock fs.existsSync to return false by default
@@ -55,9 +56,9 @@ describe('findMaproomBinary', () => {
 
   // ===== PRECEDENCE TESTS =====
 
-  it('prioritizes CREWCHIEF_MAPROOM_BIN env var over all others', () => {
-    const envPath = '/custom/path/to/crewchief-maproom'
-    process.env.CREWCHIEF_MAPROOM_BIN = envPath
+  it('prioritizes MAPROOM_BIN env var over all others', () => {
+    const envPath = '/custom/path/to/maproom'
+    process.env.MAPROOM_BIN = envPath
 
     // Mock env path exists
     vi.mocked(fs.existsSync).mockImplementation((path) => {
@@ -65,7 +66,7 @@ describe('findMaproomBinary', () => {
     })
 
     // Mock config path and global also exist (but should be ignored)
-    const configPath = '/config/path/crewchief-maproom'
+    const configPath = '/config/path/maproom'
     vi.mocked(spawnSync).mockReturnValue({
       status: 0,
       stdout: Buffer.from(''),
@@ -81,8 +82,48 @@ describe('findMaproomBinary', () => {
     expect(result.source).toBe('env')
   })
 
-  it('uses config path when env var not set', () => {
-    const configPath = '/config/path/crewchief-maproom'
+  it('MAPROOM_BIN takes precedence over CREWCHIEF_MAPROOM_BIN', () => {
+    const newEnvPath = '/path/to/maproom'
+    const legacyEnvPath = '/path/to/old-binary'
+    process.env.MAPROOM_BIN = newEnvPath
+    process.env.CREWCHIEF_MAPROOM_BIN = legacyEnvPath
+
+    vi.mocked(fs.existsSync).mockImplementation((path) => {
+      return path === newEnvPath || path === legacyEnvPath
+    })
+
+    const result = findMaproomBinary()
+
+    expect(result.path).toBe(newEnvPath)
+    expect(result.source).toBe('env')
+  })
+
+  it('CREWCHIEF_MAPROOM_BIN works as fallback with deprecation warning', () => {
+    delete process.env.MAPROOM_BIN
+    const legacyEnvPath = '/path/to/old-binary'
+    process.env.CREWCHIEF_MAPROOM_BIN = legacyEnvPath
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    vi.mocked(fs.existsSync).mockImplementation((path) => {
+      return path === legacyEnvPath
+    })
+
+    const result = findMaproomBinary()
+
+    expect(result.path).toBe(legacyEnvPath)
+    expect(result.source).toBe('env')
+    // Should log deprecation warning
+    expect(warnSpy).toHaveBeenCalled()
+    const warnMessage = warnSpy.mock.calls.flat().join(' ')
+    expect(warnMessage).toContain('deprecated')
+    expect(warnMessage).toContain('MAPROOM_BIN')
+
+    warnSpy.mockRestore()
+  })
+
+  it('uses config path when env vars not set', () => {
+    const configPath = '/config/path/maproom'
 
     vi.mocked(fs.existsSync).mockImplementation((path) => {
       return path === configPath
@@ -94,11 +135,11 @@ describe('findMaproomBinary', () => {
     expect(result.source).toBe('config')
   })
 
-  it('uses global install when env var and config not set', () => {
-    // Mock global binary found
+  it('uses global install when env vars and config not set', () => {
+    // Mock global binary found (first call for 'maproom' succeeds)
     vi.mocked(spawnSync).mockReturnValue({
       status: 0,
-      stdout: Buffer.from('/usr/local/bin/crewchief-maproom'),
+      stdout: Buffer.from('/usr/local/bin/maproom'),
       stderr: Buffer.from(''),
       pid: 0,
       output: [],
@@ -107,7 +148,7 @@ describe('findMaproomBinary', () => {
 
     const result = findMaproomBinary()
 
-    expect(result.path).toBe('crewchief-maproom')
+    expect(result.path).toBe('maproom')
     expect(result.source).toBe('global')
   })
 
@@ -116,15 +157,16 @@ describe('findMaproomBinary', () => {
     Object.defineProperty(process, 'platform', { value: 'linux', writable: true })
     Object.defineProperty(process, 'arch', { value: 'x64', writable: true })
 
-    // Mock packaged binary exists
+    // Mock packaged binary exists (new name)
     vi.mocked(fs.existsSync).mockImplementation((path) => {
-      // Match platform-specific path pattern
-      return typeof path === 'string' && path.includes('bin/linux-x64/crewchief-maproom')
+      // Match platform-specific path pattern for new name
+      return typeof path === 'string' && path.includes('bin/linux-x64/maproom') && !path.includes('crewchief-maproom')
     })
 
     const result = findMaproomBinary()
 
-    expect(result.path).toContain('bin/linux-x64/crewchief-maproom')
+    expect(result.path).toContain('bin/linux-x64/maproom')
+    expect(result.path).not.toContain('crewchief-maproom')
     expect(result.source).toBe('packaged')
   })
 
@@ -137,8 +179,8 @@ describe('findMaproomBinary', () => {
   })
 
   it('returns correct source information for debugging', () => {
-    const envPath = '/env/path/crewchief-maproom'
-    process.env.CREWCHIEF_MAPROOM_BIN = envPath
+    const envPath = '/env/path/maproom'
+    process.env.MAPROOM_BIN = envPath
 
     vi.mocked(fs.existsSync).mockImplementation((path) => {
       return path === envPath
@@ -159,14 +201,14 @@ describe('findMaproomBinary', () => {
     Object.defineProperty(process, 'platform', { value: 'win32', writable: true })
     Object.defineProperty(process, 'arch', { value: 'x64', writable: true })
 
-    // Mock Windows packaged binary exists
+    // Mock Windows packaged binary exists (new name)
     vi.mocked(fs.existsSync).mockImplementation((path) => {
-      return typeof path === 'string' && path.includes('bin/win32-x64/crewchief-maproom.exe')
+      return typeof path === 'string' && path.includes('bin/win32-x64/maproom.exe')
     })
 
     const result = findMaproomBinary()
 
-    expect(result.path).toContain('crewchief-maproom.exe')
+    expect(result.path).toContain('maproom.exe')
     expect(result.source).toBe('packaged')
   })
 
@@ -174,14 +216,16 @@ describe('findMaproomBinary', () => {
     Object.defineProperty(process, 'platform', { value: 'darwin', writable: true })
     Object.defineProperty(process, 'arch', { value: 'arm64', writable: true })
 
-    // Mock macOS packaged binary exists
+    // Mock macOS packaged binary exists (new name)
     vi.mocked(fs.existsSync).mockImplementation((path) => {
-      return typeof path === 'string' && path.includes('bin/darwin-arm64/crewchief-maproom')
+      return (
+        typeof path === 'string' && path.includes('bin/darwin-arm64/maproom') && !path.includes('crewchief-maproom')
+      )
     })
 
     const result = findMaproomBinary()
 
-    expect(result.path).toContain('crewchief-maproom')
+    expect(result.path).toContain('maproom')
     expect(result.path).not.toContain('.exe')
     expect(result.source).toBe('packaged')
   })
@@ -190,8 +234,8 @@ describe('findMaproomBinary', () => {
 
   it('resolves relative config paths', () => {
     const configFileLocation = '/home/user/project/.crewchief/config.json'
-    const configPath = './bin/crewchief-maproom'
-    const expectedPath = '/home/user/project/.crewchief/bin/crewchief-maproom'
+    const configPath = './bin/maproom'
+    const expectedPath = '/home/user/project/.crewchief/bin/maproom'
 
     vi.mocked(fs.existsSync).mockImplementation((path) => {
       return path === expectedPath
@@ -204,7 +248,7 @@ describe('findMaproomBinary', () => {
   })
 
   it('handles absolute config paths', () => {
-    const configPath = '/absolute/path/to/crewchief-maproom'
+    const configPath = '/absolute/path/to/maproom'
 
     vi.mocked(fs.existsSync).mockImplementation((path) => {
       return path === configPath
@@ -219,7 +263,7 @@ describe('findMaproomBinary', () => {
   it('warns when config path does not exist', () => {
     const loggerWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    const configPath = '/nonexistent/path/crewchief-maproom'
+    const configPath = '/nonexistent/path/maproom'
 
     // Config path doesn't exist, but packaged binary does
     Object.defineProperty(process, 'platform', { value: 'linux', writable: true })
@@ -227,7 +271,7 @@ describe('findMaproomBinary', () => {
 
     vi.mocked(fs.existsSync).mockImplementation((path) => {
       if (path === configPath) return false
-      return typeof path === 'string' && path.includes('bin/linux-x64/crewchief-maproom')
+      return typeof path === 'string' && path.includes('bin/linux-x64/maproom') && !path.includes('crewchief-maproom')
     })
 
     const result = findMaproomBinary({ configPath })
@@ -245,7 +289,7 @@ describe('findMaproomBinary', () => {
   })
 
   it('falls through to next priority when config path invalid', () => {
-    const configPath = '/invalid/path/crewchief-maproom'
+    const configPath = '/invalid/path/maproom'
 
     // Config path doesn't exist
     vi.mocked(fs.existsSync).mockImplementation((path) => {
@@ -255,7 +299,7 @@ describe('findMaproomBinary', () => {
     // Global binary exists
     vi.mocked(spawnSync).mockReturnValue({
       status: 0,
-      stdout: Buffer.from('/usr/local/bin/crewchief-maproom'),
+      stdout: Buffer.from('/usr/local/bin/maproom'),
       stderr: Buffer.from(''),
       pid: 0,
       output: [],
@@ -265,19 +309,20 @@ describe('findMaproomBinary', () => {
     const result = findMaproomBinary({ configPath })
 
     // Should fall through to global
-    expect(result.path).toBe('crewchief-maproom')
+    expect(result.path).toBe('maproom')
     expect(result.source).toBe('global')
   })
 
   // ===== EDGE CASES =====
 
-  it('handles missing process.env.CREWCHIEF_MAPROOM_BIN gracefully', () => {
+  it('handles missing env vars gracefully', () => {
+    delete process.env.MAPROOM_BIN
     delete process.env.CREWCHIEF_MAPROOM_BIN
 
     // Global binary exists
     vi.mocked(spawnSync).mockReturnValue({
       status: 0,
-      stdout: Buffer.from('/usr/local/bin/crewchief-maproom'),
+      stdout: Buffer.from('/usr/local/bin/maproom'),
       stderr: Buffer.from(''),
       pid: 0,
       output: [],
@@ -287,7 +332,7 @@ describe('findMaproomBinary', () => {
     const result = findMaproomBinary()
 
     // Should skip env check and use global
-    expect(result.path).toBe('crewchief-maproom')
+    expect(result.path).toBe('maproom')
     expect(result.source).toBe('global')
   })
 
@@ -295,7 +340,7 @@ describe('findMaproomBinary', () => {
     // Global binary exists
     vi.mocked(spawnSync).mockReturnValue({
       status: 0,
-      stdout: Buffer.from('/usr/local/bin/crewchief-maproom'),
+      stdout: Buffer.from('/usr/local/bin/maproom'),
       stderr: Buffer.from(''),
       pid: 0,
       output: [],
@@ -304,7 +349,7 @@ describe('findMaproomBinary', () => {
 
     const result = findMaproomBinary(undefined)
 
-    expect(result.path).toBe('crewchief-maproom')
+    expect(result.path).toBe('maproom')
     expect(result.source).toBe('global')
   })
 
@@ -314,7 +359,7 @@ describe('findMaproomBinary', () => {
     // Global binary exists
     vi.mocked(spawnSync).mockReturnValue({
       status: 0,
-      stdout: Buffer.from('/usr/local/bin/crewchief-maproom'),
+      stdout: Buffer.from('/usr/local/bin/maproom'),
       stderr: Buffer.from(''),
       pid: 0,
       output: [],
@@ -324,14 +369,14 @@ describe('findMaproomBinary', () => {
     const result = findMaproomBinary({ configPath })
 
     // Empty string is falsy, should skip to global
-    expect(result.path).toBe('crewchief-maproom')
+    expect(result.path).toBe('maproom')
     expect(result.source).toBe('global')
   })
 
   // ===== ADDITIONAL EDGE CASES =====
 
-  it('handles env var that does not exist on filesystem', () => {
-    process.env.CREWCHIEF_MAPROOM_BIN = '/nonexistent/env/path'
+  it('handles MAPROOM_BIN env var that does not exist on filesystem', () => {
+    process.env.MAPROOM_BIN = '/nonexistent/env/path'
 
     // Env path doesn't exist
     vi.mocked(fs.existsSync).mockReturnValue(false)
@@ -339,7 +384,32 @@ describe('findMaproomBinary', () => {
     // Global binary exists
     vi.mocked(spawnSync).mockReturnValue({
       status: 0,
-      stdout: Buffer.from('/usr/local/bin/crewchief-maproom'),
+      stdout: Buffer.from('/usr/local/bin/maproom'),
+      stderr: Buffer.from(''),
+      pid: 0,
+      output: [],
+      signal: null,
+    })
+
+    const result = findMaproomBinary()
+
+    // MAPROOM_BIN doesn't exist, CREWCHIEF_MAPROOM_BIN not set, should fall through to global
+    expect(result.path).toBe('maproom')
+    expect(result.source).toBe('global')
+  })
+
+  it('handles CREWCHIEF_MAPROOM_BIN env var that does not exist on filesystem', () => {
+    process.env.CREWCHIEF_MAPROOM_BIN = '/nonexistent/env/path'
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    // Env path doesn't exist
+    vi.mocked(fs.existsSync).mockReturnValue(false)
+
+    // Global binary exists
+    vi.mocked(spawnSync).mockReturnValue({
+      status: 0,
+      stdout: Buffer.from('/usr/local/bin/maproom'),
       stderr: Buffer.from(''),
       pid: 0,
       output: [],
@@ -349,27 +419,35 @@ describe('findMaproomBinary', () => {
     const result = findMaproomBinary()
 
     // Should fall through to global
-    expect(result.path).toBe('crewchief-maproom')
+    expect(result.path).toBe('maproom')
     expect(result.source).toBe('global')
+
+    warnSpy.mockRestore()
   })
 
   it('resolves packaged binary from bin root for backwards compatibility', () => {
     Object.defineProperty(process, 'platform', { value: 'linux', writable: true })
     Object.defineProperty(process, 'arch', { value: 'x64', writable: true })
 
-    // Platform-specific path doesn't exist, but bin root does
+    // Platform-specific paths don't exist, but bin root with new name does
     vi.mocked(fs.existsSync).mockImplementation((path) => {
       if (typeof path !== 'string') return false
-      // Platform path doesn't exist
+      // Platform paths don't exist
       if (path.includes('bin/linux-x64/')) return false
-      // Root bin path exists
-      if (path.includes('bin/crewchief-maproom') && !path.includes('linux-x64')) return true
+      // Root bin path exists (new name)
+      if (
+        path.includes('/bin/maproom') &&
+        !path.includes('linux-x64') &&
+        !path.includes('crewchief-maproom') &&
+        !path.includes('maproom-mcp')
+      )
+        return true
       return false
     })
 
     const result = findMaproomBinary()
 
-    expect(result.path).toContain('bin/crewchief-maproom')
+    expect(result.path).toContain('bin/maproom')
     expect(result.path).not.toContain('linux-x64')
     expect(result.source).toBe('packaged')
   })
@@ -378,15 +456,16 @@ describe('findMaproomBinary', () => {
     Object.defineProperty(process, 'platform', { value: 'linux', writable: true })
     Object.defineProperty(process, 'arch', { value: 'x64', writable: true })
 
-    // Platform path and bin root don't exist, but sibling maproom-mcp does
+    // Platform path and bin root don't exist, but sibling maproom-mcp does (new name)
     vi.mocked(fs.existsSync).mockImplementation((path) => {
       if (typeof path !== 'string') return false
-      return path.includes('maproom-mcp/bin/linux-x64/crewchief-maproom')
+      return path.includes('maproom-mcp/bin/linux-x64/maproom') && !path.includes('crewchief-maproom')
     })
 
     const result = findMaproomBinary()
 
-    expect(result.path).toContain('maproom-mcp/bin/linux-x64/crewchief-maproom')
+    expect(result.path).toContain('maproom-mcp/bin/linux-x64/maproom')
+    expect(result.path).not.toContain('crewchief-maproom')
     expect(result.source).toBe('packaged')
   })
 
@@ -395,7 +474,9 @@ describe('findMaproomBinary', () => {
     Object.defineProperty(process, 'arch', { value: 'arm64', writable: true })
 
     vi.mocked(fs.existsSync).mockImplementation((path) => {
-      return typeof path === 'string' && path.includes('bin/darwin-arm64/crewchief-maproom')
+      return (
+        typeof path === 'string' && path.includes('bin/darwin-arm64/maproom') && !path.includes('crewchief-maproom')
+      )
     })
 
     const result = findMaproomBinary()
@@ -415,5 +496,165 @@ describe('findMaproomBinary', () => {
     // Should return not-found instead of throwing
     expect(result.path).toBeNull()
     expect(result.source).toBe('not-found')
+  })
+
+  // ===== PATH RESOLUTION ORDER TESTS =====
+
+  it('PATH check resolves maproom before crewchief-maproom', () => {
+    // Mock: first spawnSync call (for 'maproom') succeeds
+    vi.mocked(spawnSync).mockImplementation((_cmd, args) => {
+      const argsArr = args as string[]
+      if (argsArr && argsArr.length > 1 && argsArr[1] === 'command -v maproom') {
+        return {
+          status: 0,
+          stdout: Buffer.from('/usr/local/bin/maproom'),
+          stderr: Buffer.from(''),
+          pid: 0,
+          output: [],
+          signal: null,
+        }
+      }
+      // crewchief-maproom should not be reached
+      return {
+        status: 0,
+        stdout: Buffer.from('/usr/local/bin/crewchief-maproom'),
+        stderr: Buffer.from(''),
+        pid: 0,
+        output: [],
+        signal: null,
+      }
+    })
+
+    const result = findMaproomBinary()
+
+    // Should return 'maproom' (not 'crewchief-maproom') since it's checked first
+    expect(result.path).toBe('maproom')
+    expect(result.source).toBe('global')
+  })
+
+  it('PATH check falls back to crewchief-maproom when maproom not found', () => {
+    // Mock: first spawnSync call (for 'maproom') fails, second (for 'crewchief-maproom') succeeds
+    vi.mocked(spawnSync).mockImplementation((_cmd, args) => {
+      const argsArr = args as string[]
+      if (argsArr && argsArr.length > 1 && argsArr[1] === 'command -v maproom') {
+        return {
+          status: 1,
+          stdout: Buffer.from(''),
+          stderr: Buffer.from(''),
+          pid: 0,
+          output: [],
+          signal: null,
+        }
+      }
+      if (argsArr && argsArr.length > 1 && argsArr[1] === 'command -v crewchief-maproom') {
+        return {
+          status: 0,
+          stdout: Buffer.from('/usr/local/bin/crewchief-maproom'),
+          stderr: Buffer.from(''),
+          pid: 0,
+          output: [],
+          signal: null,
+        }
+      }
+      return {
+        status: 1,
+        stdout: Buffer.from(''),
+        stderr: Buffer.from(''),
+        pid: 0,
+        output: [],
+        signal: null,
+      }
+    })
+
+    const result = findMaproomBinary()
+
+    // Should fall back to crewchief-maproom when maproom not found
+    expect(result.path).toBe('crewchief-maproom')
+    expect(result.source).toBe('global')
+  })
+
+  // ===== PACKAGED BINARY ORDER TESTS =====
+
+  it('packaged binary tries maproom before crewchief-maproom', () => {
+    Object.defineProperty(process, 'platform', { value: 'linux', writable: true })
+    Object.defineProperty(process, 'arch', { value: 'x64', writable: true })
+
+    // Both new and legacy packaged binaries exist
+    vi.mocked(fs.existsSync).mockImplementation((path) => {
+      if (typeof path !== 'string') return false
+      return path.includes('bin/linux-x64/maproom') || path.includes('bin/linux-x64/crewchief-maproom')
+    })
+
+    const result = findMaproomBinary()
+
+    // Should prefer maproom over crewchief-maproom
+    expect(result.path).toContain('bin/linux-x64/maproom')
+    expect(result.path).not.toContain('crewchief-maproom')
+    expect(result.source).toBe('packaged')
+  })
+
+  it('packaged binary falls back to crewchief-maproom when maproom not found', () => {
+    Object.defineProperty(process, 'platform', { value: 'linux', writable: true })
+    Object.defineProperty(process, 'arch', { value: 'x64', writable: true })
+
+    // Only legacy packaged binary exists
+    vi.mocked(fs.existsSync).mockImplementation((path) => {
+      if (typeof path !== 'string') return false
+      // New name does not exist
+      if (path.endsWith('/maproom') && !path.includes('crewchief-maproom')) return false
+      // Legacy name exists
+      return path.includes('bin/linux-x64/crewchief-maproom')
+    })
+
+    const result = findMaproomBinary()
+
+    // Should fall back to crewchief-maproom
+    expect(result.path).toContain('crewchief-maproom')
+    expect(result.source).toBe('packaged')
+  })
+
+  it('old crewchief-maproom binary still resolved when maproom not found anywhere', () => {
+    Object.defineProperty(process, 'platform', { value: 'linux', writable: true })
+    Object.defineProperty(process, 'arch', { value: 'x64', writable: true })
+
+    // New 'maproom' binary does not exist anywhere (PATH or packaged)
+    // Legacy 'crewchief-maproom' exists on PATH
+    vi.mocked(spawnSync).mockImplementation((_cmd, args) => {
+      const argsArr = args as string[]
+      if (argsArr && argsArr.length > 1 && argsArr[1] === 'command -v maproom') {
+        return {
+          status: 1,
+          stdout: Buffer.from(''),
+          stderr: Buffer.from(''),
+          pid: 0,
+          output: [],
+          signal: null,
+        }
+      }
+      if (argsArr && argsArr.length > 1 && argsArr[1] === 'command -v crewchief-maproom') {
+        return {
+          status: 0,
+          stdout: Buffer.from('/usr/local/bin/crewchief-maproom'),
+          stderr: Buffer.from(''),
+          pid: 0,
+          output: [],
+          signal: null,
+        }
+      }
+      return {
+        status: 1,
+        stdout: Buffer.from(''),
+        stderr: Buffer.from(''),
+        pid: 0,
+        output: [],
+        signal: null,
+      }
+    })
+
+    const result = findMaproomBinary()
+
+    // Fallback should still work
+    expect(result.path).toBe('crewchief-maproom')
+    expect(result.source).toBe('global')
   })
 })

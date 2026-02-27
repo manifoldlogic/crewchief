@@ -12,7 +12,7 @@
  *
  * Prerequisites:
  * - PostgreSQL test database with test-corpus indexed
- * - crewchief-maproom binary built and available
+ * - maproom binary built and available
  * - MAPROOM_DATABASE_URL environment variable set
  */
 
@@ -38,7 +38,7 @@ describe('MCP Search Integration via Daemon', () => {
     const { fileURLToPath } = await import('node:url')
 
     const __dirname = path.dirname(fileURLToPath(import.meta.url))
-    const binaryPath = path.join(__dirname, '..', '..', 'cli', 'bin', 'crewchief-maproom')
+    const binaryPath = path.join(__dirname, '..', '..', 'cli', 'bin', 'maproom')
 
     // Check if corpus already indexed
     const { rows } = await client.query(

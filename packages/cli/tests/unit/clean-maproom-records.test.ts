@@ -19,7 +19,7 @@ describe('cleanMaproomRecords', () => {
 
     // Default mock: binary found
     vi.mocked(findMaproomBinary).mockReturnValue({
-      path: '/mock/path/crewchief-maproom',
+      path: '/mock/path/maproom',
       source: 'packaged',
     })
 
@@ -67,7 +67,7 @@ describe('cleanMaproomRecords', () => {
     await expect(cleanMaproomRecords()).resolves.toBeUndefined()
 
     expect(findMaproomBinary).toHaveBeenCalled()
-    expect(spawnSync).toHaveBeenCalledWith('/mock/path/crewchief-maproom', ['db', 'cleanup-stale', '--confirm'], {
+    expect(spawnSync).toHaveBeenCalledWith('/mock/path/maproom', ['db', 'cleanup-stale', '--confirm'], {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
     })
@@ -286,7 +286,7 @@ describe('cleanMaproomRecords', () => {
   })
 
   it('uses binary path from env source', async () => {
-    const envBinaryPath = '/env/path/crewchief-maproom'
+    const envBinaryPath = '/env/path/maproom'
     vi.mocked(findMaproomBinary).mockReturnValue({
       path: envBinaryPath,
       source: 'env',
@@ -299,17 +299,13 @@ describe('cleanMaproomRecords', () => {
 
   it('uses binary path from global source', async () => {
     vi.mocked(findMaproomBinary).mockReturnValue({
-      path: 'crewchief-maproom',
+      path: 'maproom',
       source: 'global',
     })
 
     await cleanMaproomRecords()
 
-    expect(spawnSync).toHaveBeenCalledWith(
-      'crewchief-maproom',
-      ['db', 'cleanup-stale', '--confirm'],
-      expect.any(Object),
-    )
+    expect(spawnSync).toHaveBeenCalledWith('maproom', ['db', 'cleanup-stale', '--confirm'], expect.any(Object))
   })
 
   // ===== EDGE CASES =====
@@ -423,7 +419,7 @@ describe('cleanMaproomRecords', () => {
     })
 
     // Should execute the cleanup command
-    expect(spawnSync).toHaveBeenCalledWith('/mock/path/crewchief-maproom', ['db', 'cleanup-stale', '--confirm'], {
+    expect(spawnSync).toHaveBeenCalledWith('/mock/path/maproom', ['db', 'cleanup-stale', '--confirm'], {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
     })
@@ -449,7 +445,7 @@ describe('cleanMaproomRecords', () => {
     })
 
     // Should execute the cleanup command
-    expect(spawnSync).toHaveBeenCalledWith('/mock/path/crewchief-maproom', ['db', 'cleanup-stale', '--confirm'], {
+    expect(spawnSync).toHaveBeenCalledWith('/mock/path/maproom', ['db', 'cleanup-stale', '--confirm'], {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
     })
@@ -470,7 +466,7 @@ describe('cleanMaproomRecords', () => {
     })
 
     // Should still execute the cleanup command
-    expect(spawnSync).toHaveBeenCalledWith('/mock/path/crewchief-maproom', ['db', 'cleanup-stale', '--confirm'], {
+    expect(spawnSync).toHaveBeenCalledWith('/mock/path/maproom', ['db', 'cleanup-stale', '--confirm'], {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
     })
