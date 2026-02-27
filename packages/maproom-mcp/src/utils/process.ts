@@ -94,7 +94,7 @@ export function findMaproomBinary(): string | null {
   // TODO: Remove crewchief-maproom fallback in v1.0 or after 6-month deprecation period
   if (process.env.CREWCHIEF_MAPROOM_BIN) {
     console.warn(
-      'CREWCHIEF_MAPROOM_BIN is deprecated. Use MAPROOM_BIN instead.'
+      'Warning: CREWCHIEF_MAPROOM_BIN is deprecated and will be removed in a future release. Use MAPROOM_BIN instead.',
     )
     const binPath = process.env.CREWCHIEF_MAPROOM_BIN
     if (fs.existsSync(binPath)) {

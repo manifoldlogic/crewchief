@@ -232,9 +232,7 @@ Examples:
                   lowerMsg.includes('locked')
                 ) {
                   logger.warn('Maproom database is locked - cleanup skipped')
-                  logger.info(
-                    'Wait for other operations to complete, then run: maproom db cleanup-stale --confirm',
-                  )
+                  logger.info('Wait for other operations to complete, then run: maproom db cleanup-stale --confirm')
                 } else if (
                   lowerMsg.includes('permission denied') ||
                   lowerMsg.includes('eacces') ||
@@ -344,9 +342,7 @@ Examples:
                   lowerMsg.includes('locked')
                 ) {
                   logger.warn('Maproom database is locked - cleanup skipped')
-                  logger.info(
-                    'Wait for other operations to complete, then run: maproom db cleanup-stale --confirm',
-                  )
+                  logger.info('Wait for other operations to complete, then run: maproom db cleanup-stale --confirm')
                 } else if (
                   lowerMsg.includes('permission denied') ||
                   lowerMsg.includes('eacces') ||
@@ -406,9 +402,7 @@ Examples:
                 lowerMsg.includes('locked')
               ) {
                 logger.warn('Maproom database is locked - cleanup skipped')
-                logger.info(
-                  'Wait for other operations to complete, then run: maproom db cleanup-stale --confirm',
-                )
+                logger.info('Wait for other operations to complete, then run: maproom db cleanup-stale --confirm')
               } else if (
                 lowerMsg.includes('permission denied') ||
                 lowerMsg.includes('eacces') ||
