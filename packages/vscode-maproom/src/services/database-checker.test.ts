@@ -179,7 +179,7 @@ describe('getDatabaseUnavailableMessage', () => {
 
     expect(message).toContain('SQLite database not found')
     expect(message).toContain('/path/to/db.sqlite')
-    expect(message).toContain('crewchief-maproom scan')
+    expect(message).toContain('maproom scan')
   })
 })
 

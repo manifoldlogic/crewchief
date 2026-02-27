@@ -157,7 +157,7 @@ describe('ProcessOrchestrator', () => {
       expect(orchestrator).toBeDefined()
       expect(outputChannel.hasLine('Process orchestrator initialized')).toBe(true)
       expect(outputChannel.hasLine('Platform: linux-x64')).toBe(true)
-      expect(outputChannel.hasLine('/test/extension/bin/linux-x64/crewchief-maproom')).toBe(true)
+      expect(outputChannel.hasLine('/test/extension/bin/linux-x64/maproom')).toBe(true)
     })
 
     it('should log workspace root', () => {
@@ -178,7 +178,7 @@ describe('ProcessOrchestrator', () => {
       vi.spyOn(platform, 'getBinaryExtension').mockReturnValue('.exe')
 
       const orchestrator = new ProcessOrchestrator(outputChannel as any, config)
-      expect(outputChannel.hasLine('crewchief-maproom.exe')).toBe(true)
+      expect(outputChannel.hasLine('maproom.exe')).toBe(true)
     })
   })
 

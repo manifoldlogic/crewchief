@@ -9,11 +9,11 @@ const __dirname = dirname(__filename);
 
 // Platform configurations
 const PLATFORMS = [
-  { name: 'darwin-arm64', binary: 'crewchief-maproom' },
-  { name: 'darwin-x64', binary: 'crewchief-maproom' },
-  { name: 'linux-arm64', binary: 'crewchief-maproom' },
-  { name: 'linux-x64', binary: 'crewchief-maproom' },
-  { name: 'win32-x64', binary: 'crewchief-maproom.exe' },
+  { name: 'darwin-arm64', binary: 'maproom' },
+  { name: 'darwin-x64', binary: 'maproom' },
+  { name: 'linux-arm64', binary: 'maproom' },
+  { name: 'linux-x64', binary: 'maproom' },
+  { name: 'win32-x64', binary: 'maproom.exe' },
 ];
 
 const SOURCE_DIR = join(__dirname, '../../cli/bin');

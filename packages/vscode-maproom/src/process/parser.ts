@@ -1,5 +1,5 @@
 /**
- * NDJSON stdout parser for crewchief-maproom binary output
+ * NDJSON stdout parser for maproom binary output
  *
  * Parses newline-delimited JSON events from stdout stream and emits
  * structured TypeScript events using the EventEmitter pattern.

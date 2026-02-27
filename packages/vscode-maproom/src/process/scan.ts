@@ -2,11 +2,11 @@
  * Initial workspace scan orchestration
  *
  * Provides functionality to trigger a one-time workspace scan after the setup
- * wizard completes. Spawns the crewchief-maproom scan process, parses progress
+ * wizard completes. Spawns the maproom scan process, parses progress
  * events, and displays a VSCode progress notification.
  *
  * Key features:
- * - Spawns `crewchief-maproom scan --path <workspace>` as child process
+ * - Spawns `maproom scan --path <workspace>` as child process
  * - Parses NDJSON progress events using StdoutParser
  * - Displays VSCode progress notification with file counts and percentage
  * - Updates StatusBarManager on completion
@@ -84,7 +84,7 @@ export async function runInitialScan(config: ScanConfig): Promise<number> {
 
   // Get platform-specific binary path
   const platform = detectPlatform()
-  const binaryName = `crewchief-maproom${getBinaryExtension()}`
+  const binaryName = `maproom${getBinaryExtension()}`
   const binaryPath = path.join(extensionRoot, 'bin', platform, binaryName)
 
   // Verify binary exists and is executable
@@ -148,7 +148,7 @@ async function verifyBinary(binaryPath: string, outputChannel: vscode.OutputChan
 /**
  * Spawn scan process and track progress
  *
- * @param binaryPath - Path to crewchief-maproom binary
+ * @param binaryPath - Path to maproom binary
  * @param workspaceRoot - Workspace root to scan
  * @param databaseUrl - Database connection string
  * @param env - Environment variables

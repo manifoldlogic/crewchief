@@ -256,7 +256,7 @@ const UPSERT_BATCH_SIZE = 100
 async function runUpsert(files: string[], config: UpsertConfig): Promise<void> {
   // Construct binary path
   const platform = detectPlatform()
-  const binaryName = `crewchief-maproom${getBinaryExtension()}`
+  const binaryName = `maproom${getBinaryExtension()}`
   const binaryPath = path.join(config.extensionRoot, 'bin', platform, binaryName)
 
   // Process files in batches to avoid E2BIG errors
