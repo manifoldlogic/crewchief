@@ -47,8 +47,6 @@ crewchief.config.local.js
 google-credentials.json
 maproom-sa-key.json
 
-# GCP config directories
-.config/gcp/.crewchief/claude-code-plugins
 
 coverage/
 
@@ -68,3 +66,23 @@ worktrees/
 .worktrees/
 .security-key
 logs/security/
+
+# Claude Code personal settings (use .claude/settings.example.json as template)
+.claude/settings.json
+
+# Legacy agent definitions (directory absent; safeguard against re-addition)
+.agent/
+
+# SDD workflow directory (not part of the public project)
+.crewchief/
+
+# Agent optimization run data in nested .crewchief directories
+**/.crewchief/genetic-iterations/
+**/.crewchief/validation-benchmark/
+
+# Test output logs
+tests/e2e/*.log
+tests/**/*_TEST_RESULTS.md
+
+# Docker Compose personal override (personal dev customizations)
+.devcontainer/docker-compose.override.yml
