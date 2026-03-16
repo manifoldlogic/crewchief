@@ -21,7 +21,7 @@ crewchief --help
 
 - **Node.js >= 18**
 - **Git** (for worktree management)
-- **macOS with [iTerm2](https://iterm2.com/downloads.html)** (for agent orchestration features)
+- **iTerm2** (optional, macOS only -- required for AI agent orchestration; not needed for search or worktree features) — [download](https://iterm2.com/downloads.html)
 - **CLI agent tools** (`claude`, `gemini`, etc.) must be installed for agent orchestration
 
 ## Quick Start
@@ -794,7 +794,7 @@ All commands below should be prefixed with `crewchief`. For example: `crewchief 
 
 **Note:** For AI assistant integration, install [maproom-mcp](https://www.npmjs.com/package/maproom-mcp) instead of using these commands directly.
 
-### Agent Commands (iTerm2 Required)
+### Agent Commands (iTerm2 or Headless Mode)
 
 | Command                      | Description           |
 | ---------------------------- | --------------------- |
@@ -947,7 +947,7 @@ This will check for:
 
 - Node.js version (>= 18 required)
 - Git installation
-- iTerm2 availability (macOS only)
+- iTerm2 availability (macOS only, optional -- needed for agent orchestration)
 
 ### Common Issues
 

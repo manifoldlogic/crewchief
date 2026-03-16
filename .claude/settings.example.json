@@ -1,0 +1,9 @@
+{
+  "env": {
+    "MAPROOM_DB_ROOT": "/home/vscode/.maproom",
+    "MAPROOM_EMBEDDING_PROVIDER": "openai",
+    "ENABLE_LSP_TOOL": "true"
+  },
+  "permissions": {},
+  "hooks": {}
+}
