@@ -47,7 +47,7 @@ export async function createVariantWorktree(
 ): Promise<{ path: string; cleanup: () => Promise<void> }> {
   // 1. Create worktree using CLI command (decoupled from internal implementation)
   const branchName = `variant-${variant.id}-${Date.now()}`
-  const currentBranch = 'main' // TODO: Get from git
+  const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8' }).trim()
 
   // Determine the CLI path - use the built CLI from the same package
   const cliPath = resolve(__dirname, '../../dist/cli/index.js')
