@@ -83,6 +83,3 @@ logs/security/
 # Test output logs
 tests/e2e/*.log
 tests/**/*_TEST_RESULTS.md
-
-# Docker Compose personal override (personal dev customizations)
-.devcontainer/docker-compose.override.yml

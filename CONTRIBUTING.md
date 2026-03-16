@@ -13,17 +13,7 @@ Please review our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - **Rust** and **cargo** (for the maproom indexer crate)
 - **Git**
 
-### Using the DevContainer (Recommended)
-
-The fastest way to get a working development environment is with the included devcontainer:
-
-1. Open the repo in VS Code or Cursor
-2. When prompted, choose **"Reopen in Container"** (or run the command manually: `Dev Containers: Reopen in Container`)
-3. The container installs all prerequisites automatically
-
-### Manual Setup
-
-If you prefer not to use the devcontainer:
+### Setup
 
 1. Install the prerequisites listed above
 2. Clone the repository and install dependencies:
@@ -49,9 +39,6 @@ This project uses the gitignore + example pattern for personal settings:
 1. Copy `.claude/settings.example.json` to `.claude/settings.json`
 2. Customize as needed for your environment
 3. The `.claude/settings.json` file is gitignored and will not be committed
-
-For personal devcontainer customizations (additional mounts, env vars), create
-`.devcontainer/docker-compose.override.yml` (also gitignored).
 
 ## Building and Testing
 

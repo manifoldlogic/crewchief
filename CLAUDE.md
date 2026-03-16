@@ -28,7 +28,6 @@ Avoid: $RANDOM, [[ ]], bash arrays, `which`. Use: command -v, [ ], grep -E, port
 | `crates/maproom/` | Rust indexer | `crates/maproom/CLAUDE.md` |
 | `crates/maproom/migrations/` | Database migrations | `crates/maproom/migrations/CLAUDE.md` |
 | `.github/` | CI/CD | `.github/CLAUDE.md` |
-| `.devcontainer/` | Dev container | `.devcontainer/CLAUDE.md` |
 | `docs/` | Documentation | `docs/CLAUDE.md` |
 | `packages/cli/src/search-optimization/` | Search tuning | `packages/cli/src/search-optimization/CLAUDE.md` |
 
