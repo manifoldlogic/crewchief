@@ -56,7 +56,7 @@ async function main() {
 
   console.log(`\n✓ Tagged and pushed ${tag}`)
   console.log('  GitHub Actions will build and publish automatically')
-  console.log('  Monitor workflow: https://github.com/manifoldlogic/crewchief/actions\n')
+  console.log('  Monitor workflow: https://github.com/danielbushman/crewchief/actions\n')
 }
 
 main().catch((err) => {
