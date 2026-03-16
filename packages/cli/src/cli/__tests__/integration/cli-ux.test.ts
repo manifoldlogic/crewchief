@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 // Path to the built CLI
 const CLI_PATH = resolve(__dirname, '../../../../dist/cli/index.js')
@@ -9,11 +9,37 @@ const CLI_PATH = resolve(__dirname, '../../../../dist/cli/index.js')
 // Use the project workspace which has crewchief.config.js
 const WORKSPACE_PATH = resolve(__dirname, '../../../../../..')
 
+// Worktree names used by tests in this file
+const TEST_WORKTREES = ['test-worktree-use', 'test-worktree-stdout']
+
+function cleanupWorktree(name: string) {
+  // Remove the git worktree and branch, ignoring errors if they don't exist
+  spawnSync('git', ['worktree', 'remove', name, '--force'], {
+    cwd: WORKSPACE_PATH,
+    encoding: 'utf-8',
+  })
+  spawnSync('git', ['branch', '-D', name], {
+    cwd: WORKSPACE_PATH,
+    encoding: 'utf-8',
+  })
+}
+
 describe('CLI UX Integration', () => {
   beforeAll(() => {
     // Verify CLI is built
     if (!existsSync(CLI_PATH)) {
       throw new Error(`CLI not built. Run 'pnpm build' first. Expected: ${CLI_PATH}`)
+    }
+    // Clean up any leftover worktrees from previous test runs
+    for (const name of TEST_WORKTREES) {
+      cleanupWorktree(name)
+    }
+  })
+
+  afterAll(() => {
+    // Clean up worktrees created during tests
+    for (const name of TEST_WORKTREES) {
+      cleanupWorktree(name)
     }
   })
 

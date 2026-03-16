@@ -1125,6 +1125,7 @@ impl EdgeQualityWeights {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn test_default_config() {
@@ -1199,6 +1200,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_quality_weighted_graph_env_override() {
         // Set environment variable
         std::env::set_var(
@@ -1221,6 +1223,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_quality_weighted_graph_env_override_false() {
         // Set environment variable to false
         std::env::set_var(
@@ -1243,6 +1246,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_quality_weighted_graph_invalid_env_value() {
         // Set invalid environment variable value
         std::env::set_var(
@@ -1261,6 +1265,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_quality_weighted_graph_no_env_uses_default() {
         // Ensure no environment variable is set
         std::env::remove_var("MAPROOM_SEARCH_FEATURE_FLAGS_ENABLE_QUALITY_WEIGHTED_GRAPH");
@@ -1450,6 +1455,7 @@ enable_quality_scoring: true
     }
 
     #[test]
+    #[serial]
     fn test_graph_importance_env_overrides() {
         // Set environment variables
         std::env::set_var(
@@ -1500,6 +1506,7 @@ enable_quality_scoring: true
     }
 
     #[test]
+    #[serial]
     fn test_graph_importance_invalid_env_override() {
         // Set invalid environment variable value
         std::env::set_var(
