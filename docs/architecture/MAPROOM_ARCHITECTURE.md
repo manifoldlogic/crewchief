@@ -841,7 +841,7 @@ AI Assistant (Claude/Cursor)
    - Auto-pulls `mxbai-embed-large` model
    - Volume: `ollama-models`
 
-3. **maproom-mcp** (manifoldlogic/crewchief_maproom-mcp:latest)
+3. **maproom-mcp** (crewchief/maproom-mcp:latest)
    - Runs Rust binary in stdio mode
    - Environment: Provider config, database URL
    - Health check: PostgreSQL connectivity

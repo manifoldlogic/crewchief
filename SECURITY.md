@@ -39,29 +39,13 @@ We will respond within 48 hours and provide a fix timeline.
 
 ### Dependency Security
 
-**Latest Security Audit:** 2025-11-21 (SECHARD Project)
-
 **npm Dependencies:**
 - Tool: `pnpm audit`
-- Result: ✅ **0 vulnerabilities**
-- Last Run: 2025-11-21
-- Fixes Applied: 15 vulnerabilities resolved via pnpm overrides
-  - Critical: 3 (glob command injection, happy-dom RCE)
-  - High: 2 (vite middleware issues)
-  - Moderate: 4 (js-yaml prototype pollution, esbuild SSRF)
-  - Low: 3 (tmp symlink)
+- Known vulnerabilities resolved via pnpm overrides
 
 **Rust Dependencies:**
-- Tool: `cargo-audit v0.22.0`
-- Result: ⚠️ **1 accepted risk**, 3 warnings (unmaintained)
-- Last Run: 2025-11-21
-- Fixed: 1 (protobuf via prometheus 0.13→0.14)
-- Accepted Risk: ring v0.17.9 AES issue (transitive, update blocked)
-
-**Audit Documentation:**
-- Full details: [SECURITY-AUDIT.md](./SECURITY-AUDIT.md)
-- Accepted risks documented with justification
-- Next audit: 2026-02-21 (quarterly)
+- Tool: `cargo-audit`
+- Regular audits performed before releases
 
 **Security Practices:**
 - pnpm lock file ensures reproducible builds
