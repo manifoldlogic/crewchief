@@ -2,7 +2,7 @@
   "name": "@crewchief/maproom-mcp",
   "version": "3.3.14",
   "type": "module",
-  "description": "MCP server for semantic code search with PostgreSQL and pgvector",
+  "description": "[DEPRECATED] MCP server for semantic code search with PostgreSQL and pgvector",
   "main": "dist/index.js",
   "bin": {
     "maproom-mcp": "./bin/cli.cjs"

@@ -1,5 +1,7 @@
 # Maproom Semantic Search
 
+> **Note: This package is no longer actively maintained.** It may still work but is not receiving updates or bug fixes. For semantic code search, use the [`maproom`](https://crates.io/crates/maproom) binary directly via [`@crewchief/cli`](https://www.npmjs.com/package/@crewchief/cli).
+
 Search your code by meaning, not just text. Find functions by what they do, not what they're called.
 
 ## Before You Install
@@ -34,13 +36,13 @@ The extension auto-indexes your workspace and starts watching for changes. No ma
 
 ## Platform Support
 
-| Platform | Status |
-|----------|--------|
-| macOS (Apple Silicon) | Full support |
-| macOS (Intel) | Full support |
-| Linux (x64) | Full support |
-| Linux (arm64) | Full support |
-| Windows (x64) | Limited support |
+| Platform              | Status          |
+| --------------------- | --------------- |
+| macOS (Apple Silicon) | Full support    |
+| macOS (Intel)         | Full support    |
+| Linux (x64)           | Full support    |
+| Linux (arm64)         | Full support    |
+| Windows (x64)         | Limited support |
 
 **Windows users**: Experimental support only. Process shutdown and file watching may not work reliably. Please report issues you encounter.
 
@@ -61,6 +63,7 @@ The extension auto-detects Ollama on `host.docker.internal:11434` for Docker Des
 Free, private, runs locally. Recommended for most users.
 
 **Requirements**:
+
 - Ollama installed and running
 - ~4GB RAM for embedding model
 - ~670MB disk space for `mxbai-embed-large` model
@@ -83,12 +86,12 @@ Cloud-based alternative. Requires API key and Google Cloud setup.
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `Maproom: Setup` | Change embedding provider or API keys |
-| `Maproom: Show Output` | View detailed logs |
-| `Maproom: Show Status` | Check database and process status |
-| `Maproom: Restart Watchers` | Restart file monitoring |
+| Command                     | Description                           |
+| --------------------------- | ------------------------------------- |
+| `Maproom: Setup`            | Change embedding provider or API keys |
+| `Maproom: Show Output`      | View detailed logs                    |
+| `Maproom: Show Status`      | Check database and process status     |
+| `Maproom: Restart Watchers` | Restart file monitoring               |
 
 ## Status Bar
 
@@ -101,10 +104,10 @@ The status bar shows current state:
 
 ## Settings
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `maproom.database.sqlitePath` | Custom database path | `~/.maproom/maproom.db` |
-| `maproom.ollama.endpoint` | Ollama API URL | `http://127.0.0.1:11434` |
+| Setting                       | Description          | Default                  |
+| ----------------------------- | -------------------- | ------------------------ |
+| `maproom.database.sqlitePath` | Custom database path | `~/.maproom/maproom.db`  |
+| `maproom.ollama.endpoint`     | Ollama API URL       | `http://127.0.0.1:11434` |
 
 ## Troubleshooting
 
