@@ -1,3 +1,0 @@
-[submodule ".crewchief/claude-code-plugins"]
-	path = .crewchief/claude-code-plugins
-	url = git@github.com:manifoldlogic/claude-code-plugins.git
