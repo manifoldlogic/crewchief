@@ -27,7 +27,6 @@ Avoid: $RANDOM, [[ ]], bash arrays, `which`. Use: command -v, [ ], grep -E, port
 | `packages/vscode-maproom/` | VSCode extension | `packages/vscode-maproom/CLAUDE.md` |
 | `crates/maproom/` | Rust indexer | `crates/maproom/CLAUDE.md` |
 | `crates/maproom/migrations/` | Database migrations | `crates/maproom/migrations/CLAUDE.md` |
-| `.crewchief/` | Project workflow | `.crewchief/CLAUDE.md` |
 | `.github/` | CI/CD | `.github/CLAUDE.md` |
 | `.devcontainer/` | Dev container | `.devcontainer/CLAUDE.md` |
 | `docs/` | Documentation | `docs/CLAUDE.md` |
