@@ -1,363 +1,53 @@
-# CrewChief
+# crewchief
 
-A multi-tool CLI for git worktree management, semantic code search, and AI agent orchestration.
+Semantic code search toolkit for AI-assisted development.
 
-## Requirements
+![CI](https://github.com/danielbushman/crewchief/actions/workflows/test.yml/badge.svg)
+![Release CLI](https://github.com/danielbushman/crewchief/actions/workflows/release-cli.yml/badge.svg)
+![Release MCP](https://github.com/danielbushman/crewchief/actions/workflows/release-maproom-mcp.yml/badge.svg)
+![Release VS Code](https://github.com/danielbushman/crewchief/actions/workflows/release-vscode-maproom.yml/badge.svg)
 
-**macOS with [iTerm2](https://iterm2.com/downloads.html)**  
-> ⚠️ iTerm2 is required for agent orchestration features.
+## What is crewchief?
 
-## What's Working
+crewchief indexes your codebase using tree-sitter, stores chunks in a local SQLite database, and enables semantic search via embeddings and full-text search. It integrates with Claude Code via MCP to provide AI-assisted code navigation, and includes a VS Code extension for interactive use.
 
-✅ **Git Worktree Management** - Simplify creating, listing, and navigating git worktrees
-✅ **Semantic Code Search** - Index and search code, docs, and configs (SQLite default, PostgreSQL optional)
-✅ **Automatic Branch Detection** ✨ - Auto-index branches on switch (no manual scan needed)
-✅ **Grep-Impossible Task Framework** - Scientific validation framework for semantic search value
-✅ **MCP Integration** - Maproom MCP server for AI assistants (Claude, Cursor)
-✅ **Multi-Format Support** - TypeScript, JavaScript, Rust, Markdown, JSON, YAML, TOML
-✅ **Agent Orchestration** - Spawn AI agents in iTerm2 panes with isolated worktrees
-✅ **Agent Communication** - Send messages to agents with proper text submission (chr(13) for Claude)
+## Monorepo Layout
 
-## What's In Progress
+| Package / Crate                                       | Description                                             | Docs                                        |
+| ----------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------- |
+| [`packages/cli`](packages/cli/)                       | TypeScript CLI for worktree and agent management        | [README](packages/cli/README.md)            |
+| [`packages/maproom-mcp`](packages/maproom-mcp/)       | MCP server exposing semantic search to Claude Code      | [README](packages/maproom-mcp/README.md)    |
+| [`packages/vscode-maproom`](packages/vscode-maproom/) | VS Code extension for maproom integration               | [README](packages/vscode-maproom/README.md) |
+| [`crates/maproom`](crates/maproom/)                   | Rust indexer — file watching, embedding, SQLite storage | [README](crates/maproom/README.md)          |
+| [`packages/daemon-client`](packages/daemon-client/)   | Daemon RPC client library                               | [README](packages/daemon-client/README.md)  |
 
-⚠️ **Competition Mode** - Run multiple agents on the same task and compare results
+## Getting Started
 
-## Installation
-
-### Option 1: Run Without Installing
-
-```bash
-# Run directly with npx (downloads and runs temporarily)
-npx @crewchief/cli --help
-
-# Or with pnpm dlx
-pnpm dlx @crewchief/cli --help
-
-# Or with yarn dlx
-yarn dlx @crewchief/cli --help
-```
-
-### Option 2: Install in Your Project
+### CLI (recommended)
 
 ```bash
-# Install as a project dependency
-npm install @crewchief/cli
-# or
-pnpm add @crewchief/cli
-# or
-yarn add @crewchief/cli
-
-# Run with npx/pnpm/yarn
-npx crewchief --help
-pnpm crewchief --help
-yarn crewchief --help
-```
-
-### Option 3: Install Globally (Recommended)
-
-```bash
-# Install globally via npm
 npm install -g @crewchief/cli
-
-# Or with pnpm
-pnpm add -g @crewchief/cli
-
-# Or with yarn
-yarn global add @crewchief/cli
-
-# Now use directly
 crewchief --help
-crewchief --version
 ```
 
-### Migrating from Old `crewchief` Package
+See the [CLI README](packages/cli/README.md) for detailed installation instructions and usage.
 
-If you previously installed the unscoped `crewchief` package (v0.x), you'll need to migrate to the new `@crewchief/cli` package:
+### VS Code Extension
+
+Install the **Maproom Semantic Search** extension from the VS Code marketplace. See the [extension README](packages/vscode-maproom/README.md) for setup details.
+
+### Rust Indexer
 
 ```bash
-# Uninstall old package
-npm uninstall -g crewchief
-
-# Install new scoped package
-npm install -g @crewchief/cli
-
-# Verify installation
-crewchief --version  # Should show 1.0.0 or higher
+cargo install maproom
 ```
 
-**What changed in v1.0.0:**
-- Package renamed from `crewchief` → `@crewchief/cli`
-- All 4 platforms now supported (linux-x64, linux-arm64, darwin-x64, darwin-arm64)
-- Automated GitHub Actions releases
-- No breaking functionality changes
-
-See [MIGRATION.md](MIGRATION.md) for full migration guide.
-
-## Quick Start (SQLite - Recommended)
-
-**Zero configuration required!** Works immediately without Docker or PostgreSQL.
-
-```bash
-# Index your code (creates ~/.maproom/maproom.db automatically)
-crewchief maproom scan
-# ✅ Scan completed successfully!
-#    Files processed: 150
-#    Total chunks: 1234
-
-# Search semantically
-crewchief maproom search "authentication flow"
-
-# Check status
-crewchief maproom status
-```
-
-That's it! Your code is indexed and searchable in under a minute.
-
-### Worktree Management
-
-```bash
-# Manage worktrees
-crewchief worktree create feature-branch
-crewchief worktree list
-crewchief worktree use feature-branch
-
-# Auto-copy .env files to new worktrees (configure in crewchief.config.js)
-crewchief worktree copy-ignored feature-branch
-
-# Merge worktree changes back to source branch
-crewchief worktree merge feature-branch
-```
-
-### AI Agent Orchestration (requires iTerm2)
-
-```bash
-# Spawn AI agents in iTerm2
-crewchief spawn claude "implement-auth"      # Creates worktree 'implement-auth__claude' and launches Claude
-crewchief spawn gemini "code-review"         # Creates worktree 'code-review__gemini' and launches Gemini
-crewchief spawn claude,gemini "fix-bug"      # Spawn BOTH agents at once with smart splitting
-crewchief agent list                          # List all running agents with their full names
-crewchief agent message implement-auth__claude "Add OAuth support"  # Send task to specific Claude agent
-crewchief agent message fix-bug__claude --file prompt.md  # Send file contents as prompt to agent
-crewchief agent message fix-bug --all "Update approach"  # Send to ALL agents working on fix-bug
-crewchief agent message "*" --all "Status update"  # Broadcast to ALL running agents
-```
-
-## Advanced: PostgreSQL Setup (Team Sharing)
-
-For shared team indices or production deployments with concurrent access:
-
-```bash
-# Start PostgreSQL with Docker
-cd config && docker compose up -d
-
-# Set database URL
-export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@localhost:5433/maproom"
-
-# Run migrations
-crewchief maproom db migrate
-
-# Index and search (same commands, uses PostgreSQL)
-crewchief maproom scan
-crewchief maproom search "authentication flow"
-```
-
-See [DATABASE_ARCHITECTURE.md](docs/architecture/DATABASE_ARCHITECTURE.md) for detailed backend comparison and when to use each option.
-
-## Grep-Impossible Task Framework
-
-Scientific validation framework for semantic code search. Provides rigorous, objective proof that semantic search delivers measurable value over traditional grep-based tools through 30+ benchmark tasks across three tiers.
-
-### Three-Tier Validation
-
-**Tier 1: Grep-Impossible** - Tasks grep fundamentally cannot solve (<30% success rate)
-- Transitive dependency analysis
-- Architectural flow tracing
-- Negative space detection (finding code that lacks properties)
-- **Proves**: Semantic search can solve problems grep cannot
-
-**Tier 2: Grep-Hard** - Tasks where semantic search is significantly more efficient
-- Conceptual similarity (finding patterns across different naming)
-- Ambiguity resolution (disambiguating through context)
-- Cross-cutting concerns (scattered functionality)
-- **Proves**: 30-50% faster and more accurate than grep
-
-**Tier 3: Real-World** - Natural developer scenarios without tool coercion
-- Code review, debugging, refactoring tasks
-- Voluntary tool selection based on task characteristics
-- **Proves**: Developers naturally adopt when appropriate
-
-### Key Features
-
-- **Objective Validation**: Binary pass/fail criteria, no subjective judgment
-- **Natural Selection**: Agents choose tools organically—no coercion
-- **Ecological Validity**: All tasks based on real development workflows
-- **Statistical Rigor**: p < 0.05 significance testing, cross-project validation
-- **Integration Ready**: Works with genetic optimization for tool description evolution
-
-See [Search Evaluation Architecture](docs/architecture/SEARCH_EVALUATION.md) for comprehensive details and [Search Optimization Framework](docs/search-optimization/) for implementation guides.
-
-## Project Structure
-
-```
-crewchief/
-├── packages/
-│   ├── cli/           # Main TypeScript CLI
-│   └── maproom-mcp/   # MCP server for AI assistants
-├── crates/
-│   └── maproom/       # Rust indexing engine
-└── .agents/           # Project planning, tickets, and knowledge base
-```
-
-## Documentation
-
-- [CLI README](packages/cli/README.md) - Detailed command reference
-- [Architecture Spec](.agents/knowledge/cli/specification.md) - Full vision with implementation status
-- [Testing Report](TESTING_REPORT.md) - Features that need verification
-- **[Search Optimization Framework](docs/search-optimization/)** - Grep-impossible task design and validation
-
-## Configuration
-
-### Binary Configuration
-
-Specify a custom path to the maproom binary:
-
-```javascript
-// crewchief.config.js
-export default {
-  repository: {
-    maproomBinaryPath: './target/release/maproom'
-  }
-}
-```
-
-**Resolution Priority:**
-1. `CREWCHIEF_MAPROOM_BIN` environment variable
-2. `config.repository.maproomBinaryPath`
-3. Global install (`npm install -g @crewchief/cli`)
-4. Packaged binary
-
-**Path Resolution:**
-- Absolute paths: Always resolve correctly (recommended)
-- Relative paths: Resolve relative to config file location for most commands
-- For consistency, use absolute paths or ensure commands run from project root
-
-**Use cases:**
-- Local development with Rust builds
-- Custom binary locations
-- CI/CD environments with specific versions
-
-## Embedding Configuration
-
-Embeddings are **automatically generated** during `scan` and `upsert` operations, enabling semantic search out-of-the-box.
-
-### Provider Options
-
-Configure your embedding provider in `.env`:
-
-**Option 1: Ollama (Local, Free, Default)**
-```bash
-MAPROOM_EMBEDDING_PROVIDER=ollama
-MAPROOM_EMBEDDING_MODEL=mxbai-embed-large
-EMBEDDING_DIMENSION=1024
-```
-
-**Option 2: OpenAI (Cloud, Requires API Key)**
-```bash
-MAPROOM_EMBEDDING_PROVIDER=openai
-OPENAI_API_KEY=your-key-here
-MAPROOM_EMBEDDING_MODEL=text-embedding-3-small
-EMBEDDING_DIMENSION=1536
-```
-
-### Control Auto-Generation
-
-```bash
-# Disable auto-generation (for testing or manual control)
-crewchief maproom:scan --generate-embeddings=false
-
-# Adjust batch size for performance tuning
-crewchief maproom:scan --embedding-batch-size=100
-
-# Generate embeddings manually later
-maproom generate-embeddings
-```
-
-### Performance Tuning
-
-Fine-tune embedding generation performance in `.env`:
-
-```bash
-EMBEDDING_BATCH_SIZE=50                           # Chunks per batch
-MAPROOM_EMBEDDING_PARALLEL_ENABLED=true           # Enable parallel processing
-MAPROOM_EMBEDDING_PARALLEL_SUB_BATCH_SIZE=50      # Texts per HTTP request (default: 50)
-MAPROOM_EMBEDDING_PARALLEL_MAX_CONCURRENCY=8      # Concurrent requests (default: 8)
-```
-
-**For detailed optimization guidance**, see [Embedding Optimization Guide](docs/configuration/embedding-optimization.md) for:
-- Hardware-specific recommendations (M1/M2/M3, NVIDIA GPUs)
-- Expected performance improvements (10-20x on Apple Silicon)
-- Troubleshooting tips for slow performance, OOM, or timeouts
-
-## Database Maintenance
-
-### Cleanup Stale Worktrees
-
-Remove worktrees that no longer exist on disk to improve search quality:
-
-```bash
-# Preview what will be deleted (safe - no changes)
-crewchief maproom db cleanup-stale
-
-# Actually delete stale worktrees
-crewchief maproom db cleanup-stale --confirm
-
-# Show detailed information
-crewchief maproom db cleanup-stale --verbose
-```
-
-**Exit codes:** 0 (success), 1 (error), 2 (no stale worktrees found)
-
-See [User Guide: Cleanup](docs/user-guide-cleanup.md) for detailed instructions and [Admin Guide: Cleanup](docs/admin-guide-cleanup.md) for automation.
-
-## Requirements
-
-- Node.js >= 18
-- Git
-- **Optional**: Docker (for PostgreSQL team sharing)
-- **Optional**: iTerm2 (for agent features, macOS only)
-- **Optional**: [Ollama](https://ollama.ai/download) (for local embeddings)
-
-## Migration Guide
-
-### Priority Order Change (v0.x.0)
-
-**Breaking change:** Binary resolution now prefers global installs over packaged binaries.
-
-**Before:**
-1. Environment variable
-2. Packaged binary
-3. Global install
-
-**After:**
-1. Environment variable
-2. Config file
-3. Global install
-4. Packaged binary
-
-**Who is affected:**
-- Users with both global and packaged installs will now use global
-- This prevents stale packaged binaries from being used
-
-**Migration:**
-- No action needed for most users
-- To force packaged binary: uninstall global version
-- To force specific binary: use `CREWCHIEF_MAPROOM_BIN` env var
+See the [maproom README](crates/maproom/README.md) for usage and configuration.
 
 ## Contributing
 
-This project is actively being developed. Key areas that need work:
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-1. Completing the agent orchestration features
-2. Implementing evaluation metrics for competition mode
+## License
 
-See the [specification](.agents/knowledge/cli/specification.md) for the full roadmap.
+This project is licensed under the [MIT License](LICENSE).
