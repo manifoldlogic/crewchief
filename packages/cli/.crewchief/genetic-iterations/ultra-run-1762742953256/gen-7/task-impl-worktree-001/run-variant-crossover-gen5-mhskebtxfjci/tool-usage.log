@@ -1,4 +1,0 @@
-{"session_id":"e7ccc16c-7bea-4c99-ba69-98d244f53643","tool_name":"Grep","tool_input":{"pattern":"worktree","output_mode":"files_with_matches","-i":true},"timestamp":1762744244567}
-{"session_id":"e7ccc16c-7bea-4c99-ba69-98d244f53643","tool_name":"Grep","tool_input":{"pattern":"git worktree","output_mode":"content","-i":true},"timestamp":1762744244569}
-{"session_id":"e7ccc16c-7bea-4c99-ba69-98d244f53643","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/git/worktrees.ts"},"timestamp":1762744248956}
-{"session_id":"e7ccc16c-7bea-4c99-ba69-98d244f53643","tool_name":"Read","tool_input":{"file_path":"/workspace/packages/cli/src/cli/worktree.ts"},"timestamp":1762744248957}
