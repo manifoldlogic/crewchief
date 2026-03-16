@@ -7,7 +7,9 @@ Only the latest version receives security updates:
 | Package | Supported |
 |---------|-----------|
 | @crewchief/cli | Latest only |
-| @crewchief/maproom-mcp | Latest only |
+| maproom (Rust binary) | Latest only |
+| @crewchief/maproom-mcp | No (deprecated) |
+| vscode-maproom | No (deprecated) |
 
 ## Reporting a Vulnerability
 
@@ -71,7 +73,7 @@ We will respond within 48 hours and provide a fix timeline.
 
 In scope:
 - crewchief CLI tool
-- maproom-mcp MCP server
+- maproom Rust binary
 - GitHub Actions workflows
 - Build and release automation
 
