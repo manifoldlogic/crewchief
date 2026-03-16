@@ -28,7 +28,7 @@ If you prefer not to use the devcontainer:
 1. Install the prerequisites listed above
 2. Clone the repository and install dependencies:
    ```bash
-   git clone https://github.com/crewchief-org/crewchief.git
+   git clone https://github.com/manifoldlogic/crewchief.git
    cd crewchief
    pnpm install
    ```
