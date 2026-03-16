@@ -108,11 +108,7 @@
     "CREWCHIEF_DEV": "true",
     "OPENAI_API_KEY": "${localEnv:OPENAI_API_KEY}",
     "GITHUB_PERSONAL_ACCESS_TOKEN": "${localEnv:GITHUB_PERSONAL_ACCESS_TOKEN}",
-    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
-    "OBSIDIAN_API_KEY": "${localEnv:OBSIDIAN_API_KEY}",
-    "OBSIDIAN_HOST": "${localEnv:OBSIDIAN_HOST}",
-    "OBSIDIAN_PORT": "${localEnv:OBSIDIAN_PORT}",
-    "OBSIDIAN_VAULT_PATH": "${localEnv:OBSIDIAN_VAULT_PATH}"
+    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}"
   },
 
   // Startup commands
@@ -134,9 +130,7 @@
     "source=crewchief-cargo-cache,target=/home/vscode/.cargo,type=volume",
     "source=crewchief-pnpm-cache,target=/home/vscode/.pnpm-store,type=volume",
     // Persist gh CLI authentication across rebuilds
-    "source=crewchief-gh-config,target=/home/vscode/.config/gh,type=volume",
-    // Obsidian vault
-    "source=${localEnv:HOME}/Obsidian,target=/obsidian,type=bind,consistency=cached"
+    "source=crewchief-gh-config,target=/home/vscode/.config/gh,type=volume"
   ],
 
   // Keep container running
