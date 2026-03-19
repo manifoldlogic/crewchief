@@ -7,7 +7,7 @@ Semantic code search toolkit for AI-assisted development.
 
 ## What is crewchief?
 
-crewchief indexes your codebase using tree-sitter, stores chunks in a local SQLite database, and enables semantic search via embeddings and full-text search. It integrates with Claude Code via MCP to provide AI-assisted code navigation, and includes a VS Code extension for interactive use.
+crewchief indexes your codebase using tree-sitter, stores chunks in a local SQLite database, and enables semantic search via embeddings and full-text search. It can be integrated with Claude Code via MCP for AI-assisted code navigation.
 
 ## Monorepo Layout
 
