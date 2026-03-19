@@ -309,7 +309,7 @@ jobs:
 - Multi-tag strategy (latest, major, minor, full version)
 
 **Registry**:
-- Docker Hub: `manifoldlogic/crewchief_maproom-mcp`
+- Docker Hub: `danielbushman/crewchief_maproom-mcp`
 
 ---
 
