@@ -18,7 +18,7 @@ Please review our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 1. Install the prerequisites listed above
 2. Clone the repository and install dependencies:
    ```bash
-   git clone https://github.com/danielbushman/crewchief.git
+   git clone https://github.com/manifoldlogic/crewchief.git
    cd crewchief
    pnpm install
    ```

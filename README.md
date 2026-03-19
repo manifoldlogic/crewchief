@@ -2,8 +2,8 @@
 
 Semantic code search toolkit for AI-assisted development.
 
-![CI](https://github.com/danielbushman/crewchief/actions/workflows/test.yml/badge.svg)
-![Release CLI](https://github.com/danielbushman/crewchief/actions/workflows/release-cli.yml/badge.svg)
+![CI](https://github.com/manifoldlogic/crewchief/actions/workflows/test.yml/badge.svg)
+![Release CLI](https://github.com/manifoldlogic/crewchief/actions/workflows/release-cli.yml/badge.svg)
 
 ## What is crewchief?
 

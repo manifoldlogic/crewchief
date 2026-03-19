@@ -1087,7 +1087,7 @@ If issues persist:
 
 1. Run `crewchief doctor` and share the output
 2. Check logs: `~/.crewchief/logs/` (if exists)
-3. Open an issue at https://github.com/danielbushman/crewchief/issues with:
+3. Open an issue at https://github.com/manifoldlogic/crewchief/issues with:
    - Error message (remove sensitive data)
    - Output of `crewchief doctor`
    - Platform and Node.js version

@@ -308,9 +308,6 @@ jobs:
 - Trivy security scanning
 - Multi-tag strategy (latest, major, minor, full version)
 
-**Registry**:
-- Docker Hub: `danielbushman/crewchief_maproom-mcp`
-
 ---
 
 ## Reusable Workflows
