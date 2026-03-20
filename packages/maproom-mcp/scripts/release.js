@@ -82,7 +82,7 @@ try {
   console.log(`  - Build Rust binaries for 4 platforms`);
   console.log(`  - Publish to npm: @crewchief/maproom-mcp@${version}`);
   console.log(`  - Build and publish Docker images`);
-  console.log(`\nMonitor at: https://github.com/danielbushman/crewchief/actions\n`);
+  console.log(`\nMonitor at: https://github.com/manifoldlogic/crewchief/actions\n`);
 
 } catch (error) {
   console.error(`\n❌ Release failed: ${error.message}\n`);

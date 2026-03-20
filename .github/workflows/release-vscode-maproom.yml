@@ -361,7 +361,7 @@ jobs:
           # Create release
           gh release create "$TAG" \
             --title "VSCode Maproom v${VERSION}" \
-            --notes "Extension release v${VERSION}. See [CHANGELOG.md](https://github.com/danielbushman/crewchief/blob/main/packages/vscode-maproom/CHANGELOG.md) for details." \
+            --notes "Extension release v${VERSION}. See [CHANGELOG.md](https://github.com/manifoldlogic/crewchief/blob/main/packages/vscode-maproom/CHANGELOG.md) for details." \
             $PRERELEASE_FLAG \
             "$VSIX_FILE"
 
@@ -391,5 +391,5 @@ jobs:
           fi
 
           echo "  GitHub Release:"
-          echo "    https://github.com/danielbushman/crewchief/releases/tag/${TAG}"
+          echo "    https://github.com/manifoldlogic/crewchief/releases/tag/${TAG}"
           echo "    (download .vsix for manual install)"

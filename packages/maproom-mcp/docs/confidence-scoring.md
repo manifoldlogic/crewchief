@@ -482,5 +482,5 @@ Don't use rigid thresholds—interpret source count alongside other signals and 
 ---
 
 **Need Help?**
-- [GitHub Issues](https://github.com/danielbushman/crewchief/issues)
+- [GitHub Issues](https://github.com/manifoldlogic/crewchief/issues)
 - [Main Documentation](../README.md)

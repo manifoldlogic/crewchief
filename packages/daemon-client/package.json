@@ -37,13 +37,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/danielbushman/crewchief.git",
+    "url": "https://github.com/manifoldlogic/crewchief.git",
     "directory": "packages/daemon-client"
   },
   "bugs": {
-    "url": "https://github.com/danielbushman/crewchief/issues"
+    "url": "https://github.com/manifoldlogic/crewchief/issues"
   },
-  "homepage": "https://github.com/danielbushman/crewchief/tree/main/packages/daemon-client#readme",
+  "homepage": "https://github.com/manifoldlogic/crewchief/tree/main/packages/daemon-client#readme",
   "publishConfig": {
     "access": "public"
   },

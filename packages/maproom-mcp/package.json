@@ -44,13 +44,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/danielbushman/crewchief.git",
+    "url": "https://github.com/manifoldlogic/crewchief.git",
     "directory": "packages/maproom-mcp"
   },
   "bugs": {
-    "url": "https://github.com/danielbushman/crewchief/issues"
+    "url": "https://github.com/manifoldlogic/crewchief/issues"
   },
-  "homepage": "https://github.com/danielbushman/crewchief/tree/main/packages/maproom-mcp#readme",
+  "homepage": "https://github.com/manifoldlogic/crewchief/tree/main/packages/maproom-mcp#readme",
   "engines": {
     "node": ">=18.0.0"
   },
