@@ -202,9 +202,9 @@ Plus a postinstall message with migration instructions.
 
 ## Questions or Issues?
 
-- **GitHub Issues**: [danielbushman/crewchief/issues](https://github.com/danielbushman/crewchief/issues)
+- **GitHub Issues**: [manifoldlogic/crewchief/issues](https://github.com/manifoldlogic/crewchief/issues)
 - **npm Package**: [npmjs.com/package/@crewchief/cli](https://www.npmjs.com/package/@crewchief/cli)
-- **Repository**: [github.com/danielbushman/crewchief](https://github.com/danielbushman/crewchief)
+- **Repository**: [github.com/manifoldlogic/crewchief](https://github.com/manifoldlogic/crewchief)
 
 ## Timeline
 

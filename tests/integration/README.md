@@ -30,7 +30,7 @@ The test infrastructure is complete and production-ready. However, execution is 
 
 1. Execute DKRHUB-1901 test plan (requires GitHub push access)
 2. Create and push tag: `git tag -a v1.1.10-rc1 -m "Test release" && git push origin v1.1.10-rc1`
-3. Monitor GitHub Actions: https://github.com/danielbushman/crewchief/actions
+3. Monitor GitHub Actions: https://github.com/manifoldlogic/crewchief/actions
 4. Verify images published: `docker pull crewchief/maproom-mcp:1.1.10-rc1`
 5. Re-run this test
 

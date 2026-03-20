@@ -81,7 +81,7 @@ Key fields in `package.json`:
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/danielbushman/crewchief.git"
+    "url": "https://github.com/manifoldlogic/crewchief.git"
   }
 }
 ```

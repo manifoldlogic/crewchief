@@ -76,7 +76,7 @@ The release script will:
 The workflow takes ~10-15 minutes to complete.
 
 **Via GitHub UI**:
-1. Go to https://github.com/danielbushman/crewchief/actions
+1. Go to https://github.com/manifoldlogic/crewchief/actions
 2. Find "Build and Publish CLI" (or MCP) workflow run
 3. Watch progress in real-time
 
@@ -435,7 +435,7 @@ pnpm release:patch  # 1.2.3 → 1.2.4 (bug fixes)
 
 - **Documentation**: This file (RELEASE.md)
 - **Security**: See SECURITY.md
-- **Issues**: https://github.com/danielbushman/crewchief/issues
+- **Issues**: https://github.com/manifoldlogic/crewchief/issues
 - **Workflows**: `.github/workflows/build-and-publish-*.yml`
 - **Scripts**: `packages/*/scripts/release.*`
 
