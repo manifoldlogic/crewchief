@@ -377,10 +377,11 @@ export default {
 
 **Resolution Priority:**
 
-1. `CREWCHIEF_MAPROOM_BIN` environment variable
-2. `config.repository.maproomBinaryPath` (config file)
-3. Global install (`npm install -g @crewchief/cli`)
-4. Packaged binary (bundled with npm package)
+1. `MAPROOM_BIN` environment variable
+2. `CREWCHIEF_MAPROOM_BIN` environment variable (deprecated alias for `MAPROOM_BIN`)
+3. `config.repository.maproomBinaryPath` (config file)
+4. Global install (`npm install -g @crewchief/cli`)
+5. Packaged binary (bundled with npm package)
 
 **Common Use Cases:**
 

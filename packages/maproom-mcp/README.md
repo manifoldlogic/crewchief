@@ -1,5 +1,7 @@
 # @crewchief/maproom-mcp
 
+> **Note: This package is no longer actively maintained.** It may still work but is not receiving updates or bug fixes. For semantic code search, use the [`maproom`](https://crates.io/crates/maproom) binary directly via [`@crewchief/cli`](https://www.npmjs.com/package/@crewchief/cli).
+
 MCP server for semantic code search powered by SQLite and your choice of embedding provider.
 
 ## Breaking Changes (v3.0.0)
@@ -54,12 +56,12 @@ Add to your editor's MCP configuration:
 
 ## Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `MAPROOM_DATABASE_URL` | SQLite database URL | Auto-detected¹ |
-| `MAPROOM_EMBEDDING_PROVIDER` | `openai`, `google`, or `ollama` | Yes |
-| `OPENAI_API_KEY` | OpenAI API key | If provider=openai |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Google credentials path | If provider=google |
+| Variable                         | Description                     | Required           |
+| -------------------------------- | ------------------------------- | ------------------ |
+| `MAPROOM_DATABASE_URL`           | SQLite database URL             | Auto-detected¹     |
+| `MAPROOM_EMBEDDING_PROVIDER`     | `openai`, `google`, or `ollama` | Yes                |
+| `OPENAI_API_KEY`                 | OpenAI API key                  | If provider=openai |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Google credentials path         | If provider=google |
 
 ¹ Auto-detection: `MAPROOM_DATABASE_URL` > `~/.maproom/maproom.db`
 

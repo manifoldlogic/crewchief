@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "CrewChief Release Configuration",
+  "description": "Coordinated release configuration for CrewChief packages",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
+    },
+    "description": {
+      "type": "string"
+    },
+    "releaseOrder": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Order in which packages should be released"
+    },
+    "packages": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/package"
+      },
+      "description": "Package definitions keyed by package name"
+    },
+    "rustBinary": {
+      "type": "object",
+      "properties": {
+        "crate": { "type": "string" },
+        "name": { "type": "string" },
+        "platforms": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "requireCleanWorkingTree": { "type": "boolean" },
+        "requirePassingTests": { "type": "boolean" },
+        "requireVersionBump": { "type": "boolean" },
+        "blockOnUnreleasedDependencies": { "type": "boolean" }
+      }
+    }
+  },
+  "$defs": {
+    "package": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative path to the package directory"
+        },
+        "publishTo": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Registries/marketplaces to publish to"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Other packages this depends on"
+        },
+        "requiredCliVersion": {
+          "type": "string",
+          "description": "Semver range for required CLI version"
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "description": "Schema version for this package entry"
+        },
+        "deprecated": {
+          "type": "boolean",
+          "description": "When true, this package is no longer maintained and should not be released",
+          "default": false
+        },
+        "notes": {
+          "type": "string",
+          "description": "Human-readable notes about this package"
+        }
+      },
+      "required": ["path", "publishTo", "schemaVersion"]
+    }
+  }
+}
