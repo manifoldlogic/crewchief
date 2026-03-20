@@ -4,7 +4,7 @@ export default {
     // worktreeBasePath uses default: '~/.crewchief/worktrees/<repo-name>'
   },
   worktree: {
-    copyIgnoredFiles: [".env", ".env.local"],
+    copyIgnoredFiles: [".env", ".env.local", ".claude/settings.json", ".claude/settings.local.json"],
     copyFromPath: '.',
     overwriteStrategy: 'skip'
   },
