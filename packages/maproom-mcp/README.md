@@ -131,8 +131,8 @@ const results = await search({ query: 'authenticate', debug: true })
 
 ## Support
 
-- [GitHub Issues](https://github.com/danielbushman/crewchief/issues)
-- [Documentation](https://github.com/danielbushman/crewchief/tree/main/packages/maproom-mcp)
+- [GitHub Issues](https://github.com/manifoldlogic/crewchief/issues)
+- [Documentation](https://github.com/manifoldlogic/crewchief/tree/main/packages/maproom-mcp)
 
 ## License
 

@@ -157,8 +157,8 @@ Normal for large codebases. The status bar shows progress. Subsequent file chang
 
 ## Support
 
-- **Issues**: https://github.com/danielbushman/crewchief/issues
-- **Documentation**: https://github.com/danielbushman/crewchief
+- **Issues**: https://github.com/manifoldlogic/crewchief/issues
+- **Documentation**: https://github.com/manifoldlogic/crewchief
 
 ## License
 
