@@ -1,5 +1,9 @@
 # CrewChief CLI
 
+<p align="center">
+  <img src="../../docs/images/crewchief_cli_hero.svg" alt="crewchief CLI architecture diagram">
+</p>
+
 A powerful command-line tool for git worktree management, semantic code search, and AI agent orchestration.
 
 ## Installation
@@ -793,7 +797,7 @@ All commands below should be prefixed with `crewchief`. For example: `crewchief 
 | `maproom upsert [files...]`   | Update specific files          |
 | `maproom generate-embeddings` | Generate embeddings for chunks |
 
-**Note:** For AI assistant integration, install [maproom-mcp](https://www.npmjs.com/package/maproom-mcp) instead of using these commands directly.
+**Note:** For AI assistant integration, install [`@crewchief/maproom-mcp`](https://www.npmjs.com/package/@crewchief/maproom-mcp) instead of using these commands directly. The [`maproom`](https://crates.io/crates/maproom) Rust binary powers both the CLI commands and the MCP server.
 
 ### Agent Commands (iTerm2 or Headless Mode)
 
