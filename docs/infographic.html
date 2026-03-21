@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>crewchief - Semantic Code Search Toolkit + Git Worktree Orchestration</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0f1419;
+            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            padding: 40px 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: linear-gradient(135deg, #1a202c 0%, #0f1419 100%);
+            border: 1px solid #2d3748;
+            border-radius: 8px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Header Section */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 30px;
+            border-bottom: 2px solid #2d3748;
+        }
+
+        .repo-name {
+            font-size: 48px;
+            font-weight: 700;
+            color: #60a5fa;
+            margin-bottom: 8px;
+            font-family: 'Courier New', monospace;
+            letter-spacing: -1px;
+        }
+
+        .repo-tagline {
+            font-size: 18px;
+            color: #cbd5e0;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .repo-description {
+            font-size: 14px;
+            color: #a0aec0;
+            font-style: italic;
+        }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            flex-wrap: wrap;
+            margin-bottom: 40px;
+            padding: 20px;
+            background: rgba(45, 55, 72, 0.3);
+            border-radius: 6px;
+            border: 1px solid #2d3748;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+
+        .critical {
+            background: #ef4444;
+        }
+
+        .high {
+            background: #f97316;
+        }
+
+        .medium {
+            background: #eab308;
+        }
+
+        .low {
+            background: #6b7280;
+        }
+
+        /* Section Titles */
+        .section-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #60a5fa;
+            margin: 40px 0 25px 0;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #4f46e5;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Tech Stack */
+        .tech-stack {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .tech-item {
+            background: rgba(79, 70, 229, 0.1);
+            border: 1px solid #4f46e5;
+            border-radius: 6px;
+            padding: 16px;
+        }
+
+        .tech-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #60a5fa;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .tech-content {
+            font-size: 13px;
+            color: #cbd5e0;
+            font-family: 'Courier New', monospace;
+            line-height: 1.5;
+        }
+
+        /* Architecture Diagram */
+        .architecture {
+            margin-bottom: 40px;
+            background: rgba(15, 20, 25, 0.5);
+            border: 1px solid #2d3748;
+            border-radius: 6px;
+            padding: 25px;
+        }
+
+        .arch-layer {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid #4f46e5;
+            border-radius: 4px;
+            padding: 16px;
+            margin-bottom: 16px;
+            position: relative;
+        }
+
+        .arch-layer::after {
+            content: '↓';
+            position: absolute;
+            left: 50%;
+            bottom: -28px;
+            transform: translateX(-50%);
+            font-size: 20px;
+            color: #60a5fa;
+        }
+
+        .arch-layer:last-child::after {
+            content: '';
+        }
+
+        .arch-layer-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: #60a5fa;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+            opacity: 0.7;
+        }
+
+        .arch-layer-content {
+            font-size: 14px;
+            color: #e0e0e0;
+            font-family: 'Courier New', monospace;
+            font-weight: 500;
+        }
+
+        /* Core Modules */
+        .modules-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+
+        .module-card {
+            border-radius: 6px;
+            padding: 18px;
+            border-left: 4px solid;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .module-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0) 100%);
+            pointer-events: none;
+        }
+
+        .module-card-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .module-card.critical {
+            border-left-color: #ef4444;
+            background: rgba(239, 68, 68, 0.08);
+        }
+
+        .module-card.high {
+            border-left-color: #f97316;
+            background: rgba(249, 115, 22, 0.08);
+        }
+
+        .module-card.medium {
+            border-left-color: #eab308;
+            background: rgba(234, 179, 8, 0.08);
+        }
+
+        .module-card.low {
+            border-left-color: #6b7280;
+            background: rgba(107, 114, 128, 0.08);
+        }
+
+        .module-name {
+            font-size: 14px;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+            margin-bottom: 6px;
+            color: #e0e0e0;
+        }
+
+        .module-criticality {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-bottom: 8px;
+        }
+
+        .module-card.critical .module-criticality {
+            background: rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+        }
+
+        .module-card.high .module-criticality {
+            background: rgba(249, 115, 22, 0.3);
+            color: #fdba74;
+        }
+
+        .module-card.medium .module-criticality {
+            background: rgba(234, 179, 8, 0.3);
+            color: #fde047;
+        }
+
+        .module-card.low .module-criticality {
+            background: rgba(107, 114, 128, 0.3);
+            color: #d1d5db;
+        }
+
+        .module-description {
+            font-size: 12px;
+            color: #cbd5e0;
+            line-height: 1.5;
+        }
+
+        /* Search Pipeline */
+        .search-pipeline {
+            background: rgba(15, 20, 25, 0.5);
+            border: 1px solid #2d3748;
+            border-radius: 6px;
+            padding: 25px;
+            margin-bottom: 40px;
+            overflow-x: auto;
+        }
+
+        .pipeline-flow {
+            display: flex;
+            gap: 12px;
+            min-width: fit-content;
+            align-items: center;
+        }
+
+        .pipeline-stage {
+            background: rgba(79, 70, 229, 0.2);
+            border: 1px solid #4f46e5;
+            border-radius: 4px;
+            padding: 14px 16px;
+            white-space: nowrap;
+            flex-shrink: 0;
+            text-align: center;
+            min-width: 130px;
+        }
+
+        .pipeline-stage-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: #60a5fa;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .pipeline-stage-content {
+            font-size: 12px;
+            color: #e0e0e0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .pipeline-arrow {
+            color: #60a5fa;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        /* Database Schema */
+        .schema-diagram {
+            background: rgba(15, 20, 25, 0.5);
+            border: 1px solid #2d3748;
+            border-radius: 6px;
+            padding: 25px;
+            margin-bottom: 40px;
+        }
+
+        .schema-tables {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .schema-table {
+            background: rgba(30, 41, 59, 0.8);
+            border: 2px solid #4f46e5;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .schema-table-name {
+            background: rgba(79, 70, 229, 0.3);
+            padding: 10px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+            color: #60a5fa;
+            border-bottom: 1px solid #4f46e5;
+        }
+
+        .schema-columns {
+            padding: 10px 12px;
+            font-size: 11px;
+            font-family: 'Courier New', monospace;
+            color: #cbd5e0;
+            line-height: 1.6;
+        }
+
+        .schema-column {
+            color: #cbd5e0;
+        }
+
+        .schema-column-type {
+            color: #a0aec0;
+            font-size: 10px;
+        }
+
+        .schema-relationships {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid #2d3748;
+            border-radius: 4px;
+            padding: 16px;
+        }
+
+        .relationship-item {
+            font-size: 12px;
+            color: #cbd5e0;
+            margin-bottom: 8px;
+            padding-left: 12px;
+            border-left: 2px solid #4f46e5;
+            font-family: 'Courier New', monospace;
+        }
+
+        .relationship-item:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Performance Metrics */
+        .performance {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .metric-card {
+            background: linear-gradient(135deg, rgba(96, 165, 250, 0.1) 0%, rgba(79, 70, 229, 0.1) 100%);
+            border: 1px solid #4f46e5;
+            border-radius: 6px;
+            padding: 20px;
+            position: relative;
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at top right, rgba(96, 165, 250, 0.1) 0%, transparent 70%);
+            border-radius: 6px;
+            pointer-events: none;
+        }
+
+        .metric-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .metric-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: #60a5fa;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #60a5fa;
+            font-family: 'Courier New', monospace;
+            margin-bottom: 4px;
+        }
+
+        .metric-description {
+            font-size: 12px;
+            color: #cbd5e0;
+            line-height: 1.4;
+        }
+
+        /* Unique Aspects */
+        .unique-aspects {
+            background: rgba(15, 20, 25, 0.5);
+            border: 1px solid #2d3748;
+            border-radius: 6px;
+            padding: 25px;
+            margin-bottom: 40px;
+        }
+
+        .aspects-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .aspect-item {
+            background: rgba(30, 41, 59, 0.8);
+            border-left: 3px solid #60a5fa;
+            border-radius: 4px;
+            padding: 14px;
+        }
+
+        .aspect-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #60a5fa;
+            font-family: 'Courier New', monospace;
+            margin-bottom: 6px;
+        }
+
+        .aspect-description {
+            font-size: 12px;
+            color: #cbd5e0;
+            line-height: 1.5;
+        }
+
+        /* Packages & Crates */
+        .packages {
+            background: rgba(15, 20, 25, 0.5);
+            border: 1px solid #2d3748;
+            border-radius: 6px;
+            padding: 25px;
+            margin-bottom: 40px;
+        }
+
+        .packages-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+        }
+
+        .package-item {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid #4f46e5;
+            border-radius: 4px;
+            padding: 14px;
+        }
+
+        .package-name {
+            font-size: 13px;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+            color: #60a5fa;
+            margin-bottom: 4px;
+        }
+
+        .package-version {
+            font-size: 12px;
+            color: #a0aec0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .package-note {
+            font-size: 11px;
+            color: #cbd5e0;
+            margin-top: 6px;
+            font-style: italic;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding-top: 20px;
+            border-top: 1px solid #2d3748;
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        /* Print Styles */
+        @media print {
+            body {
+                padding: 0;
+                background: white;
+            }
+
+            .container {
+                box-shadow: none;
+                border: none;
+                background: white;
+                color: #000;
+            }
+
+            .repo-name {
+                color: #0066cc;
+            }
+
+            .section-title {
+                color: #0066cc;
+                border-color: #0066cc;
+            }
+
+            .legend-color.critical {
+                background: #cc0000;
+            }
+
+            .legend-color.high {
+                background: #ff6600;
+            }
+
+            .legend-color.medium {
+                background: #ffcc00;
+            }
+
+            .legend-color.low {
+                background: #999999;
+            }
+
+            .tech-item {
+                background: #f5f5f5;
+                border-color: #cccccc;
+            }
+
+            .tech-label {
+                color: #0066cc;
+            }
+
+            .arch-layer {
+                background: #f9f9f9;
+                border-color: #0066cc;
+            }
+
+            .module-card {
+                background: #f5f5f5;
+            }
+
+            .metric-card {
+                background: #f9f9f9;
+                border-color: #0066cc;
+            }
+
+            .metric-value {
+                color: #0066cc;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="repo-name">crewchief</div>
+            <div class="repo-tagline">Semantic Code Search Toolkit + Git Worktree Orchestration</div>
+            <div class="repo-description">High-performance code indexing, embedding-based semantic search, and branch-aware worktree management with content deduplication and relationship graph traversal</div>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color critical"></div>
+                <span>CRITICAL — System-defining, irreplaceable, 20-50x performance impact</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color high"></div>
+                <span>HIGH — Essential for core workflows, directly user-facing</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color medium"></div>
+                <span>MEDIUM — Important supporting components</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color low"></div>
+                <span>LOW — Auxiliary or deprecated features</span>
+            </div>
+        </div>
+
+        <!-- Tech Stack -->
+        <div class="section-title">Tech Stack</div>
+        <div class="tech-stack">
+            <div class="tech-item">
+                <div class="tech-label">Runtime & Async</div>
+                <div class="tech-content">Rust (Tokio async)<br>r2d2 connection pool<br>Parallel batch processing (400 texts/request)</div>
+            </div>
+            <div class="tech-item">
+                <div class="tech-label">Languages</div>
+                <div class="tech-content">Rust (daemon)<br>TypeScript (MCP, client)</div>
+            </div>
+            <div class="tech-item">
+                <div class="tech-label">Database & Indexing</div>
+                <div class="tech-content">SQLite (persistent)<br>sqlite-vec (vector ops)<br>FTS5 (full-text search)</div>
+            </div>
+            <div class="tech-item">
+                <div class="tech-label">Code Analysis</div>
+                <div class="tech-content">Tree-sitter (AST parsing)<br>10+ language support<br>Function/class extraction</div>
+            </div>
+            <div class="tech-item">
+                <div class="tech-label">Embeddings</div>
+                <div class="tech-content">Ollama (local, default)<br>OpenAI, Google Vertex AI<br>768/1024/1536 dimensions</div>
+            </div>
+            <div class="tech-item">
+                <div class="tech-label">Monorepo Support</div>
+                <div class="tech-content">pnpm workspaces<br>npm/yarn compatible<br>Workspace-aware indexing</div>
+            </div>
+        </div>
+
+        <!-- Supported Languages -->
+        <div class="section-title">Supported Languages for Analysis</div>
+        <div class="tech-item" style="grid-column: 1/-1; margin-bottom: 40px;">
+            <div class="tech-label">Tree-sitter Parsers</div>
+            <div class="tech-content">TypeScript • JavaScript • Rust • Python • Go • Ruby • C • C# • Java • C++ • Markdown • JSON • YAML • TOML</div>
+        </div>
+
+        <!-- Architecture -->
+        <div class="section-title">Architecture (Hybrid Layered)</div>
+        <div class="architecture">
+            <div class="arch-layer">
+                <div class="arch-layer-label">Client Layer</div>
+                <div class="arch-layer-content">Claude Code, VSCode, Terminal</div>
+            </div>
+            <div class="arch-layer">
+                <div class="arch-layer-label">MCP Server (TypeScript)</div>
+                <div class="arch-layer-content">maproom-mcp — Protocol bridge, request dispatch</div>
+            </div>
+            <div class="arch-layer">
+                <div class="arch-layer-label">Daemon Client (TypeScript)</div>
+                <div class="arch-layer-content">@crewchief/daemon-client — JSON-RPC 2.0 over stdio</div>
+            </div>
+            <div class="arch-layer">
+                <div class="arch-layer-label">Rust Daemon (CRITICAL)</div>
+                <div class="arch-layer-content">maproom serve — Long-running, connection pooled, persistent state</div>
+            </div>
+            <div class="arch-layer">
+                <div class="arch-layer-label">Persistent Storage</div>
+                <div class="arch-layer-content">SQLite Database (~/.maproom/maproom.db) — repos, worktrees, files, chunks, embeddings</div>
+            </div>
+        </div>
+
+        <!-- Core Modules -->
+        <div class="section-title">Core Modules (by Criticality)</div>
+        <div class="modules-grid">
+            <div class="module-card critical">
+                <div class="module-card-content">
+                    <div class="module-criticality">CRITICAL</div>
+                    <div class="module-name">Rust Daemon</div>
+                    <div class="module-description">Persistent database connections, embedding cache management, connection pooling. 20-50x speedup vs process-per-request model. Single source of truth for repository state.</div>
+                </div>
+            </div>
+            <div class="module-card critical">
+                <div class="module-card-content">
+                    <div class="module-criticality">CRITICAL</div>
+                    <div class="module-name">Tree-sitter Parser</div>
+                    <div class="module-description">AST-based code extraction for 10+ languages. Enables accurate function/class/structure boundary detection without regex. Foundation for semantic analysis.</div>
+                </div>
+            </div>
+            <div class="module-card critical">
+                <div class="module-card-content">
+                    <div class="module-criticality">CRITICAL</div>
+                    <div class="module-name">Search Fusion Pipeline</div>
+                    <div class="module-description">FTS5 (BM25) + vector similarity (cosine) + Reciprocal Rank Fusion (k=60). Hybrid approach eliminates false negatives. Semantic ranking with kind boost and recency bonus.</div>
+                </div>
+            </div>
+            <div class="module-card critical">
+                <div class="module-card-content">
+                    <div class="module-criticality">CRITICAL</div>
+                    <div class="module-name">Embedding Cache</div>
+                    <div class="module-description">SHA-256 content deduplication. 70-90% API call reduction. Multi-dimension support (768/1024/1536). In-memory and persistent caching layers.</div>
+                </div>
+            </div>
+            <div class="module-card high">
+                <div class="module-card-content">
+                    <div class="module-criticality">HIGH</div>
+                    <div class="module-name">Worktree Management</div>
+                    <div class="module-description">Isolated git worktrees per branch, automatic cleanup, config auto-copy. Prevents git state collisions and enables parallel workspace analysis.</div>
+                </div>
+            </div>
+            <div class="module-card high">
+                <div class="module-card-content">
+                    <div class="module-criticality">HIGH</div>
+                    <div class="module-name">Agent Orchestration</div>
+                    <div class="module-description">iTerm2 pane management or headless execution mode. Structured message protocol for tool coordination and state synchronization.</div>
+                </div>
+            </div>
+            <div class="module-card medium">
+                <div class="module-card-content">
+                    <div class="module-criticality">MEDIUM</div>
+                    <div class="module-name">MCP Server</div>
+                    <div class="module-description">Model Context Protocol implementation bridge. Enables integration with Claude and other LLM platforms via standardized interface.</div>
+                </div>
+            </div>
+            <div class="module-card medium">
+                <div class="module-card-content">
+                    <div class="module-criticality">MEDIUM</div>
+                    <div class="module-name">Daemon Client</div>
+                    <div class="module-description">JSON-RPC 2.0 client for stdio communication. Type-safe request/response marshalling and error handling.</div>
+                </div>
+            </div>
+            <div class="module-card low">
+                <div class="module-card-content">
+                    <div class="module-criticality">LOW</div>
+                    <div class="module-name">VSCode Extension</div>
+                    <div class="module-description">Deprecated. Historical integration layer (vscode-maproom). Functionality absorbed into MCP server and terminal client.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Pipeline -->
+        <div class="section-title">Search Pipeline (Query → Result)</div>
+        <div class="search-pipeline">
+            <div class="pipeline-flow">
+                <div class="pipeline-stage">
+                    <div class="pipeline-stage-label">Input</div>
+                    <div class="pipeline-stage-content">Query Text</div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-stage">
+                    <div class="pipeline-stage-label">Embed</div>
+                    <div class="pipeline-stage-content">Provider-agnostic embedding</div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-stage">
+                    <div class="pipeline-stage-label">Hybrid Search</div>
+                    <div class="pipeline-stage-content">FTS5 (BM25) + Vector (cosine)</div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-stage">
+                    <div class="pipeline-stage-label">Rank Fusion</div>
+                    <div class="pipeline-stage-content">Reciprocal Rank Fusion k=60</div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-stage">
+                    <div class="pipeline-stage-label">Semantic Rank</div>
+                    <div class="pipeline-stage-content">Kind boost, recency bonus</div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-stage">
+                    <div class="pipeline-stage-label">Context Assembly</div>
+                    <div class="pipeline-stage-content">Relationships graph traversal</div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-stage">
+                    <div class="pipeline-stage-label">Output</div>
+                    <div class="pipeline-stage-content">Result with context</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Database Schema -->
+        <div class="section-title">Database Schema (SQLite)</div>
+        <div class="schema-diagram">
+            <div class="schema-tables">
+                <div class="schema-table">
+                    <div class="schema-table-name">repos</div>
+                    <div class="schema-columns">
+                        <div class="schema-column">id <span class="schema-column-type">[PK]</span></div>
+                        <div class="schema-column">url <span class="schema-column-type">[TEXT]</span></div>
+                        <div class="schema-column">sync_at <span class="schema-column-type">[TIMESTAMP]</span></div>
+                    </div>
+                </div>
+                <div class="schema-table">
+                    <div class="schema-table-name">worktrees</div>
+                    <div class="schema-columns">
+                        <div class="schema-column">id <span class="schema-column-type">[PK]</span></div>
+                        <div class="schema-column">repo_id <span class="schema-column-type">[FK]</span></div>
+                        <div class="schema-column">branch <span class="schema-column-type">[TEXT]</span></div>
+                        <div class="schema-column">path <span class="schema-column-type">[TEXT]</span></div>
+                    </div>
+                </div>
+                <div class="schema-table">
+                    <div class="schema-table-name">files</div>
+                    <div class="schema-columns">
+                        <div class="schema-column">id <span class="schema-column-type">[PK]</span></div>
+                        <div class="schema-column">worktree_id <span class="schema-column-type">[FK]</span></div>
+                        <div class="schema-column">path <span class="schema-column-type">[TEXT]</span></div>
+                        <div class="schema-column">blob_sha <span class="schema-column-type">[TEXT]</span></div>
+                    </div>
+                </div>
+                <div class="schema-table">
+                    <div class="schema-table-name">chunks</div>
+                    <div class="schema-columns">
+                        <div class="schema-column">id <span class="schema-column-type">[PK]</span></div>
+                        <div class="schema-column">file_id <span class="schema-column-type">[FK]</span></div>
+                        <div class="schema-column">kind <span class="schema-column-type">[TEXT]</span></div>
+                        <div class="schema-column">content <span class="schema-column-type">[TEXT]</span></div>
+                        <div class="schema-column">line_start/end <span class="schema-column-type">[INT]</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <div class="section-title" style="font-size: 16px; margin: 0 0 16px 0; padding: 0; border: none; color: #cbd5e0;">Secondary Tables & Relationships</div>
+            </div>
+
+            <div class="schema-tables">
+                <div class="schema-table">
+                    <div class="schema-table-name">code_embeddings</div>
+                    <div class="schema-columns">
+                        <div class="schema-column">blob_sha <span class="schema-column-type">[PK]</span></div>
+                        <div class="schema-column">embedding <span class="schema-column-type">[BLOB]</span></div>
+                        <div class="schema-column">model <span class="schema-column-type">[TEXT]</span></div>
+                        <div class="schema-column">dimensions <span class="schema-column-type">[INT]</span></div>
+                        <div class="schema-column">cached_at <span class="schema-column-type">[TIMESTAMP]</span></div>
+                    </div>
+                </div>
+                <div class="schema-table">
+                    <div class="schema-table-name">chunk_edges</div>
+                    <div class="schema-columns">
+                        <div class="schema-column">from_chunk <span class="schema-column-type">[FK]</span></div>
+                        <div class="schema-column">to_chunk <span class="schema-column-type">[FK]</span></div>
+                        <div class="schema-column">kind <span class="schema-column-type">[TEXT]</span></div>
+                        <div class="schema-column">— imports, calls,</div>
+                        <div class="schema-column">defines, tests, routes</div>
+                    </div>
+                </div>
+                <div class="schema-table">
+                    <div class="schema-table-name">vec_code_*</div>
+                    <div class="schema-columns">
+                        <div class="schema-column">sqlite-vec virtual</div>
+                        <div class="schema-column">tables for vector</div>
+                        <div class="schema-column">similarity search</div>
+                        <div class="schema-column">(768/1024/1536 dims)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 16px;">
+                <div class="schema-relationships">
+                    <div style="font-size: 11px; font-weight: 700; color: #60a5fa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">Relationship Graph</div>
+                    <div class="relationship-item">repos → worktrees → files → chunks</div>
+                    <div class="relationship-item">chunks ↔ chunk_edges (directed relationship graph)</div>
+                    <div class="relationship-item">chunks → code_embeddings (deduped by blob_sha)</div>
+                    <div class="relationship-item">code_embeddings → vec_code_* (dimensional indices)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Metrics -->
+        <div class="section-title">Performance Characteristics</div>
+        <div class="performance">
+            <div class="metric-card">
+                <div class="metric-content">
+                    <div class="metric-label">Search Latency</div>
+                    <div class="metric-value">&lt;50ms</div>
+                    <div class="metric-description">Warm cache, FTS5 + vector hybrid search on local SQLite</div>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-content">
+                    <div class="metric-label">Daemon Speedup</div>
+                    <div class="metric-value">20-50x</div>
+                    <div class="metric-description">vs process-per-request model due to persistent connections and cache</div>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-content">
+                    <div class="metric-label">Embedding Dedup</div>
+                    <div class="metric-value">70-90%</div>
+                    <div class="metric-description">API call reduction via SHA-256 content deduplication</div>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-content">
+                    <div class="metric-label">Indexing Throughput</div>
+                    <div class="metric-value">150-200</div>
+                    <div class="metric-description">Files per minute (sequential) with Tree-sitter AST parsing</div>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-content">
+                    <div class="metric-label">Batch Embedding</div>
+                    <div class="metric-value">400 texts</div>
+                    <div class="metric-description">Per request (50 × 8 workers parallel processing)</div>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-content">
+                    <div class="metric-label">Connection Pool</div>
+                    <div class="metric-value">10 max</div>
+                    <div class="metric-description">r2d2 SQLite connections for concurrent access</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Unique Aspects -->
+        <div class="section-title">Unique & Distinguishing Aspects</div>
+        <div class="unique-aspects">
+            <div class="aspects-list">
+                <div class="aspect-item">
+                    <div class="aspect-title">Content-Aware Deduplication</div>
+                    <div class="aspect-description">SHA-256 hashing on code chunks eliminates redundant embeddings across repos and branches. Identical code reuses cached vectors regardless of location or worktree.</div>
+                </div>
+                <div class="aspect-item">
+                    <div class="aspect-title">Branch-Aware Indexing</div>
+                    <div class="aspect-description">Per-worktree isolation prevents branch state collisions. Index updates scoped to specific branches; enables parallel analysis and incremental sync.</div>
+                </div>
+                <div class="aspect-item">
+                    <div class="aspect-title">Relationship Graph Traversal</div>
+                    <div class="aspect-description">chunk_edges graph (imports, calls, defines, tests, routes) enables context-aware result assembly. Returns semantic dependencies alongside search matches.</div>
+                </div>
+                <div class="aspect-item">
+                    <div class="aspect-title">Multi-Provider Embedding</div>
+                    <div class="aspect-description">Provider-agnostic abstraction: Ollama (local/default), OpenAI, Google Vertex AI. Auto-detection and dimension flexibility (768/1024/1536). Cost optimization with local defaults.</div>
+                </div>
+                <div class="aspect-item">
+                    <div class="aspect-title">Monorepo-Native Support</div>
+                    <div class="aspect-description">pnpm/npm/yarn workspace-aware indexing. Multi-workspace chunking and cross-workspace relationship traversal. Scales to large polyglot monorepos.</div>
+                </div>
+                <div class="aspect-item">
+                    <div class="aspect-title">Hybrid Search Fusion</div>
+                    <div class="aspect-description">Reciprocal Rank Fusion combines BM25 (lexical) + cosine similarity (semantic). Eliminates false negatives from vector-only search. Semantic re-ranking with kind boost and recency.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Packages & Crates -->
+        <div class="section-title">Packages & Crates</div>
+        <div class="packages">
+            <div class="packages-grid">
+                <div class="package-item">
+                    <div class="package-name">@crewchief/cli</div>
+                    <div class="package-version">v1.6.21</div>
+                    <div class="package-note">Command-line interface, primary entry point</div>
+                </div>
+                <div class="package-item">
+                    <div class="package-name">@crewchief/daemon-client</div>
+                    <div class="package-version">v0.1.0</div>
+                    <div class="package-note">JSON-RPC 2.0 TypeScript client</div>
+                </div>
+                <div class="package-item">
+                    <div class="package-name">maproom-mcp</div>
+                    <div class="package-version">TypeScript</div>
+                    <div class="package-note">Model Context Protocol server</div>
+                </div>
+                <div class="package-item">
+                    <div class="package-name">vscode-maproom</div>
+                    <div class="package-version">Deprecated</div>
+                    <div class="package-note">Historical VSCode extension (archived)</div>
+                </div>
+                <div class="package-item">
+                    <div class="package-name">maproom</div>
+                    <div class="package-version">Rust Crate</div>
+                    <div class="package-note">Daemon implementation (~151KB main.rs)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            Technical infographic for software engineers. Data reflects current implementation details as of March 2026. For latest architecture, see repository documentation.
+        </div>
+    </div>
+</body>
+</html>

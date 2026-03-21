@@ -5,6 +5,12 @@ Semantic code search and AI-assisted development toolkit.
 ![CI](https://github.com/manifoldlogic/crewchief/actions/workflows/test.yml/badge.svg)
 ![Release CLI](https://github.com/manifoldlogic/crewchief/actions/workflows/release-cli.yml/badge.svg)
 
+## Architecture Infographic
+
+A comprehensive technical infographic is available at [`docs/infographic.html`](docs/infographic.html). Open it in a browser for a visual overview of the Rust/TypeScript monorepo architecture, tree-sitter indexing pipeline, embedding storage system, and MCP integration layer.
+
+---
+
 ## The CLI: worktrees, agents, and search in one tool
 
 <p align="center">
