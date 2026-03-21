@@ -35,7 +35,7 @@ Built to `../../packages/cli/bin/<platform>/maproom`:
 
 ## Conventions
 
-- **Search modes**: FTS works without embeddings. Vector/hybrid require `generate-embeddings` first.
+- **FTS-first default**: `maproom scan` defaults to FTS-only (no embeddings). Use `--generate-embeddings` to opt in to vector search. Vector/hybrid require a configured embedding provider.
 - **Embedding dimension auto-inference**: Known Ollama models (`mxbai-embed-large` → 1024, `nomic-embed-text` → 768) are inferred automatically. Override with `MAPROOM_EMBEDDING_DIMENSION`.
 - **Multiple vector tables**: sqlite-vec requires fixed dimensions at table creation. Separate tables per dimension (`vec_code`, `vec_code_1024`, `vec_code_768`).
 
