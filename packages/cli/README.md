@@ -21,7 +21,8 @@ crewchief --help
 
 - **Node.js >= 18**
 - **Git** (for worktree management)
-- **iTerm2** (optional, macOS only -- required for AI agent orchestration; not needed for search or worktree features) — [download](https://iterm2.com/downloads.html)
+- **iTerm2** (optional, macOS only -- for AI agent orchestration) — [download](https://iterm2.com/downloads.html)
+- **tmux** (optional, Linux/Windows -- for AI agent orchestration) — `sudo apt install tmux` or `brew install tmux`
 - **CLI agent tools** (`claude`, `gemini`, etc.) must be installed for agent orchestration
 
 ## Quick Start
@@ -178,9 +179,11 @@ crewchief maproom scan
 
 ### AI Agent Orchestration
 
-Agent orchestration supports two modes: **iTerm2** (default) for visual terminal management on macOS, and **Headless** for non-interactive or server environments.
+Agent orchestration supports three modes: **iTerm2** (default on macOS) for visual terminal management, **tmux** (recommended on Linux/Windows) for cross-platform terminal multiplexing, and **Headless** for non-interactive or server environments.
 
-#### iTerm2 Mode (Default)
+The backend is auto-detected: if you are running inside a tmux session, tmux is used automatically. On macOS inside iTerm2, iTerm2 is used. Otherwise, headless mode is the fallback.
+
+#### iTerm2 Mode (Default on macOS)
 
 Requires iTerm2 on macOS. Agents run in dedicated terminal panes.
 
@@ -202,9 +205,31 @@ crewchief agent message implement-auth__claude "Add OAuth support"
 crewchief agent message implement-auth --all "Update approach"
 ```
 
+#### tmux Mode (Linux/Windows)
+
+Recommended for Linux and Windows (WSL). Agents run in dedicated tmux windows/panes. tmux must be installed (`sudo apt install tmux` on Debian/Ubuntu, `brew install tmux` on macOS).
+
+```bash
+# Auto-detected when running inside a tmux session:
+tmux
+crewchief spawn claude "implement the login feature"
+
+# Or configure tmux as the default backend in crewchief.config.js:
+#   terminal: { backend: 'tmux' }
+
+# Agents appear as tmux windows — view them with:
+tmux list-windows
+tmux list-panes -s
+
+# Attach to see agent output:
+tmux attach -t crewchief
+```
+
+**Why tmux?** tmux sessions persist across terminal disconnects, making it ideal for long-running agent tasks. Agents survive SSH disconnections and terminal closures.
+
 #### Headless Mode
 
-For non-iTerm2 environments (servers, CI/CD, other terminals). Agents run as background processes.
+For non-iTerm2/non-tmux environments (servers, CI/CD, other terminals). Agents run as background processes.
 
 ```bash
 # Spawn agents in headless mode
@@ -455,7 +480,7 @@ export default {
     overwriteStrategy: 'skip', // 'skip', 'overwrite', or 'backup'
   },
   terminal: {
-    backend: 'iterm',
+    backend: 'iterm', // Options: 'iterm' (macOS), 'tmux' (Linux/Windows), 'headless', 'auto'
     iterm: {
       sessionName: 'crewchief',
     },
@@ -795,7 +820,7 @@ All commands below should be prefixed with `crewchief`. For example: `crewchief 
 
 **Note:** For AI assistant integration, install [maproom-mcp](https://www.npmjs.com/package/maproom-mcp) instead of using these commands directly.
 
-### Agent Commands (iTerm2 or Headless Mode)
+### Agent Commands (iTerm2, tmux, or Headless Mode)
 
 | Command                      | Description           |
 | ---------------------------- | --------------------- |
@@ -949,6 +974,7 @@ This will check for:
 - Node.js version (>= 18 required)
 - Git installation
 - iTerm2 availability (macOS only, optional -- needed for agent orchestration)
+- tmux availability (optional -- needed for agent orchestration on Linux/Windows)
 
 ### Common Issues
 
@@ -1044,7 +1070,7 @@ This will check for:
 3. Verify iTerm2 version (>= 3.4 recommended):
    - iTerm2 → About iTerm2
 
-**Note:** Agent orchestration features are macOS-only and require iTerm2. Worktree and semantic search work on all platforms.
+**Note:** On macOS, agent orchestration uses iTerm2. On Linux and Windows, use `--backend tmux` or run inside a tmux session for automatic detection. Worktree and semantic search work on all platforms.
 
 #### Worktree Creation Failed
 
