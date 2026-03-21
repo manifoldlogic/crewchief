@@ -1,5 +1,9 @@
 # Maproom
 
+<p align="center">
+  <img src="../../docs/images/maproom_hero.svg" alt="maproom architecture diagram" width="600">
+</p>
+
 Semantic code search powered by embeddings and SQLite.
 
 Maproom indexes your codebase using tree-sitter, stores chunks in a local SQLite database, and enables both full-text and vector similarity search. It runs as a CLI tool or as an MCP server for integration with AI coding assistants.

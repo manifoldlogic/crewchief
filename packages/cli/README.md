@@ -1,5 +1,9 @@
 # CrewChief CLI
 
+<p align="center">
+  <img src="../../docs/images/crewchief_cli_hero.svg" alt="crewchief CLI architecture diagram" width="600">
+</p>
+
 A powerful command-line tool for git worktree management, semantic code search, and AI agent orchestration.
 
 ## Installation

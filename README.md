@@ -2,6 +2,10 @@
 
 Semantic code search toolkit for AI-assisted development.
 
+<p align="center">
+  <img src="docs/images/crewchief_hero_banner.svg" alt="crewchief architecture diagram" width="600">
+</p>
+
 ![CI](https://github.com/manifoldlogic/crewchief/actions/workflows/test.yml/badge.svg)
 ![Release CLI](https://github.com/manifoldlogic/crewchief/actions/workflows/release-cli.yml/badge.svg)
 
