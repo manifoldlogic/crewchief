@@ -32,7 +32,7 @@ MCP server for semantic code search powered by SQLite and your choice of embeddi
 
 ### With VSCode/Cursor Extension (Recommended)
 
-Install the [Maproom extension](https://marketplace.visualstudio.com/items?itemName=crewchief.maproom) which handles everything automatically.
+Install the [Maproom extension](https://marketplace.visualstudio.com/items?itemName=manifoldlogic.vscode-maproom) which handles everything automatically.
 
 ### Manual MCP Configuration
 
