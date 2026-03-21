@@ -42,7 +42,6 @@
  * All edge cases are tested in tests/integration/semrank-edge-cases.test.ts
  */
 
-import { Client } from "pg";
 import pino from "pino";
 import { z } from "zod";
 import type { SearchParams, SearchResult, SearchBundle } from "../types.js";
@@ -186,7 +185,7 @@ interface RustSearchOutput {
  * @deprecated Legacy function for PostgreSQL. Not used with SQLite backend.
  */
 async function fetchChunkIds(
-  client: Client,
+  client: any,
   repo: string,
   hits: RustSearchHit[],
 ): Promise<Map<string, number>> {
@@ -248,7 +247,7 @@ async function fetchChunkIds(
  */
 export async function handleSearchTool(
   params: unknown,
-  client: Client,
+  client: any,
 ): Promise<SearchBundle> {
   // Validate parameters with Zod schema
   const validatedParams = validateSearchParams(params);

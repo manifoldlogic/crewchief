@@ -1,8 +1,16 @@
 # @crewchief/maproom-mcp
 
-> **Note: This package is no longer actively maintained.** It may still work but is not receiving updates or bug fixes. For semantic code search, use the [`maproom`](https://crates.io/crates/maproom) binary directly via [`@crewchief/cli`](https://www.npmjs.com/package/@crewchief/cli).
+MCP server for semantic code search powered by Maproom. This is the recommended way to expose Maproom search capabilities to LLM agents via the [Model Context Protocol](https://modelcontextprotocol.io/).
 
-MCP server for semantic code search powered by SQLite and your choice of embedding provider.
+## Agent Integration via MCP
+
+`@crewchief/maproom-mcp` provides a Model Context Protocol (MCP) server for semantic code search. It connects to the Maproom Rust daemon which handles indexing, search, and context assembly over a SQLite database.
+
+```bash
+npm install -g @crewchief/maproom-mcp
+# or add to your MCP server configuration:
+# { "command": "maproom-mcp" }
+```
 
 ## Breaking Changes (v3.0.0)
 
