@@ -1,31 +1,64 @@
 import { spawnSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { Command } from 'commander'
 import { validateMaproomEnvironment, displayValidationResult } from './maproom-validation.js'
 import { loadConfig } from '../config/loader.js'
 import { findMaproomBinary } from '../utils/maproom-binary.js'
 
-async function runMaproomForward(args: string[]) {
-  const subcommand = args[0]
-
-  // Skip validation for help commands and non-database commands
-  const skipValidation = args.includes('--help') || args.includes('-h') || subcommand === 'cache'
-
-  if (!skipValidation) {
-    // Commands that require database and may need embeddings
-    const needsValidation = ['scan', 'upsert', 'search', 'generate-embeddings']
-
-    if (needsValidation.includes(subcommand)) {
-      const validation = validateMaproomEnvironment()
-      displayValidationResult(validation)
-
-      if (!validation.valid) {
-        process.exitCode = 1
-        return
-      }
+/**
+ * Resolve the Maproom SQLite database path.
+ *
+ * Mirrors the Rust convention in `crates/maproom/src/db/connection.rs`:
+ * 1. MAPROOM_DATABASE_URL env var (strip `sqlite://` prefix, expand `~`)
+ * 2. ~/.maproom/maproom.db (default)
+ */
+export function resolveMaproomDbPath(): string {
+  const envUrl = process.env.MAPROOM_DATABASE_URL
+  if (envUrl) {
+    let dbPath = envUrl
+    if (dbPath.startsWith('sqlite://')) {
+      dbPath = dbPath.slice('sqlite://'.length)
     }
+    // Expand leading tilde
+    if (dbPath.startsWith('~/')) {
+      dbPath = path.join(os.homedir(), dbPath.slice(2))
+    } else if (dbPath === '~') {
+      dbPath = os.homedir()
+    }
+    return dbPath
   }
+  return path.join(os.homedir(), '.maproom', 'maproom.db')
+}
 
-  // Load config to get binary path (handle missing config gracefully)
+/**
+ * Check whether a Maproom index exists by testing for the database file.
+ *
+ * This is a fast synchronous stat call (sub-millisecond) so it adds
+ * negligible overhead to every search invocation.
+ */
+export function maproomIndexExists(): boolean {
+  return fs.existsSync(resolveMaproomDbPath())
+}
+
+/**
+ * Run a FTS-only scan to bootstrap the index for the current repository.
+ *
+ * @param binaryPath - Resolved path to the maproom binary
+ * @returns The exit code from the scan (0 = success)
+ */
+export function runAutoIndexScan(binaryPath: string): number {
+  console.log('No index found. Building FTS index for this repo (no embedding provider required).')
+  const scanResult = spawnSync(binaryPath, ['scan'], { stdio: 'inherit' })
+  return scanResult.status ?? 1
+}
+
+/**
+ * Resolve the maproom binary path. Shared between runMaproomForward and
+ * runMaproomSearchWithAutoIndex so the resolution logic is not duplicated.
+ */
+async function resolveMaproomBinaryPath(): Promise<string | null> {
   let configPath: string | undefined
   try {
     const config = await loadConfig()
@@ -52,11 +85,100 @@ async function runMaproomForward(args: string[]) {
         '- Global: not found\n' +
         '- Packaged: not found',
     )
+    return null
+  }
+
+  return result.path
+}
+
+export async function runMaproomForward(args: string[]) {
+  const subcommand = args[0]
+
+  // Skip validation for help commands and non-database commands
+  const skipValidation = args.includes('--help') || args.includes('-h') || subcommand === 'cache'
+
+  if (!skipValidation) {
+    // Commands that require database and may need embeddings
+    const needsValidation = ['scan', 'upsert', 'search', 'generate-embeddings']
+
+    if (needsValidation.includes(subcommand)) {
+      const validation = validateMaproomEnvironment()
+      displayValidationResult(validation)
+
+      if (!validation.valid) {
+        process.exitCode = 1
+        return
+      }
+    }
+  }
+
+  const binaryPath = await resolveMaproomBinaryPath()
+  if (!binaryPath) {
     process.exitCode = 1
     return
   }
 
-  const res = spawnSync(result.path, args, { stdio: 'inherit' })
+  const res = spawnSync(binaryPath, args, { stdio: 'inherit' })
+  if (res.status !== 0) process.exitCode = res.status ?? 1
+}
+
+/**
+ * Run a maproom search with auto-index support.
+ *
+ * Detection strategy (two-pronged):
+ *   1. **Pre-flight**: Fast filesystem check for the SQLite database file.
+ *      If the file does not exist, run a FTS-only scan before the search.
+ *   2. **Post-flight**: If the search exits with code 2 (config_error,
+ *      typically "database not found" or "repository not indexed"),
+ *      auto-scan and retry once.
+ *
+ * The pre-flight check handles the common case (fresh install, no index)
+ * with zero extra process spawns. The post-flight fallback catches edge
+ * cases where the database file exists but the repo isn't indexed yet.
+ */
+export async function runMaproomSearchWithAutoIndex(args: string[]) {
+  const validation = validateMaproomEnvironment()
+  displayValidationResult(validation)
+  if (!validation.valid) {
+    process.exitCode = 1
+    return
+  }
+
+  const binaryPath = await resolveMaproomBinaryPath()
+  if (!binaryPath) {
+    process.exitCode = 1
+    return
+  }
+
+  // Pre-flight: fast filesystem check for the database file
+  if (!maproomIndexExists()) {
+    const scanExit = runAutoIndexScan(binaryPath)
+    if (scanExit !== 0) {
+      console.error('Auto-index failed. Run "crewchief maproom scan" manually for details.')
+      process.exitCode = scanExit
+      return
+    }
+  }
+
+  // Run the search
+  const searchArgs = ['search', ...args]
+  const res = spawnSync(binaryPath, searchArgs, { stdio: 'inherit' })
+
+  // Post-flight fallback: if exit code 2 (config error / repo not indexed),
+  // try auto-indexing and retry once
+  if (res.status === 2) {
+    const scanExit = runAutoIndexScan(binaryPath)
+    if (scanExit !== 0) {
+      console.error('Auto-index failed. Run "crewchief maproom scan" manually for details.')
+      process.exitCode = scanExit
+      return
+    }
+    // Retry search after scan
+    const retryRes = spawnSync(binaryPath, searchArgs, { stdio: 'inherit' })
+    if (retryRes.status !== 0) process.exitCode = retryRes.status ?? 1
+    return
+  }
+
   if (res.status !== 0) process.exitCode = res.status ?? 1
 }
 
@@ -89,7 +211,7 @@ export function registerMaproomCommands(program: Command) {
       'after',
       '\nExamples:\n  $ crewchief maproom search "authentication flow"\n  $ crewchief maproom search "database queries" --limit 10',
     )
-    .action(async (args) => await runMaproomForward(['search', ...(args || [])]))
+    .action(async (args) => await runMaproomSearchWithAutoIndex(args || []))
 
   maproom
     .command('upsert')

@@ -7,6 +7,7 @@ import { registerAgentCommands } from './agent'
 import { registerCompetitionCommands } from './competition'
 import { registerDoctorCommand } from './doctor'
 import { registerMaproomCommands } from './maproom'
+import { registerMaproomAliases } from './maproom-aliases'
 import { registerOptimizationCommands } from './optimization'
 import { registerReleaseCommand } from './release'
 import { registerSetupCommand } from './setup'
@@ -39,6 +40,7 @@ registerWorktreeCommands(program)
 registerAgentCommands(program)
 registerCompetitionCommands(program)
 registerMaproomCommands(program)
+registerMaproomAliases(program)
 registerOptimizationCommands(program)
 registerSetupCommand(program)
 registerDoctorCommand(program)
