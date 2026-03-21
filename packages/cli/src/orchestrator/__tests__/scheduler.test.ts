@@ -4,6 +4,7 @@ import { busManager } from '../../bus'
 import { loadConfig } from '../../config/loader'
 import { WorktreeService, buildDeterministicBranchName } from '../../git/worktrees'
 import type { TerminalProvider } from '../../terminal/interface'
+import { deriveMaproomSocketPath } from '../../utils/worktree-metadata.js'
 import { RunManager } from '../runManager'
 import { Scheduler } from '../scheduler'
 import type { SpawnOptions } from '../scheduler'
@@ -40,6 +41,10 @@ vi.mock('../../bus', () => ({
   },
 }))
 
+vi.mock('../../utils/worktree-metadata.js', () => ({
+  deriveMaproomSocketPath: vi.fn(),
+}))
+
 // ---------------------------------------------------------------------------
 // Test setup
 // ---------------------------------------------------------------------------
@@ -55,6 +60,10 @@ beforeEach(() => {
   vi.clearAllMocks()
 
   // Re-setup mocked return values after clearAllMocks
+  vi.mocked(deriveMaproomSocketPath).mockImplementation(
+    (dir: string) => `/tmp/maproom-1000-${dir.split('/').pop()}.sock`,
+  )
+
   vi.mocked(loadConfig).mockResolvedValue({
     repository: {
       mainBranch: 'main',
@@ -416,6 +425,30 @@ describe('Scheduler.spawnAgent', () => {
       const command = runCommandSpy.mock.calls[0][1] as string
       expect(command).toContain('CREWCHIEF_BUS_PATH=')
     })
+
+    it('includes MAPROOM_MCP_SOCKET in command string (Connection E)', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('test task', 'claude', { useWorktree: false })
+
+      const command = runCommandSpy.mock.calls[0][1] as string
+      expect(command).toContain('MAPROOM_MCP_SOCKET=')
+    })
+
+    it('derives MAPROOM_MCP_SOCKET from the effective working directory', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('test task', 'claude', { useWorktree: false })
+
+      // deriveMaproomSocketPath should have been called with process.cwd()
+      expect(deriveMaproomSocketPath).toHaveBeenCalledWith(process.cwd())
+    })
+
+    it('derives MAPROOM_MCP_SOCKET from worktree path when useWorktree is true', async () => {
+      const scheduler = new Scheduler(mockTerminal, mockRunManager as unknown as RunManager)
+      await scheduler.spawnAgent('test task', 'claude', { useWorktree: true })
+
+      // When using worktree, the effective working dir is the created worktree path
+      expect(deriveMaproomSocketPath).toHaveBeenCalledWith('/path/to/worktree')
+    })
   })
 
   describe('extraArgs', () => {
@@ -432,8 +465,9 @@ describe('Scheduler.spawnAgent', () => {
       await scheduler.spawnAgent('task', 'claude', { useWorktree: false })
 
       const command = runCommandSpy.mock.calls[0][1] as string
-      // Command should just be 'claude' without trailing args
-      expect(command).toMatch(/CREWCHIEF_BUS_PATH="[^"]*" claude$/)
+      // Command should end with 'claude' without trailing args
+      // (preceded by env vars CREWCHIEF_BUS_PATH and MAPROOM_MCP_SOCKET)
+      expect(command).toMatch(/MAPROOM_MCP_SOCKET="[^"]*" claude$/)
     })
   })
 

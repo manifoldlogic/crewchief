@@ -10,7 +10,6 @@
 
 import path from 'node:path'
 import fs from 'node:fs/promises'
-import { Client } from 'pg'
 import pino from 'pino'
 import type { OpenParams, FileContent, OpenToolConfig } from '../types.js'
 import { validateOpenParams } from './open_schema.js'
@@ -75,7 +74,7 @@ const DEFAULT_CONFIG: OpenToolConfig = {
  * // Skips candidates with abs_path outside /workspace (e.g., /etc, /tmp)
  */
 async function getWorktreePath(
-  client: Client,
+  client: any,
   worktreeName: string,
   relpath: string,
   expectedRoot?: string
@@ -98,7 +97,7 @@ async function getWorktreePath(
 
     if (availableWorktrees.rows.length > 0) {
       throw new ValidationError(
-        `File exists in other worktrees: ${availableWorktrees.rows.map((r) => r.name).join(', ')}. Check your worktree parameter.`,
+        `File exists in other worktrees: ${availableWorktrees.rows.map((r: any) => r.name).join(', ')}. Check your worktree parameter.`,
         'FILE_NOT_FOUND'
       )
     } else {
@@ -239,7 +238,7 @@ async function readFileFromFilesystem(
  */
 export async function handleOpenTool(
   params: unknown,
-  client: Client,
+  client: any,
   config: OpenToolConfig = DEFAULT_CONFIG
 ): Promise<FileContent> {
   // Validate parameters with Zod schema

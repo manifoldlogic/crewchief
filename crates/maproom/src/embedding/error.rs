@@ -89,8 +89,8 @@ impl std::fmt::Display for DimensionMismatchError {
                 export MAPROOM_EMBEDDING_PROVIDER={}\n\
              2. Set dimension to match your model:\n\
                 export MAPROOM_EMBEDDING_DIMENSION={}\n\
-             3. Skip embeddings if not needed:\n\
-                maproom scan --generate-embeddings=false\n\n\
+             3. Skip embeddings (the default):\n\
+                maproom scan  (without --generate-embeddings)\n\n\
              See troubleshooting guide: .crewchief/claude-code-plugins/plugins/maproom/skills/maproom-search/references/troubleshooting.md",
             self.expected,
             self.actual,
@@ -256,7 +256,7 @@ mod tests {
             "Error should suggest MAPROOM_EMBEDDING_DIMENSION env var"
         );
         assert!(
-            error_msg.contains("--generate-embeddings=false"),
+            error_msg.contains("without --generate-embeddings"),
             "Error should suggest skipping embeddings"
         );
         assert!(

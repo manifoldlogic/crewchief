@@ -368,24 +368,21 @@ enum Commands {
         /// Force full scan, bypassing incremental tree SHA optimization (BRANCHX-1011)
         #[arg(long, default_value_t = false)]
         force: bool,
-        /// Generate embeddings for vector search (default: true).
+        /// Generate embeddings for vector search (default: false).
         /// Embeddings enable semantic search but require embedding provider configuration.
-        /// Use --generate-embeddings=false (or --no-generate-embeddings) to skip if:
-        /// - Embedding provider is not configured
-        /// - Only using full-text search
-        /// - Troubleshooting configuration issues
+        /// Use --generate-embeddings to opt in when you want vector/semantic search.
+        /// FTS (full-text search) works without embeddings and is the default mode.
         #[arg(
             long,
-            default_value_t = true,
+            default_value_t = false,
             action = clap::ArgAction::Set,
-            help = "Generate embeddings for vector search (default: true)",
+            help = "Generate embeddings for vector search (default: false)",
             long_help = "Generate embeddings for vector search.\n\
                          Embeddings enable semantic search via vector-search command.\n\
-                         Full-text search works without embeddings.\n\n\
-                         Skip embeddings with --generate-embeddings=false or --no-generate-embeddings when:\n\
-                         - Embedding provider is not configured\n\
-                         - Only using full-text search\n\
-                         - Troubleshooting configuration issues"
+                         Full-text search works without embeddings and is the default mode.\n\n\
+                         Use --generate-embeddings to opt in when:\n\
+                         - You want semantic/vector search capabilities\n\
+                         - You have an embedding provider configured (Ollama, OpenAI, or Google Vertex)"
         )]
         generate_embeddings: bool,
         /// Embedding batch size for generation (default: 50)
@@ -414,8 +411,8 @@ enum Commands {
         worktree: String,
         #[arg(long)]
         root: PathBuf,
-        /// Automatically generate embeddings after upserting (default: true)
-        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+        /// Automatically generate embeddings after upserting (default: false)
+        #[arg(long, default_value_t = false, action = clap::ArgAction::Set)]
         generate_embeddings: bool,
         /// Embedding batch size for generation (default: 50)
         #[arg(long, default_value_t = 50)]

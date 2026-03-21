@@ -6,7 +6,7 @@
 
 ## Executive Summary
 
-Maproom is a **hybrid semantic code search engine** that combines full-text search (FTS), vector similarity search, graph-based importance signals, and temporal signals to provide highly relevant code search results. The system indexes codebases using tree-sitter parsing, generates semantic embeddings via multiple providers (Ollama, Google Vertex AI, OpenAI), and stores everything in PostgreSQL with pgvector for efficient vector similarity queries.
+Maproom is a **hybrid semantic code search engine** that combines full-text search (FTS), vector similarity search, graph-based importance signals, and temporal signals to provide highly relevant code search results. The system indexes codebases using tree-sitter parsing and stores everything in SQLite with sqlite-vec for efficient vector similarity queries. **FTS is the default search mode** — `maproom scan` indexes for full-text search without requiring any embedding provider configuration. Vector search is an optional upgrade enabled by passing `--generate-embeddings` with a configured provider (Ollama, Google Vertex AI, or OpenAI).
 
 **Core Value Proposition**: Find code by _what it does_ (semantic search) rather than _what it's called_ (keyword search).
 

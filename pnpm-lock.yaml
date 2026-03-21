@@ -142,9 +142,6 @@ importers:
       lru-cache:
         specifier: ^11.2.2
         version: 11.2.2
-      pg:
-        specifier: ^8.11.3
-        version: 8.16.3
       pino:
         specifier: ^8.16.2
         version: 8.21.0
@@ -158,9 +155,6 @@ importers:
       '@types/node':
         specifier: ^20.10.5
         version: 20.19.10
-      '@types/pg':
-        specifier: ^8.10.9
-        version: 8.15.5
       typescript:
         specifier: ^5.3.3
         version: 5.9.2
@@ -777,9 +771,6 @@ packages:
 
   '@types/normalize-package-data@2.4.4':
     resolution: {integrity: sha512-37i+OaWTh9qeK4LSHPsyRC7NahnGotNuZvjLSgcPzblpHB3rrCJxAOgI5gCdKm7coonsaX1Of0ILiTcnZjbfxA==}
-
-  '@types/pg@8.15.5':
-    resolution: {integrity: sha512-LF7lF6zWEKxuT3/OR8wAZGzkg4ENGXFNyiV/JeOt9z5B+0ZVwbql9McqX5c/WStFq1GaGso7H1AzP/qSzmlCKQ==}
 
   '@types/pg@8.15.6':
     resolution: {integrity: sha512-NoaMtzhxOrubeL/7UZuNTrejB4MPAJ0RpxZqXQf2qXuVlTPuG6Y8p4u9dKRaue4yjmC7ZhzVO2/Yyyn25znrPQ==}
@@ -4041,12 +4032,6 @@ snapshots:
       undici-types: 6.21.0
 
   '@types/normalize-package-data@2.4.4': {}
-
-  '@types/pg@8.15.5':
-    dependencies:
-      '@types/node': 20.19.10
-      pg-protocol: 1.10.3
-      pg-types: 2.2.0
 
   '@types/pg@8.15.6':
     dependencies:
