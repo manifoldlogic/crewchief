@@ -9,7 +9,7 @@ import { ensureDirSync, removeDirSync } from '../utils/fs'
 import { logger } from '../utils/logger'
 import { findMaproomBinary } from '../utils/maproom-binary.js'
 import { expandWorktreePath } from '../utils/paths'
-import { WorktreeMetadataService } from '../utils/worktree-metadata'
+import { WorktreeMetadataService, deriveMaproomSocketPath } from '../utils/worktree-metadata'
 
 export interface WorktreeListItem {
   path: string
@@ -121,7 +121,8 @@ export class WorktreeService {
 
     await this.git.raw(['worktree', 'add', '-B', name, wtPath, baseBranch])
 
-    // Save worktree metadata
+    // Save worktree metadata (index_state starts as "pending"; updated to
+    // "indexed" after a successful scan, if auto-scan is enabled).
     const metadataService = new WorktreeMetadataService()
     await metadataService.save(wtPath, {
       sourceBranch: currentBranch,
@@ -129,6 +130,11 @@ export class WorktreeService {
       createdFrom: this.cwd,
       baseBranch,
       purpose,
+      index_state: 'pending',
+      agent_run_id: null,
+      agent_platform: null,
+      mcp_socket_path: deriveMaproomSocketPath(wtPath),
+      task_description: '',
     })
 
     // Load config once for both operations (efficiency + consistency)
@@ -153,9 +159,13 @@ export class WorktreeService {
       }
     }
 
-    // Run maproom scan if configured (opt-in)
+    // Run maproom scan if configured (opt-in).
+    // On success, update index_state from "pending" to "indexed".
     if (config?.worktree?.autoScanOnWorktreeUse) {
       await this.runMaproomScan(wtPath)
+      // runMaproomScan logs warnings on failure; check is best-effort.
+      // If it completed without throwing, mark the worktree as indexed.
+      await metadataService.update(wtPath, { index_state: 'indexed' })
     }
 
     return wtPath

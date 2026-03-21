@@ -4,6 +4,7 @@ import { busManager } from '../bus'
 import { loadConfig } from '../config/loader'
 import { WorktreeService, buildDeterministicBranchName } from '../git/worktrees'
 import { TerminalProvider } from '../terminal/interface'
+import { deriveMaproomSocketPath } from '../utils/worktree-metadata.js'
 
 // ---------------------------------------------------------------------------
 // SpawnOptions - configuration for the new spawnAgent() method
@@ -123,9 +124,13 @@ export class Scheduler {
       command = `${command} ${options.extraArgs}`
     }
 
+    // Derive the Maproom MCP socket path so the spawned agent can connect
+    // to the semantic search daemon for this worktree (Connection E).
+    const maproomSocketPath = deriveMaproomSocketPath(effectiveWorkingDir)
+
     await this.terminal.runCommand(
       paneId,
-      `cd ${JSON.stringify(effectiveWorkingDir)} && CREWCHIEF_BUS_PATH=${JSON.stringify(busPath)} ${command}`,
+      `cd ${JSON.stringify(effectiveWorkingDir)} && CREWCHIEF_BUS_PATH=${JSON.stringify(busPath)} MAPROOM_MCP_SOCKET=${JSON.stringify(maproomSocketPath)} ${command}`,
     )
 
     return run.id
