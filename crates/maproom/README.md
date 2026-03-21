@@ -1,7 +1,7 @@
 # Maproom
 
 <p align="center">
-  <img src="../../docs/images/maproom_hero.svg" alt="maproom architecture diagram" width="600">
+  <img src="../../docs/images/maproom_hero.svg" alt="maproom architecture diagram">
 </p>
 
 Semantic code search powered by embeddings and SQLite.
