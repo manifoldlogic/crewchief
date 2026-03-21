@@ -11,7 +11,7 @@ Semantic code search and AI-assisted development toolkit.
   <img src="docs/images/crewchief_cli_hero.svg" alt="CrewChief CLI architecture — worktree management creates isolated branches, agent orchestration spawns and coordinates AI coding agents in iTerm2, and maproom integration provides semantic code search. All accessible through the crewchief command.">
 </p>
 
-The `crewchief` CLI brings together git worktree management, AI agent orchestration, and semantic code search. Create isolated worktrees for parallel development, spawn AI agents that work in their own terminal tabs, and search your codebase by meaning — all from one command.
+The [`crewchief` CLI](https://www.npmjs.com/package/@crewchief/cli) brings together git worktree management, AI agent orchestration, and semantic code search. Create isolated worktrees for parallel development, spawn AI agents that work in their own terminal tabs, and search your codebase by meaning — all from one command.
 
 ```bash
 npm install -g @crewchief/cli
@@ -29,7 +29,7 @@ See the [CLI README](packages/cli/README.md) for full installation, configuratio
   <img src="docs/images/maproom_hero.svg" alt="Maproom indexer architecture — tree-sitter parses source files into AST chunks, embeddings encode semantic meaning via Ollama or OpenAI, SQLite stores chunks with full-text and vector indexes, and hybrid search combines lexical and semantic ranking with recency and churn signals.">
 </p>
 
-`maproom` is the Rust binary that powers crewchief's code search. It parses your codebase with tree-sitter (15 languages), stores chunks in a local SQLite database, and runs hybrid search combining full-text matching with vector similarity. Results are ranked using lexical relevance, semantic similarity, git recency, and churn signals.
+[`maproom`](https://crates.io/crates/maproom) is the Rust binary that powers crewchief's code search. It parses your codebase with tree-sitter (15 languages), stores chunks in a local SQLite database, and runs hybrid search combining full-text matching with vector similarity. Results are ranked using lexical relevance, semantic similarity, git recency, and churn signals.
 
 ```bash
 cargo install maproom
@@ -37,7 +37,7 @@ maproom scan --repository .
 maproom search "error handling in API routes"
 ```
 
-Full-text search works immediately after indexing. Add an embedding provider (Ollama for local/free, OpenAI for hosted) to unlock vector and hybrid search modes. See the [maproom README](crates/maproom/README.md) for provider configuration.
+Full-text search works immediately after indexing. Add an embedding provider (Ollama for local/free, OpenAI for hosted) to unlock vector and hybrid search modes. See the [maproom README](crates/maproom/README.md) for provider configuration. The CLI wraps `maproom` so you can use either `crewchief maproom search` or the `maproom` binary directly.
 
 ## Getting Started
 
@@ -47,7 +47,7 @@ Full-text search works immediately after indexing. Add an embedding provider (Ol
 # CLI (recommended — includes the maproom binary)
 npm install -g @crewchief/cli
 
-# Or install the Rust binary directly
+# Or install the Rust indexer directly
 cargo install maproom
 ```
 
@@ -83,7 +83,7 @@ crewchief agent message claude "also add cache invalidation"
 
 ## Supported Languages
 
-maproom parses these languages with tree-sitter for symbol-level chunking:
+[`maproom`](https://crates.io/crates/maproom) parses these languages with tree-sitter for symbol-level chunking:
 
 TypeScript, JavaScript, Python, Rust, Go, Ruby, C, C++, C#, Java, Markdown, JSON, YAML, TOML
 
@@ -111,7 +111,7 @@ This is not a heavyweight process tool. It runs inside Claude Code as slash comm
 
 ### Deprecated
 
-- **`@crewchief/maproom-mcp`** — Standalone MCP server. Use [`@crewchief/cli`](https://www.npmjs.com/package/@crewchief/cli) instead, which wraps the maproom binary directly.
+- **[`@crewchief/maproom-mcp`](https://www.npmjs.com/package/@crewchief/maproom-mcp)** — Standalone MCP server. Use [`@crewchief/cli`](https://www.npmjs.com/package/@crewchief/cli) instead, which wraps the [`maproom`](https://crates.io/crates/maproom) binary directly.
 - **`vscode-maproom`** — VS Code extension. Use [`@crewchief/cli`](https://www.npmjs.com/package/@crewchief/cli) and the [`maproom`](https://crates.io/crates/maproom) binary directly.
 
 These packages remain in the repository for reference but are not receiving new features or bug fixes.
