@@ -34,7 +34,7 @@ export class WorktreeService {
    * @param worktreePath - Absolute path to the worktree directory
    * @private
    */
-  private async runMaproomScan(worktreePath: string): Promise<void> {
+  private async runMaproomScan(worktreePath: string): Promise<boolean> {
     try {
       const config = await loadConfig()
       const result = findMaproomBinary({
@@ -63,12 +63,15 @@ export class WorktreeService {
         } else {
           console.log('✅ Maproom scan completed')
         }
+        return true
       } else {
         const errorMsg = scanResult.stderr || scanResult.stdout || 'Unknown error'
         console.warn(`⚠️  Maproom scan failed: ${errorMsg.split('\n')[0]}`)
+        return false
       }
     } catch (error) {
       console.warn('⚠️  Failed to run maproom scan:', error instanceof Error ? error.message : error)
+      return false
     }
   }
 
@@ -162,10 +165,10 @@ export class WorktreeService {
     // Run maproom scan if configured (opt-in).
     // On success, update index_state from "pending" to "indexed".
     if (config?.worktree?.autoScanOnWorktreeUse) {
-      await this.runMaproomScan(wtPath)
-      // runMaproomScan logs warnings on failure; check is best-effort.
-      // If it completed without throwing, mark the worktree as indexed.
-      await metadataService.update(wtPath, { index_state: 'indexed' })
+      const scanSucceeded = await this.runMaproomScan(wtPath)
+      if (scanSucceeded) {
+        await metadataService.update(wtPath, { index_state: 'indexed' })
+      }
     }
 
     return wtPath
