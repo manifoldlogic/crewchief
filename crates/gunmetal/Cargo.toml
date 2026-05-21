@@ -44,4 +44,5 @@ web-sys = { version = "0.3", features = [
     "IdbDatabase", "IdbFactory", "IdbObjectStore", "IdbObjectStoreParameters",
     "IdbRequest", "IdbTransaction", "IdbTransactionMode", "IdbOpenDbRequest",
     "IdbCursorWithValue", "IdbCursorDirection", "IdbKeyRange",
+    "IdbVersionChangeEvent", "Window", "DomException", "Event",
 ] }
