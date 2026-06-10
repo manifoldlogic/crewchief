@@ -64,6 +64,26 @@ pub trait StorageAdapter: crate::concurrency::MaybeSend {
     fn delete(&mut self, key: &str) -> Result<(), String>;
 }
 
+/// Boxed adapters forward to the inner implementation, so callers can
+/// select a backend at runtime (e.g. the relay's `--file` storage).
+impl StorageAdapter for Box<dyn StorageAdapter> {
+    fn put(&mut self, key: &str, value: &StoredValue) -> Result<(), String> {
+        (**self).put(key, value)
+    }
+
+    fn get(&self, key: &str) -> Result<Option<StoredValue>, String> {
+        (**self).get(key)
+    }
+
+    fn scan(&self, prefix: &str) -> Result<Vec<(String, StoredValue)>, String> {
+        (**self).scan(prefix)
+    }
+
+    fn delete(&mut self, key: &str) -> Result<(), String> {
+        (**self).delete(key)
+    }
+}
+
 /// Async trait for I/O-bound storage backends.
 ///
 /// Used for backends where operations are inherently async:

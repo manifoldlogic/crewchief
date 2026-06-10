@@ -55,6 +55,8 @@ pub mod graph;
 pub mod instance;
 pub mod lex;
 pub mod mesh;
+#[cfg(all(feature = "relay", not(target_arch = "wasm32")))]
+pub mod relay;
 pub mod runtime;
 pub mod sea;
 pub mod state;

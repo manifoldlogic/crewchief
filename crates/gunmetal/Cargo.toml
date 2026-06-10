@@ -26,16 +26,27 @@ base64 = "0.22"
 indexmap = "2"
 
 [features]
-default = ["extended-api"]
+default = ["extended-api", "relay"]
 wasm = ["wasm-bindgen", "js-sys", "getrandom"]
 # Extended chain API: path(), open(), load(), not(), unset(), then(), later(), bye().
 # Mirrors GUN's gun/lib/* plugins. Disable with default-features = false for a lean core.
 extended-api = []
+# Relay server (native only): WebSocket relay wire-compatible with GUN.js.
+relay = []
+# TLS support for the relay via rustls.
+relay-tls = ["relay", "dep:tokio-rustls", "dep:rustls-pemfile"]
+
+[[bin]]
+name = "gunmetal-relay"
+path = "src/bin/gunmetal-relay.rs"
+required-features = ["relay"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "time", "sync", "macros"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "time", "sync", "macros", "io-util", "signal"] }
 tokio-tungstenite = "0.26"
 futures-util = "0.3"
+tokio-rustls = { version = "0.26", optional = true }
+rustls-pemfile = { version = "2", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
