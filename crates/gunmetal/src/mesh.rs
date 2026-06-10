@@ -154,10 +154,16 @@ pub struct Mesh {
 
 impl Mesh {
     /// Create a mesh routing messages in and out of `gun`.
+    ///
+    /// Local writes (e.g. `gun.get("a").put_kv(...)`) are broadcast to
+    /// connected peers automatically — the GUN `put → out` flow. Events
+    /// originating from the network carry the wire message ID and are NOT
+    /// re-wrapped (the relay path in [`hear`](Self::hear) already forwards
+    /// them with their original ID for loop-free dedup).
     pub fn new(gun: Gun, config: MeshConfig) -> Self {
         let dup = Dup::with_config(config.dup.clone());
-        Self {
-            gun,
+        let mesh = Self {
+            gun: gun.clone(),
             inner: new_shared_mut(MeshInner {
                 config,
                 dup,
@@ -167,7 +173,23 @@ impl Mesh {
                 mob_redirect: None,
                 suggested_peers: Vec::new(),
             }),
-        }
+        };
+
+        let mesh_for_writes = mesh.clone();
+        lock_mut(&gun.events).on("put", move |event| {
+            if event.msg_id.is_some() {
+                return; // network/storage-originated — already routed
+            }
+            let (Some(value), Some(key)) = (&event.value, &event.key) else {
+                return;
+            };
+            let mut node = crate::types::Node::new(&event.soul);
+            node.put(key, value.clone(), event.state);
+            let msg = wire::put_message(&random_message_id(9), &[&node]);
+            mesh_for_writes.say(msg, None);
+        });
+
+        mesh
     }
 
     /// This mesh's process ID.

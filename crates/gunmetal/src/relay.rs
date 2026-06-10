@@ -215,8 +215,17 @@ impl RelayHandle {
     }
 }
 
-/// Start a relay with the default storage backend.
+/// Start a relay with the default storage backend: RAD chunked storage
+/// on the filesystem under `config.file` (GUN's `radata` layout).
 pub async fn spawn(config: RelayConfig) -> Result<RelayHandle, String> {
+    let store = crate::rad::fs_store::FsStore::new(&config.file)?;
+    let adapter = crate::rad::RadStorageAdapter::with_store(Box::new(store));
+    spawn_with_storage(config, Box::new(adapter)).await
+}
+
+/// Start a relay with in-memory storage (no persistence). Useful for
+/// tests and ephemeral relays.
+pub async fn spawn_in_memory(config: RelayConfig) -> Result<RelayHandle, String> {
     spawn_with_storage(config, Box::new(MemoryStorage::new())).await
 }
 
@@ -696,7 +705,7 @@ mod tests {
 
     #[tokio::test]
     async fn health_endpoint_responds() {
-        let handle = spawn(test_config()).await.unwrap();
+        let handle = spawn_in_memory(test_config()).await.unwrap();
 
         let mut stream = TcpStream::connect(handle.addr).await.unwrap();
         stream
@@ -716,7 +725,7 @@ mod tests {
 
     #[tokio::test]
     async fn unknown_path_404s() {
-        let handle = spawn(test_config()).await.unwrap();
+        let handle = spawn_in_memory(test_config()).await.unwrap();
 
         let mut stream = TcpStream::connect(handle.addr).await.unwrap();
         stream
@@ -734,7 +743,7 @@ mod tests {
 
     #[tokio::test]
     async fn websocket_handshake_and_dam_exchange() {
-        let handle = spawn(test_config()).await.unwrap();
+        let handle = spawn_in_memory(test_config()).await.unwrap();
         let mut ws = ws_connect(handle.addr, "/gun").await;
 
         // The relay sends its DAM handshake on connect.
@@ -749,7 +758,7 @@ mod tests {
 
     #[tokio::test]
     async fn put_stored_and_get_answered() {
-        let handle = spawn(test_config()).await.unwrap();
+        let handle = spawn_in_memory(test_config()).await.unwrap();
 
         // Client A writes.
         let mut ws_a = ws_connect(handle.addr, "/gun").await;
@@ -789,7 +798,7 @@ mod tests {
 
     #[tokio::test]
     async fn put_relayed_to_other_peers() {
-        let handle = spawn(test_config()).await.unwrap();
+        let handle = spawn_in_memory(test_config()).await.unwrap();
 
         let mut ws_a = ws_connect(handle.addr, "/gun").await;
         let mut ws_b = ws_connect(handle.addr, "/gun").await;
@@ -866,7 +875,7 @@ mod tests {
 
     #[tokio::test]
     async fn bye_writes_applied_on_disconnect() {
-        let handle = spawn(test_config()).await.unwrap();
+        let handle = spawn_in_memory(test_config()).await.unwrap();
 
         let mut ws = ws_connect(handle.addr, "/gun").await;
         ws.send(Message::Text(
@@ -897,5 +906,40 @@ mod tests {
         }
 
         handle.shutdown();
+    }
+
+    #[tokio::test]
+    async fn default_storage_is_rad_on_filesystem() {
+        let dir = std::env::temp_dir().join(format!(
+            "gunmetal-relay-test-{}",
+            crate::uuid::generate_uuid()
+        ));
+        let mut config = test_config();
+        config.file = dir.to_string_lossy().to_string();
+
+        // First run: write through a connected client.
+        let handle = spawn(config.clone()).await.unwrap();
+        let mut ws = ws_connect(handle.addr, "/gun").await;
+        ws.send(Message::Text(
+            r###"{"#":"fs1","put":{"persist":{"_":{"#":"persist",">":{"k":1700000000000}},"k":"on-disk"}}}"###.into(),
+        ))
+        .await
+        .unwrap();
+        let _ = wait_for_frame(&mut ws, |f| f.contains(r###""@":"fs1""###)).await;
+        drop(ws);
+        handle.shutdown();
+        // RAD batches writes for 250ms before flushing to disk.
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        drop(handle);
+
+        // Second run from the same directory: data rehydrates from RAD.
+        let handle2 = spawn(config).await.unwrap();
+        assert_eq!(
+            handle2.gun().get("persist").get("k").val(),
+            Some(GunValue::Text("on-disk".into())),
+            "relay restarted from RAD filesystem storage"
+        );
+        handle2.shutdown();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

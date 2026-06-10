@@ -156,7 +156,9 @@ impl Gun {
                                         .cloned()
                                         .unwrap_or(GunValue::Null);
                                     let state = verified_node.state_of(&key);
-                                    events.push(Event::data(&soul, &key, value, state));
+                                    let mut event = Event::data(&soul, &key, value, state);
+                                    event.msg_id = msg.id.clone();
+                                    events.push(event);
                                 }
                             }
                         }
@@ -169,7 +171,9 @@ impl Gun {
                         if result == PutResult::Accepted {
                             let value = node.get(&key).cloned().unwrap_or(GunValue::Null);
                             let state = node.state_of(&key);
-                            events.push(Event::data(&soul, &key, value, state));
+                            let mut event = Event::data(&soul, &key, value, state);
+                            event.msg_id = msg.id.clone();
+                            events.push(event);
                         }
                     }
                 }
