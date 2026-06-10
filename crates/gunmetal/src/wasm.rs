@@ -216,6 +216,56 @@ impl WasmGun {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// WasmGun — Extended chain API (gun/lib/* equivalents)
+// ═══════════════════════════════════════════════════════════════════════
+
+#[cfg(all(target_arch = "wasm32", feature = "extended-api"))]
+#[wasm_bindgen]
+impl WasmGun {
+    /// Promise-based read (`gun/lib/then.js`): resolves with the JSON value
+    /// at `soul.key` (or `null` if missing), using `.once()` semantics.
+    #[wasm_bindgen(js_name = "then")]
+    pub fn then_promise(&self, soul: &str, key: &str) -> js_sys::Promise {
+        let chain = self.inner.get(soul).get(key);
+        wasm_bindgen_futures::future_to_promise(async move {
+            Ok(match chain.then().await {
+                Some(val) => JsValue::from_str(&wire::value_to_json(&val).to_string()),
+                None => JsValue::NULL,
+            })
+        })
+    }
+
+    /// One-shot deep document load (`gun/lib/load.js`): fires `callback`
+    /// once with the full document tree as a JSON string.
+    #[wasm_bindgen(js_name = "load")]
+    pub fn load(&self, soul: &str, callback: js_sys::Function) {
+        self.inner
+            .get(soul)
+            .load(crate::extended::OpenOptions::default(), move |doc| {
+                let _ = callback.call1(&JsValue::NULL, &JsValue::from_str(&doc.to_string()));
+            });
+    }
+
+    /// Dot-notation path read (`gun/lib/path.js`): resolves `soul` then the
+    /// dot-delimited `path`, returning the value as JSON or `null`.
+    #[wasm_bindgen(js_name = "pathVal")]
+    pub fn path_val(&self, soul: &str, path: &str) -> JsValue {
+        match self.inner.get(soul).path(path).val() {
+            Some(val) => JsValue::from_str(&wire::value_to_json(&val).to_string()),
+            None => JsValue::NULL,
+        }
+    }
+
+    /// Remove a node from a set (`gun/lib/unset.js`): nulls the link to
+    /// `item_soul` inside the set at `set_soul`.
+    #[wasm_bindgen(js_name = "unset")]
+    pub fn unset(&self, set_soul: &str, item_soul: &str) {
+        let item = self.inner.get(item_soul);
+        self.inner.get(set_soul).unset(&item);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // WasmSEA — Cryptographic operations
 // ═══════════════════════════════════════════════════════════════════════
 

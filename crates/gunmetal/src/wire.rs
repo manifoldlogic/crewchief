@@ -38,7 +38,7 @@ use serde_json::{Map, Value};
 use crate::types::{GunValue, Node};
 
 /// A GUN wire message.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WireMessage {
     /// Message ID.
     #[serde(rename = "#", skip_serializing_if = "Option::is_none")]
@@ -56,13 +56,49 @@ pub struct WireMessage {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub get: Option<GetRequest>,
 
-    /// Success acknowledgment.
+    /// Success acknowledgment. DAM uses `{ "@": hops, "/": nearPeerCount }`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ok: Option<Value>,
 
     /// Error message.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
+
+    /// Content hash of `put` data for hash-based deduplication (DAM).
+    /// GUN emits this as a number (string hashes also appear in the wild).
+    #[serde(rename = "##", skip_serializing_if = "Option::is_none")]
+    pub hash: Option<Value>,
+
+    /// Peer exclusion list: comma-separated peer IDs that have already
+    /// seen this message (DAM). Each relay replaces this field.
+    #[serde(rename = "><", skip_serializing_if = "Option::is_none")]
+    pub seen_by: Option<String>,
+
+    /// DAM protocol message type (`?`, `!`, `mob`, `opt`, …).
+    /// Protocol messages are consumed by the mesh and never relayed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dam: Option<String>,
+
+    /// Process ID, exchanged in the DAM `?` handshake.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pid: Option<String>,
+
+    /// Mob rebalancing payload: peer count (`{dam:'mob', mob:count, peers:…}`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mob: Option<Value>,
+
+    /// Peer introduction payload (`{dam:'opt', opt:{peers:'url'}}`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opt: Option<Value>,
+
+    /// Alternative peer URLs accompanying a `mob` message.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peers: Option<Value>,
+
+    /// Disconnect-write registration (`gun/lib/bye.js`): a graph of
+    /// `{soul: {key: value}}` writes to apply when this peer disconnects.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bye: Option<Value>,
 }
 
 /// A GET request specifying what to read.
@@ -145,11 +181,8 @@ pub fn graph_to_json(nodes: &[&Node]) -> Value {
 pub fn put_message(id: &str, nodes: &[&Node]) -> WireMessage {
     WireMessage {
         id: Some(id.to_string()),
-        ack: None,
         put: Some(graph_to_json(nodes)),
-        get: None,
-        ok: None,
-        err: None,
+        ..Default::default()
     }
 }
 
@@ -157,14 +190,11 @@ pub fn put_message(id: &str, nodes: &[&Node]) -> WireMessage {
 pub fn get_message(id: &str, soul: &str, key: Option<&str>) -> WireMessage {
     WireMessage {
         id: Some(id.to_string()),
-        ack: None,
-        put: None,
         get: Some(GetRequest {
             soul: soul.to_string(),
             key: key.map(|k| k.to_string()),
         }),
-        ok: None,
-        err: None,
+        ..Default::default()
     }
 }
 
@@ -176,24 +206,18 @@ pub fn ack_ok(ack_id: &str) -> WireMessage {
         Value::Number(serde_json::Number::from(1)),
     );
     WireMessage {
-        id: None,
         ack: Some(ack_id.to_string()),
-        put: None,
-        get: None,
         ok: Some(Value::Object(ok)),
-        err: None,
+        ..Default::default()
     }
 }
 
 /// Build an ACK (error) wire message.
 pub fn ack_err(ack_id: &str, error: &str) -> WireMessage {
     WireMessage {
-        id: None,
         ack: Some(ack_id.to_string()),
-        put: None,
-        get: None,
-        ok: None,
         err: Some(error.to_string()),
+        ..Default::default()
     }
 }
 

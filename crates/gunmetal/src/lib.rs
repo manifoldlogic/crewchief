@@ -49,6 +49,8 @@ pub mod concurrency;
 pub mod crdt;
 pub mod dup;
 pub mod events;
+#[cfg(feature = "extended-api")]
+pub mod extended;
 pub mod graph;
 pub mod instance;
 pub mod lex;

@@ -26,8 +26,11 @@ base64 = "0.22"
 indexmap = "2"
 
 [features]
-default = []
+default = ["extended-api"]
 wasm = ["wasm-bindgen", "js-sys", "getrandom"]
+# Extended chain API: path(), open(), load(), not(), unset(), then(), later(), bye().
+# Mirrors GUN's gun/lib/* plugins. Disable with default-features = false for a lean core.
+extended-api = []
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "time", "sync", "macros"] }

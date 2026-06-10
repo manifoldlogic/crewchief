@@ -62,8 +62,8 @@ pub struct GunOptions {
 /// ```
 #[derive(Clone)]
 pub struct Gun {
-    graph: SharedRead<Graph>,
-    events: SharedMut<EventBus>,
+    pub(crate) graph: SharedRead<Graph>,
+    pub(crate) events: SharedMut<EventBus>,
     dup: SharedMut<Dup>,
     #[allow(dead_code)]
     options: GunOptions,
@@ -329,9 +329,9 @@ impl Gun {
 /// a `key` (a property within that node).
 #[derive(Clone)]
 pub struct GunChain {
-    gun: Gun,
-    soul: Soul,
-    key: Option<String>,
+    pub(crate) gun: Gun,
+    pub(crate) soul: Soul,
+    pub(crate) key: Option<String>,
 }
 
 impl GunChain {
