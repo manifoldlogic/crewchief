@@ -109,6 +109,7 @@ pub trait AsyncStorageAdapter: Send + Sync {
     >;
 
     /// Retrieve all keys matching a prefix asynchronously.
+    #[allow(clippy::type_complexity)]
     fn scan(
         &self,
         prefix: String,
@@ -284,14 +285,17 @@ pub struct StorageEngine {
 impl StorageEngine {
     /// Create a storage engine and start auto-persisting writes.
     pub fn new(gun: Gun, adapter: impl StorageAdapter + 'static) -> Self {
+        // On WASM the adapter isn't Send/Sync — fine, the target is
+        // single-threaded; Arc is used for the shared handle API.
+        #[allow(clippy::arc_with_non_send_sync)]
         let adapter: Arc<Mutex<Box<dyn StorageAdapter>>> =
             Arc::new(Mutex::new(Box::new(adapter)));
 
         // Listen for "put" events and persist to storage
         let adapter_clone = adapter.clone();
         let listener_id = gun.on_event("put", move |event| {
-            if let (Some(value), Some(key)) = (&event.value, &event.key) {
-                if let Some(storage_k) = storage_key(&event.soul, key) {
+            if let (Some(value), Some(key)) = (&event.value, &event.key)
+                && let Some(storage_k) = storage_key(&event.soul, key) {
                     let stored = StoredValue {
                         value: value.clone(),
                         state: event.state,
@@ -299,7 +303,6 @@ impl StorageEngine {
                     let mut adapter = adapter_clone.lock().unwrap_or_else(|e| e.into_inner());
                     let _ = adapter.put(&storage_k, &stored);
                 }
-            }
         });
 
         Self {
@@ -673,11 +676,9 @@ mod tests {
         let mut cx = Context::from_waker(&waker);
         let mut f = std::pin::pin!(f);
 
-        loop {
-            match f.as_mut().poll(&mut cx) {
-                Poll::Ready(val) => return val,
-                Poll::Pending => panic!("unexpected Pending in test executor"),
-            }
+        match f.as_mut().poll(&mut cx) {
+            Poll::Ready(val) => val,
+            Poll::Pending => panic!("unexpected Pending in test executor"),
         }
     }
 

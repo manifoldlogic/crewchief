@@ -128,24 +128,21 @@ impl RelayConfig {
             mesh: MeshConfig::from_options(options),
             ..Default::default()
         };
-        if let Some(web) = &options.web {
-            if let Some((host, port)) = web.rsplit_once(':') {
-                if let Ok(port) = port.parse() {
+        if let Some(web) = &options.web
+            && let Some((host, port)) = web.rsplit_once(':')
+                && let Ok(port) = port.parse() {
                     config.host = host.to_string();
                     config.port = port;
                 }
-            }
-        }
         config
     }
 
     /// Apply environment variables (medium priority).
     pub fn apply_env(mut self) -> Self {
-        if let Ok(port) = std::env::var("PORT") {
-            if let Ok(port) = port.parse() {
+        if let Ok(port) = std::env::var("PORT")
+            && let Ok(port) = port.parse() {
                 self.port = port;
             }
-        }
         if let Ok(host) = std::env::var("HOST") {
             self.host = host;
         }
@@ -161,11 +158,10 @@ impl RelayConfig {
         if let Ok(key) = std::env::var("TLS_KEY") {
             self.tls_key = Some(key);
         }
-        if let Ok(mob) = std::env::var("MOB") {
-            if let Ok(mob) = mob.parse() {
+        if let Ok(mob) = std::env::var("MOB")
+            && let Ok(mob) = mob.parse() {
                 self.max_peers = mob;
             }
-        }
         if let Ok(peers) = std::env::var("GUN_PEERS") {
             self.peers = peers
                 .split(',')
@@ -582,44 +578,41 @@ where
 async fn dial_upstream(ctx: RelayCtx, url: String) {
     let mut backoff = Duration::from_secs(1);
     loop {
-        match tokio_tungstenite::connect_async(&url).await {
-            Ok((ws, _)) => {
-                backoff = Duration::from_secs(1);
-                let peer_id = format!("up:{}", url);
-                let (mut sink, mut source) = ws.split();
-                let (tx, mut rx) = mpsc::unbounded_channel::<String>();
-                let sender: PeerSender = Arc::new(move |raw: &str| {
-                    let _ = tx.send(raw.to_string());
-                });
-                ctx.mesh.hi(&peer_id, Some(url.clone()), Some(sender));
+        if let Ok((ws, _)) = tokio_tungstenite::connect_async(&url).await {
+            backoff = Duration::from_secs(1);
+            let peer_id = format!("up:{}", url);
+            let (mut sink, mut source) = ws.split();
+            let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+            let sender: PeerSender = Arc::new(move |raw: &str| {
+                let _ = tx.send(raw.to_string());
+            });
+            ctx.mesh.hi(&peer_id, Some(url.clone()), Some(sender));
 
-                loop {
-                    tokio::select! {
-                        outbound = rx.recv() => {
-                            let Some(raw) = outbound else { break };
-                            if sink.send(Message::Text(raw.into())).await.is_err() {
-                                break;
-                            }
+            loop {
+                tokio::select! {
+                    outbound = rx.recv() => {
+                        let Some(raw) = outbound else { break };
+                        if sink.send(Message::Text(raw.into())).await.is_err() {
+                            break;
                         }
-                        inbound = source.next() => {
-                            match inbound {
-                                Some(Ok(Message::Text(text))) => {
-                                    ctx.mesh.hear_async(text.as_str(), &peer_id).await;
-                                }
-                                Some(Ok(Message::Binary(bytes))) => {
-                                    if let Ok(text) = String::from_utf8(bytes.to_vec()) {
-                                        ctx.mesh.hear_async(&text, &peer_id).await;
-                                    }
-                                }
-                                Some(Ok(_)) => {}
-                                Some(Err(_)) | None => break,
+                    }
+                    inbound = source.next() => {
+                        match inbound {
+                            Some(Ok(Message::Text(text))) => {
+                                ctx.mesh.hear_async(text.as_str(), &peer_id).await;
                             }
+                            Some(Ok(Message::Binary(bytes))) => {
+                                if let Ok(text) = String::from_utf8(bytes.to_vec()) {
+                                    ctx.mesh.hear_async(&text, &peer_id).await;
+                                }
+                            }
+                            Some(Ok(_)) => {}
+                            Some(Err(_)) | None => break,
                         }
                     }
                 }
-                ctx.mesh.bye(&peer_id);
             }
-            Err(_) => {}
+            ctx.mesh.bye(&peer_id);
         }
         tokio::time::sleep(backoff).await;
         backoff = (backoff * 2).min(Duration::from_secs(60));

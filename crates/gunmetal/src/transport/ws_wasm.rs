@@ -46,8 +46,13 @@ mod implementation {
 
     use super::{WsWasmConfig, WsWasmEvent};
 
+    /// Shared `(peer_id, message)` callback slot.
+    type MessageHandler = Rc<RefCell<Option<Box<dyn Fn(String, String)>>>>;
+
     struct PeerConnection {
         ws: WebSocket,
+        /// Kept for diagnostics/reconnect; not read on the hot path.
+        #[allow(dead_code)]
         url: String,
         // Closures must be kept alive for the duration of the connection
         _on_open: Closure<dyn FnMut()>,
@@ -60,7 +65,7 @@ mod implementation {
         config: WsWasmConfig,
         connections: Rc<RefCell<HashMap<String, PeerConnection>>>,
         events: Rc<RefCell<Vec<WsWasmEvent>>>,
-        on_message: Rc<RefCell<Option<Box<dyn Fn(String, String)>>>>,
+        on_message: MessageHandler,
     }
 
     impl WsWasmTransport {

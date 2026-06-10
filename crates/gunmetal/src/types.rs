@@ -239,7 +239,7 @@ mod tests {
     fn gun_value_number_accepts_finite() {
         assert_eq!(GunValue::number(42.0), Some(GunValue::Number(42.0)));
         assert_eq!(GunValue::number(0.0), Some(GunValue::Number(0.0)));
-        assert_eq!(GunValue::number(-3.14), Some(GunValue::Number(-3.14)));
+        assert_eq!(GunValue::number(-2.75), Some(GunValue::Number(-2.75)));
     }
 
     #[test]

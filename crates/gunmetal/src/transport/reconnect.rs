@@ -58,11 +58,10 @@ impl ReconnectState {
     ///
     /// Returns `None` if max attempts has been reached.
     pub fn next_delay(&mut self) -> Option<Duration> {
-        if let Some(max) = self.config.max_attempts {
-            if self.attempt >= max {
+        if let Some(max) = self.config.max_attempts
+            && self.attempt >= max {
                 return None;
             }
-        }
 
         let delay = self.compute_delay();
         self.attempt += 1;
@@ -71,11 +70,10 @@ impl ReconnectState {
 
     /// Peek at the next delay without incrementing the counter.
     pub fn peek_delay(&self) -> Option<Duration> {
-        if let Some(max) = self.config.max_attempts {
-            if self.attempt >= max {
+        if let Some(max) = self.config.max_attempts
+            && self.attempt >= max {
                 return None;
             }
-        }
         Some(self.compute_delay())
     }
 

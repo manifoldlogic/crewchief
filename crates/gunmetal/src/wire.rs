@@ -268,11 +268,10 @@ pub fn json_to_value(val: &Value) -> Option<GunValue> {
         }),
         Value::Object(obj) => {
             // A link is {"#": "soul"} — exactly one key "#" with a string value
-            if obj.len() == 1 {
-                if let Some(Value::String(soul)) = obj.get("#") {
+            if obj.len() == 1
+                && let Some(Value::String(soul)) = obj.get("#") {
                     return Some(GunValue::Link(soul.clone()));
                 }
-            }
             None // non-link objects are not valid GunValues
         }
         Value::Array(_) => None, // arrays are not valid in GUN

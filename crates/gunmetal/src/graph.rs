@@ -191,7 +191,7 @@ impl Graph {
                 let is_new_key = self
                     .nodes
                     .get(soul)
-                    .map_or(true, |n| n.get(key).is_none());
+                    .is_none_or(|n| n.get(key).is_none());
 
                 let node = self
                     .nodes

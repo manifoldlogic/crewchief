@@ -73,11 +73,10 @@ impl MemorySync {
 impl SyncAdapter for MemorySync {
     fn send(&mut self, peer_id: &str, msg: &str) {
         for (id, gun) in &self.peers {
-            if id == peer_id {
-                if let Ok(wire_msg) = wire::parse_message(msg) {
+            if id == peer_id
+                && let Ok(wire_msg) = wire::parse_message(msg) {
                     gun.receive(&wire_msg);
                 }
-            }
         }
     }
 
@@ -89,14 +88,13 @@ impl SyncAdapter for MemorySync {
             if Some(id.as_str()) == exclude {
                 continue;
             }
-            if let Ok(wire_msg) = wire::parse_message(msg) {
-                if let Some(response) = gun.receive(&wire_msg) {
+            if let Ok(wire_msg) = wire::parse_message(msg)
+                && let Some(response) = gun.receive(&wire_msg) {
                     // GET handler produced a response — route it back
                     if let Ok(json) = wire::serialize_message(&response) {
                         responses.push(json);
                     }
                 }
-            }
         }
 
         // Route GET responses back to the local gun instance

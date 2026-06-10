@@ -511,10 +511,11 @@ impl ByeBuilder {
         let mut bye_graph = Map::new();
         bye_graph.insert(self.soul.clone(), Value::Object(node_obj));
 
-        let mut msg = wire::WireMessage::default();
-        msg.id = Some(crate::uuid::generate_uuid());
-        msg.bye = Some(Value::Object(bye_graph));
-        msg
+        wire::WireMessage {
+            id: Some(crate::uuid::generate_uuid()),
+            bye: Some(Value::Object(bye_graph)),
+            ..Default::default()
+        }
     }
 }
 

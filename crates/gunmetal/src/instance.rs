@@ -229,11 +229,10 @@ impl Gun {
     /// with the requested data and an `@` ack field referencing the request.
     pub fn receive(&self, msg: &wire::WireMessage) -> Option<wire::WireMessage> {
         // Step 1: Dedup check (dup lock only)
-        if let Some(ref id) = msg.id {
-            if lock_mut(&self.dup).track(id.clone()) {
+        if let Some(ref id) = msg.id
+            && lock_mut(&self.dup).track(id.clone()) {
                 return None; // already seen
             }
-        }
 
         // Step 2: Graph merge (graph write lock only)
         let pending_events = {
@@ -326,8 +325,8 @@ impl Gun {
             }
 
             // For signed values, verify the signature
-            if let GunValue::Text(text) = value {
-                if text.starts_with("SEA{") {
+            if let GunValue::Text(text) = value
+                && text.starts_with("SEA{") {
                     match crate::sea::verify(text, pub_key) {
                         Ok(_) => {
                             // Signature valid — store the signed value as-is
@@ -340,7 +339,6 @@ impl Gun {
                     }
                     continue;
                 }
-            }
 
             // Non-signed, non-metadata values in user namespace:
             // Accept them (backward compatibility — not all data is signed yet)
@@ -348,7 +346,7 @@ impl Gun {
         }
 
         // Only return if we have at least one key
-        if verified.len() > 0 {
+        if !verified.is_empty() {
             Some(verified)
         } else {
             None
@@ -462,8 +460,8 @@ impl GunChain {
         // Property-level chain → check if current value is a link
         {
             let graph = read_lock(&self.gun.graph);
-            if let Some(current_key) = &self.key {
-                if let Some(GunValue::Link(target)) = graph.get(&self.soul, current_key) {
+            if let Some(current_key) = &self.key
+                && let Some(GunValue::Link(target)) = graph.get(&self.soul, current_key) {
                     // Follow the link to the target node
                     return GunChain {
                         gun: self.gun.clone(),
@@ -471,7 +469,6 @@ impl GunChain {
                         key: Some(key_str),
                     };
                 }
-            }
         } // graph lock released
 
         // Not a link — treat as nested path (soul/key)
@@ -493,15 +490,14 @@ impl GunChain {
             let mut events = Vec::new();
 
             for (key, result) in &results {
-                if *result == PutResult::Accepted {
-                    if let Some(value) = graph.get(&self.soul, key) {
+                if *result == PutResult::Accepted
+                    && let Some(value) = graph.get(&self.soul, key) {
                         let state = graph
                             .get_node(&self.soul)
                             .map(|n| n.state_of(key))
                             .unwrap_or(0.0);
                         events.push(Event::data(&self.soul, key, value.clone(), state));
                     }
-                }
             }
             events
         }; // graph lock released
@@ -728,11 +724,10 @@ impl GunChain {
             let graph = read_lock(&self.gun.graph);
             if let Some(node) = graph.get_node(&self.soul) {
                 for (k, v) in node.iter() {
-                    if let Some(lex) = lex {
-                        if !lex.matches(k) {
+                    if let Some(lex) = lex
+                        && !lex.matches(k) {
                             continue;
                         }
-                    }
                     cb(v.clone(), k.clone());
                 }
             }
@@ -743,11 +738,10 @@ impl GunChain {
         let lex_owned = lex.cloned();
         lock_mut(&self.gun.events).on(soul_tag, move |event| {
             if let (Some(value), Some(key)) = (&event.value, &event.key) {
-                if let Some(ref lex) = lex_owned {
-                    if !lex.matches(key) {
+                if let Some(ref lex) = lex_owned
+                    && !lex.matches(key) {
                         return;
                     }
-                }
                 cb(value.clone(), key.clone());
             }
         })

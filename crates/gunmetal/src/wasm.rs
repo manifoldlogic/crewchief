@@ -215,6 +215,14 @@ impl WasmGun {
     }
 }
 
+
+#[cfg(target_arch = "wasm32")]
+impl Default for WasmGun {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // WasmGun — Extended chain API (gun/lib/* equivalents)
 // ═══════════════════════════════════════════════════════════════════════
@@ -279,6 +287,13 @@ impl WasmGun {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub struct WasmSEA;
+
+#[cfg(target_arch = "wasm32")]
+impl Default for WasmSEA {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
@@ -626,6 +641,13 @@ impl WasmUser {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub struct WasmCert;
+
+#[cfg(target_arch = "wasm32")]
+impl Default for WasmCert {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]

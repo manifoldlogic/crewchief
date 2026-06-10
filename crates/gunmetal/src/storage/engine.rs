@@ -262,15 +262,11 @@ mod tests {
         let mut cx = Context::from_waker(&waker);
         let mut f = std::pin::pin!(f);
 
-        loop {
-            match f.as_mut().poll(&mut cx) {
-                Poll::Ready(val) => return val,
-                Poll::Pending => {
-                    // Our AsyncMemoryStorage futures are always ready,
-                    // so we should never get here.
-                    panic!("unexpected Pending in test executor");
-                }
-            }
+        match f.as_mut().poll(&mut cx) {
+            Poll::Ready(val) => val,
+            // Our AsyncMemoryStorage futures are always ready,
+            // so we should never get here.
+            Poll::Pending => panic!("unexpected Pending in test executor"),
         }
     }
 

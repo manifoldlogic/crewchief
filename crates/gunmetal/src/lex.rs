@@ -100,11 +100,10 @@ impl Lex {
             .or(self.prefix.as_deref())
             .or(self.gte.as_deref())
             .or(self.lte.as_deref());
-        if let Some(val) = first {
-            if key == val {
+        if let Some(val) = first
+            && key == val {
                 return true;
             }
-        }
 
         // 1. Exact match mode — if '=' is set, nothing else matches
         if self.exact.is_some() {
@@ -114,11 +113,10 @@ impl Lex {
         // Prefix check: `tmp = (o['*'] || o['>']);`
         //               `if(t.slice(0, (tmp||'').length) === tmp){ return true }`
         let prefix_or_gte = self.prefix.as_deref().or(self.gte.as_deref());
-        if let Some(pfx) = prefix_or_gte {
-            if key.starts_with(pfx) {
+        if let Some(pfx) = prefix_or_gte
+            && key.starts_with(pfx) {
                 return true;
             }
-        }
 
         // 2. Prefix match mode — if '*' is set, nothing else matches
         if self.prefix.is_some() {

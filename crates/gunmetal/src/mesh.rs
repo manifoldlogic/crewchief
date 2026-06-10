@@ -387,10 +387,8 @@ impl Mesh {
         }
         let trimmed = raw.trim_start();
         if trimmed.starts_with('[') {
-            match serde_json::from_str::<Vec<Value>>(trimmed) {
-                Ok(items) => items, // empty array == heartbeat == no items
-                Err(_) => Vec::new(),
-            }
+            // Empty array == heartbeat == no items; parse errors yield none.
+            serde_json::from_str::<Vec<Value>>(trimmed).unwrap_or_default()
         } else if trimmed.starts_with('{') {
             match serde_json::from_str::<Value>(trimmed) {
                 Ok(v) => vec![v],
@@ -644,15 +642,13 @@ impl Mesh {
 
             // Content hash for ACKs carrying data (enables `@`+`##` dedup
             // downstream).
-            if msg.put.is_some() && msg.ack.is_some() && msg.hash.is_none() {
-                if let Some(ref put) = msg.put {
-                    if let Ok(json) = serde_json::to_string(put) {
+            if msg.put.is_some() && msg.ack.is_some() && msg.hash.is_none()
+                && let Some(ref put) = msg.put
+                    && let Ok(json) = serde_json::to_string(put) {
                         msg.hash = Some(Value::Number(serde_json::Number::from(
                             gun_string_hash(&json),
                         )));
                     }
-                }
-            }
 
             // Track our own sends so echoes are dropped on hear.
             inner.dup.track(id.clone());
@@ -743,11 +739,10 @@ impl Mesh {
                         peer.flush_scheduled = self.schedule_flush(peer.id.clone(), gap);
                     }
                     // Deadline fallback when no async runtime is available.
-                    if now - peer.batch_started_ms >= gap.as_millis() as f64 {
-                        if let Some(frame) = drain_batch(peer) {
+                    if now - peer.batch_started_ms >= gap.as_millis() as f64
+                        && let Some(frame) = drain_batch(peer) {
                             frames.push(frame);
                         }
-                    }
                 }
             }
             frames
@@ -1397,8 +1392,10 @@ mod tests {
 
     #[test]
     fn gap_batches_into_array() {
-        let mut config = MeshConfig::default();
-        config.gap = Duration::from_secs(3600); // flush only explicitly
+        let config = MeshConfig {
+            gap: Duration::from_secs(3600), // flush only explicitly
+            ..Default::default()
+        };
         let mesh = Mesh::new(Gun::new(GunOptions::default()), config);
         let outbox = attach_peer(&mesh, "peerA");
         mesh.flush(); // deliver the handshake so only test traffic batches
@@ -1443,8 +1440,10 @@ mod tests {
 
     #[test]
     fn axe_routes_puts_to_subscribers_only() {
-        let mut config = MeshConfig::default();
-        config.axe = true;
+        let config = MeshConfig {
+            axe: true,
+            ..Default::default()
+        };
         let mesh = Mesh::new(Gun::new(GunOptions::default()), config);
         let writer = attach_peer(&mesh, "writer");
         let subscribed = attach_peer(&mesh, "subscribed");
@@ -1511,8 +1510,10 @@ mod tests {
 
     #[test]
     fn duplicate_connection_resolved_deterministically() {
-        let mut config = MeshConfig::default();
-        config.pid = "ZZZ".into(); // our pid is higher than theirs
+        let config = MeshConfig {
+            pid: "ZZZ".into(), // our pid is higher than theirs
+            ..Default::default()
+        };
         let mesh = Mesh::new(Gun::new(GunOptions::default()), config);
 
         // Inbound link (no url) and outbound link (url) to the same process.
@@ -1624,8 +1625,10 @@ mod tests {
 
     #[test]
     fn oversized_frame_dropped() {
-        let mut config = MeshConfig::default();
-        config.max_message_bytes = 64;
+        let config = MeshConfig {
+            max_message_bytes: 64,
+            ..Default::default()
+        };
         let mesh = Mesh::new(Gun::new(GunOptions::default()), config);
         attach_peer(&mesh, "peerA");
 

@@ -44,10 +44,10 @@ fn script_path(name: &str) -> PathBuf {
 }
 
 /// Run a node interop script, returning (status_ok, combined_output).
-async fn run_node_script(name: &str, relay_url: &str, gun_js: &PathBuf) -> (bool, String) {
+async fn run_node_script(name: &str, relay_url: &str, gun_js: &std::path::Path) -> (bool, String) {
     let script = script_path(name);
     let relay_url = relay_url.to_string();
-    let gun_js = gun_js.clone();
+    let gun_js = gun_js.to_path_buf();
     tokio::task::spawn_blocking(move || {
         match Command::new("node")
             .arg(&script)

@@ -500,10 +500,8 @@ impl SignedChain {
         match &raw {
             GunValue::Text(text) if text.starts_with("SEA{") => {
                 // Try to verify and unwrap
-                match sea::verify_signed_value(text, &self.pub_key) {
-                    Ok(value) => Some(value),
-                    Err(_) => None, // verification failed
-                }
+                // None on verification failure
+                sea::verify_signed_value(text, &self.pub_key).ok()
             }
             _ => Some(raw), // not signed, return as-is (metadata keys)
         }

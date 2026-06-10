@@ -178,8 +178,8 @@ mod implementation {
                     .unwrap()
                     .unchecked_into();
 
-                let mut params = web_sys::IdbObjectStoreParameters::new();
-                params.key_path(Some(&JsValue::from_str("k")));
+                let params = web_sys::IdbObjectStoreParameters::new();
+                params.set_key_path(&JsValue::from_str("k"));
                 let _ = db.create_object_store_with_optional_parameters(
                     &store_name,
                     &params,

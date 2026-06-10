@@ -677,7 +677,7 @@ fn eviction_with_subscriptions_auto_pin() {
         .put_kv("val", GunValue::Text("important".into()));
 
     // Verify the subscription fired
-    assert!(received.lock().unwrap().len() >= 1);
+    assert!(!received.lock().unwrap().is_empty());
 
     // The node should be pinned in the graph
     let is_pinned = gun.graph(|g| g.is_pinned("pinned_node"));

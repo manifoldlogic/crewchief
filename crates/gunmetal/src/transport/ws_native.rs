@@ -188,7 +188,7 @@ impl WsNativeTransport {
 
                 {
                     let mut p = peers.lock().await;
-                    p.add_peer(peer_id.clone(), &addr.to_string());
+                    p.add_peer(peer_id.clone(), addr.to_string());
                     if let Some(info) = p.get_mut(&peer_id) {
                         info.record_connected();
                     }
@@ -210,8 +210,8 @@ impl WsNativeTransport {
                 tokio::spawn(async move {
                     while let Some(msg) = read_stream.next().await {
                         match msg {
-                            Ok(Message::Text(text)) => {
-                                if text.len() <= max_msg {
+                            Ok(Message::Text(text))
+                                if text.len() <= max_msg => {
                                     let _ = tx.send(WsEvent::MessageReceived {
                                         peer_id: pid.clone(),
                                         message: text.to_string(),
@@ -221,7 +221,6 @@ impl WsNativeTransport {
                                         info.record_received();
                                     }
                                 }
-                            }
                             Ok(Message::Close(_)) | Err(_) => break,
                             _ => {}
                         }
@@ -332,8 +331,8 @@ impl WsNativeTransport {
         tokio::spawn(async move {
             while let Some(msg) = stream.next().await {
                 match msg {
-                    Ok(Message::Text(text)) => {
-                        if text.len() <= max_msg {
+                    Ok(Message::Text(text))
+                        if text.len() <= max_msg => {
                             let _ = tx.send(WsEvent::MessageReceived {
                                 peer_id: pid.clone(),
                                 message: text.to_string(),
@@ -343,7 +342,6 @@ impl WsNativeTransport {
                                 info.record_received();
                             }
                         }
-                    }
                     Ok(Message::Ping(data)) => {
                         let mut s = sinks.lock().await;
                         if let Some(sink) = s.get_mut(&pid) {
@@ -399,7 +397,7 @@ impl WsNativeTransport {
                         let _ = tx_for_reconnect.send(WsEvent::PeerConnected {
                             peer_id: pid.clone(),
                         }).await;
-                        reconnect_configs.lock().await.get_mut(&pid).map(|s| s.reset());
+                        if let Some(s) = reconnect_configs.lock().await.get_mut(&pid) { s.reset() }
                     }
                 }
             }
@@ -520,7 +518,7 @@ mod tests {
 
                 {
                     let mut p = server_peers.lock().await;
-                    p.add_peer(pid.clone(), &remote.to_string());
+                    p.add_peer(pid.clone(), remote.to_string());
                     if let Some(info) = p.get_mut(&pid) {
                         info.record_connected();
                     }
