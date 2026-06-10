@@ -30,6 +30,9 @@
 //! | [`user`] | Decentralized authentication + `SignedChain` |
 //! | [`cert`] | Certificate system for delegated write permissions |
 //! | [`sync`] | Peer-to-peer replication with GET handling |
+//! | [`mesh`] | DAM mesh routing: dedup, batching, ACK tracing, AXE |
+//! | [`relay`] | GUN.js-compatible WebSocket relay server (`relay` feature) |
+//! | [`extended`] | `gun/lib/*` plugins: path/open/load/not/unset/then/later/bye |
 //! | [`storage`] | Sync/async persistence adapters + `BatchWriter` |
 //! | [`rad`] | RAD radix storage engine (chunked, batched persistence) |
 //! | [`transport`] | WebSocket transport, reconnection, peer tracking |

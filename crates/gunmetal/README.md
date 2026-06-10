@@ -12,6 +12,10 @@ A Rust/WASM decentralized graph database with CRDT conflict resolution, end-to-e
 - **Auto-signing** -- `SignedChain` wrapper signs all writes with the user's private key; verification on receive rejects forgeries
 - **LRU eviction** -- bounded memory with configurable capacity, pinned subscriptions, whole-node eviction
 - **Peer-to-peer sync** -- pluggable transport layer with reconnection backoff, peer health tracking, GET/PUT request handling
+- **DAM mesh networking** -- GUN's wire protocol in full: message/content-hash dedup, `><` peer exclusion, ACK routing, batching windows, `dam` protocol handshakes, heartbeats, AXE subscription routing
+- **Relay server** -- `gunmetal-relay` binary, wire-compatible with GUN.js browser clients (`Gun({peers: ['ws://host:8765/gun']})` just works); health endpoint, mob shedding, upstream relay mesh, optional TLS (`relay-tls` feature)
+- **RAD storage** -- GUN's chunked radix-tree persistence: 1 MB chunk splitting, 250 ms write batching, atomic filesystem writes, corrupt-chunk self-healing, JSON-mode compatibility with GUN.js `radata` directories
+- **Extended chain API** -- `path()`, `open()`, `load()`, `not()`, `unset()`, `then()`/`promise()`, `later()`, `bye()` (the `gun/lib/*` plugins, behind the default `extended-api` feature)
 - **Persistence** -- sync and async storage adapters; IndexedDB schema for browsers; batched writes via `BatchWriter`
 
 ## Quick Start
