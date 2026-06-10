@@ -409,15 +409,19 @@ impl Gun {
     /// during emission, and it's released between each emit call.
     fn emit_events(&self, events: &[Event]) {
         for event in events {
-            // Lock per-emit to allow callback re-entrancy patterns
-            lock_mut(&self.events).emit("put", event);
+            // One lock acquisition per event (the bus is the relay's
+            // hottest mutex). Callbacks run with the bus locked either
+            // way — they may read the graph, but must not subscribe or
+            // write (documented in `extended` and the chain API).
+            let mut bus = lock_mut(&self.events);
+            bus.emit("put", event);
 
             let soul_tag = EventBus::soul_tag(&event.soul, None);
-            lock_mut(&self.events).emit(&soul_tag, event);
+            bus.emit(&soul_tag, event);
 
             if let Some(ref key) = event.key {
                 let key_tag = EventBus::soul_tag(&event.soul, Some(key));
-                lock_mut(&self.events).emit(&key_tag, event);
+                bus.emit(&key_tag, event);
             }
         }
     }

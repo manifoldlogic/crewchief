@@ -361,7 +361,11 @@ pub fn json_to_graph(val: &Value) -> Vec<Node> {
 /// Enforces a maximum message size to prevent memory exhaustion (H3).
 pub fn parse_message(json: &str) -> Result<WireMessage, serde_json::Error> {
     if json.len() > MAX_MESSAGE_BYTES {
-        return Err(serde_json::from_str::<WireMessage>("").unwrap_err()); // trigger a parse error
+        return Err(serde::de::Error::custom(format!(
+            "message exceeds size limit ({} > {} bytes)",
+            json.len(),
+            MAX_MESSAGE_BYTES
+        )));
     }
     serde_json::from_str(json)
 }

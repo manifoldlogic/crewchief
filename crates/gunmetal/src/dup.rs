@@ -22,7 +22,7 @@
 //! Timestamps use `state::now_ms()` (wall-clock f64 ms) instead of
 //! `std::time::Instant`, which is unavailable on `wasm32-unknown-unknown`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use crate::state::now_ms;
 
@@ -63,6 +63,10 @@ struct DupEntry {
 pub struct Dup {
     config: DupConfig,
     seen: HashMap<String, DupEntry>,
+    /// Insertion order for O(1) oldest-first eviction (avoids sorting the
+    /// whole table on every track once at capacity). May contain stale
+    /// IDs already removed from `seen`; they are skipped on pop.
+    order: VecDeque<String>,
 }
 
 impl Dup {
@@ -71,6 +75,7 @@ impl Dup {
         Self {
             config: DupConfig::default(),
             seen: HashMap::new(),
+            order: VecDeque::new(),
         }
     }
 
@@ -79,6 +84,7 @@ impl Dup {
         Self {
             config,
             seen: HashMap::new(),
+            order: VecDeque::new(),
         }
     }
 
@@ -111,15 +117,19 @@ impl Dup {
         let id = id.into();
         let was_dup = self.check(&id);
         let now = now_ms();
-        self.seen
-            .entry(id)
-            .and_modify(|e| {
+        match self.seen.entry(id.clone()) {
+            std::collections::hash_map::Entry::Occupied(mut e) => {
+                let e = e.get_mut();
                 e.when_ms = now;
                 if e.via.is_none() {
-                    e.via = via.clone();
+                    e.via = via;
                 }
-            })
-            .or_insert(DupEntry { when_ms: now, via });
+            }
+            std::collections::hash_map::Entry::Vacant(e) => {
+                e.insert(DupEntry { when_ms: now, via });
+                self.order.push_back(id);
+            }
+        }
 
         if self.seen.len() > self.config.max {
             self.drop_expired();
@@ -135,25 +145,23 @@ impl Dup {
         self.seen.get(id).and_then(|e| e.via.as_deref())
     }
 
-    /// Remove expired entries. If still over capacity, evict the oldest.
+    /// Remove expired entries. If still over capacity, evict the oldest
+    /// (by insertion order — O(1) per eviction instead of a full sort).
     pub fn drop_expired(&mut self) {
         let age = self.config.age_ms as f64;
         let now = now_ms();
         self.seen.retain(|_, e| now - e.when_ms < age);
+        // Keep the order queue from accumulating IDs the retain removed.
+        self.order.retain(|id| self.seen.contains_key(id));
 
-        // If still over max after removing expired, evict oldest entries
-        // to prevent unbounded growth from high-frequency unique IDs.
-        if self.seen.len() > self.config.max {
-            let mut entries: Vec<(String, f64)> = self
-                .seen
-                .iter()
-                .map(|(k, e)| (k.clone(), e.when_ms))
-                .collect();
-            entries.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-            let to_remove = self.seen.len() - self.config.max;
-            for (key, _) in entries.into_iter().take(to_remove) {
-                self.seen.remove(&key);
-            }
+        // If still over max after removing expired, evict the earliest
+        // inserted entries to prevent unbounded growth from
+        // high-frequency unique IDs.
+        while self.seen.len() > self.config.max {
+            let Some(oldest) = self.order.pop_front() else {
+                break;
+            };
+            self.seen.remove(&oldest);
         }
     }
 

@@ -453,3 +453,37 @@ SeaError::KeyError(format!("Invalid private key: {}", e))
 14. Add cross-implementation test vectors from GUN JS
 15. Add input length limits at the WASM boundary (M13)
 16. Document the inherent limitations (C6 alias races, no ACL enforcement, no message authentication)
+
+---
+
+# Parity-Phase Review Addendum
+
+**Date:** 2026-06-10
+**Scope:** Modules added for full GUN parity (spec `gunmetal-parity.md`): `mesh`, `relay`, `extended`, `rad/*`, plus `dup` via-tracking and the DAM wire fields.
+**Methodology:** Three parallel reviews (security, correctness, performance) of the new code against the GUN JS source and the DAM/RAD reference docs, followed by remediation.
+
+## Remediation Status (new modules)
+
+| Finding | Severity | Status | Fix Applied |
+|---------|----------|--------|-------------|
+| Bye-writes bypass user-namespace signature verification | CRITICAL | **FIXED** | `apply_bye_graph` rejects `~pubKey/...` souls — unsigned disconnect writes can no longer bypass `verify_user_node` |
+| Radix recursion stack overflow (adversarial deep trees) | CRITICAL | **FIXED** | `MAX_DEPTH` (512) caps `get_in`, `map_tree`, and `insert_into`; insert degrades to flat edges, traversal stops gracefully |
+| Hash-dedup poisoning via forged `##` | HIGH | **FIXED** | The `@`+`##` dedup combo is keyed on a locally recomputed hash of the `put` payload; a forged `##` cannot suppress a genuine answer |
+| Unbounded `bye` registration growth per peer | HIGH | **FIXED** | `MAX_BYE_WRITES_PER_PEER` (100); excess registrations dropped |
+| Unbounded AXE subscription tables per peer | HIGH | **FIXED** | `MAX_SUBSCRIPTIONS_PER_PEER` (10 000); further GETs answered but not recorded |
+| Dup table O(N log N) sort on every track at capacity | PERF-HIGH | **FIXED** | Insertion-order `VecDeque` gives O(1) oldest-first eviction |
+| Per-peer frame body cloning in broadcast path | PERF-HIGH | **FIXED** | Frames are `Arc<str>`/`Rc<str>` (`SharedFrame`); per-target clone is a refcount bump |
+| 3 event-bus lock acquisitions per emitted event | PERF-HIGH | **FIXED** | `emit_events` takes the bus lock once per event |
+| Batch frames double-decoded via `serde_json::Value` | PERF-MED | **FIXED** | `parse_frame` deserializes straight to `Vec<WireMessage>` |
+| Radix chunk tree cloned on every flush serialization | PERF-LOW | **FIXED** | `to_json` serializes the map in place |
+| Null bytes accepted in RAD file names | MEDIUM | **FIXED** | `FsStore::check_name` rejects `\0` |
+| Oversized wire message produced a misleading parse error | LOW | **FIXED** | `parse_message` returns an explicit "exceeds size limit" error |
+
+## Accepted / documented behaviors
+
+- **Open-write plain souls**: any peer may PUT (or bye-write) non-`~` souls. This is the GUN data model; access control is SEA user namespaces and certificates.
+- **Slowloris on the relay HTTP head**: bounded — the whole request head must arrive within 10 s (`HTTP_HEAD_TIMEOUT`) and 8 KB; a connection can stall at most one task for 10 s.
+- **Dup TTL (9 s) bounds ACK tracing**: ACKs arriving after the dedup entry expires fall back to broadcast. Matches GUN; relevant only on >9 s round-trips.
+- **Writes from inside `.on()`/`open()` callbacks deadlock** (events lock is held during emission). Documented on the chain API and `extended`; matches the existing core constraint (H8-era design).
+- **Mesh peer count is bounded by the transport** (relay `--mob` shedding); `Mesh::hi` itself trusts local callers.
+- **`open()` reassembles the full document per delivery** — bounded by the coalescing window (`wait`, default 9 ms); avoid `open()` on a relay's hot write path.

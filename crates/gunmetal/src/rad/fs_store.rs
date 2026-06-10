@@ -65,6 +65,7 @@ impl FsStore {
             || file.contains('/')
             || file.contains('\\')
             || file.contains("..")
+            || file.contains('\0')
         {
             return Err(format!("rfs: invalid file name {:?}", file));
         }

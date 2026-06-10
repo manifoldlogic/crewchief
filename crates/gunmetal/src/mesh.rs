@@ -46,11 +46,26 @@ pub type PeerSender = std::sync::Arc<dyn Fn(&str) + Send + Sync>;
 #[cfg(target_arch = "wasm32")]
 pub type PeerSender = std::rc::Rc<dyn Fn(&str)>;
 
+/// A serialized frame shared across per-peer queues/batches without
+/// copying the bytes per peer.
+#[cfg(not(target_arch = "wasm32"))]
+type SharedFrame = std::sync::Arc<str>;
+#[cfg(target_arch = "wasm32")]
+type SharedFrame = std::rc::Rc<str>;
+
 /// The wire form of a heartbeat: an empty batch.
 pub const HEARTBEAT_RAW: &str = "[]";
 
 /// How often transports send heartbeats on WebSocket connections.
 pub const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(20);
+
+/// Maximum disconnect-write registrations kept per peer.
+const MAX_BYE_WRITES_PER_PEER: usize = 100;
+
+/// Maximum souls a single peer may hold AXE subscriptions for. Beyond
+/// this, further GETs are still answered but no longer recorded (the
+/// peer simply misses pushed updates for the extra souls).
+const MAX_SUBSCRIPTIONS_PER_PEER: usize = 10_000;
 
 /// Mesh configuration. Mirrors DAM's `opt.*` knobs.
 #[derive(Debug, Clone)]
@@ -121,9 +136,9 @@ struct MeshPeer {
     /// Outbound transport. `None` while the connection is opening.
     sender: Option<PeerSender>,
     /// Frames queued while the connection is opening.
-    queue: Vec<String>,
+    queue: Vec<SharedFrame>,
     /// Frames buffered inside the current `gap` window.
-    batch: Vec<String>,
+    batch: Vec<SharedFrame>,
     /// When the current batch was opened (ms since epoch).
     batch_started_ms: f64,
     /// Whether an async flush has been scheduled for the current batch.
@@ -167,7 +182,7 @@ struct MeshInner {
 /// sent after releasing it).
 struct OutFrame {
     sender: PeerSender,
-    raw: String,
+    raw: SharedFrame,
 }
 
 /// The DAM mesh router. Cheaply cloneable; clones share state.
@@ -345,6 +360,13 @@ impl Mesh {
             return;
         };
         for (soul, node) in souls {
+            // Bye writes are registered by any peer without signatures, so
+            // they must not reach user namespaces — a regular PUT to
+            // `~pubKey/...` goes through signature verification
+            // (instance::verify_user_node); a bye write would bypass it.
+            if soul.starts_with('~') {
+                continue;
+            }
             let Some(entries) = node.as_object() else {
                 continue;
             };
@@ -361,8 +383,8 @@ impl Mesh {
     /// Process an inbound frame: a single message (`{…}`), a batch
     /// (`[…]`), or a heartbeat (`[]`, ignored).
     pub fn hear(&self, raw: &str, from_peer: &str) {
-        for value in self.parse_frame(raw) {
-            self.hear_value(value, from_peer);
+        for msg in self.parse_frame(raw) {
+            self.hear_one(msg, from_peer);
         }
     }
 
@@ -370,17 +392,17 @@ impl Mesh {
     /// every `puff` messages while draining large batches.
     pub async fn hear_async(&self, raw: &str, from_peer: &str) {
         let puff = lock_mut(&self.inner).config.puff.max(1);
-        for (i, value) in self.parse_frame(raw).into_iter().enumerate() {
+        for (i, msg) in self.parse_frame(raw).into_iter().enumerate() {
             if i > 0 && i % puff == 0 {
                 crate::runtime::sleep_async(Duration::ZERO).await;
             }
-            self.hear_value(value, from_peer);
+            self.hear_one(msg, from_peer);
         }
     }
 
-    /// Parse a raw frame into individual message values. Oversized frames,
+    /// Parse a raw frame into individual wire messages. Oversized frames,
     /// heartbeats and malformed JSON yield nothing.
-    fn parse_frame(&self, raw: &str) -> Vec<Value> {
+    fn parse_frame(&self, raw: &str) -> Vec<WireMessage> {
         let max = lock_mut(&self.inner).config.max_message_bytes;
         if raw.len() > max {
             return Vec::new();
@@ -388,22 +410,15 @@ impl Mesh {
         let trimmed = raw.trim_start();
         if trimmed.starts_with('[') {
             // Empty array == heartbeat == no items; parse errors yield none.
-            serde_json::from_str::<Vec<Value>>(trimmed).unwrap_or_default()
+            serde_json::from_str::<Vec<WireMessage>>(trimmed).unwrap_or_default()
         } else if trimmed.starts_with('{') {
-            match serde_json::from_str::<Value>(trimmed) {
-                Ok(v) => vec![v],
+            match serde_json::from_str::<WireMessage>(trimmed) {
+                Ok(msg) => vec![msg],
                 Err(_) => Vec::new(),
             }
         } else {
             Vec::new()
         }
-    }
-
-    fn hear_value(&self, value: Value, from_peer: &str) {
-        let Ok(msg) = serde_json::from_value::<WireMessage>(value) else {
-            return;
-        };
-        self.hear_one(msg, from_peer);
     }
 
     fn hear_one(&self, msg: WireMessage, from_peer: &str) {
@@ -415,14 +430,22 @@ impl Mesh {
             return;
         };
 
-        // Dedup by message ID, then by ack+content-hash combo.
+        // Dedup by message ID, then by ack+content-hash combo. The hash
+        // used for the combo is recomputed locally from the `put` payload
+        // rather than trusting the `##` field: a peer lying about the
+        // hash could otherwise suppress another peer's genuine answer
+        // (dedup poisoning). With a local hash, two answers only dedup
+        // when their payloads actually hash the same.
         {
             let mut inner = lock_mut(&self.inner);
             if inner.dup.check(&id) {
                 return;
             }
-            if let (Some(ack), Some(hash)) = (&msg.ack, &msg.hash) {
-                let combo = format!("{}{}", ack, hash);
+            if msg.hash.is_some()
+                && let (Some(ack), Some(put)) = (&msg.ack, &msg.put)
+                && let Ok(json) = serde_json::to_string(put)
+            {
+                let combo = format!("{}{}", ack, gun_string_hash(&json));
                 if inner.dup.check(&combo) {
                     inner.dup.track_from(id, Some(from_peer.to_string()));
                     return;
@@ -446,13 +469,14 @@ impl Mesh {
             .unwrap_or_default();
         exclusions.insert(from_peer.to_string());
 
-        // Disconnect-write registration rides on data messages.
+        // Disconnect-write registration rides on data messages. Capped
+        // per peer so a client cannot grow the registry without bound.
         if let Some(ref bye_graph) = msg.bye {
-            lock_mut(&self.inner)
-                .bye_writes
-                .entry(from_peer.to_string())
-                .or_default()
-                .push(bye_graph.clone());
+            let mut inner = lock_mut(&self.inner);
+            let writes = inner.bye_writes.entry(from_peer.to_string()).or_default();
+            if writes.len() < MAX_BYE_WRITES_PER_PEER {
+                writes.push(bye_graph.clone());
+            }
         }
 
         let is_put = msg.put.is_some();
@@ -462,7 +486,10 @@ impl Mesh {
         // asked for so PUT updates can be routed instead of broadcast.
         if let Some(ref get) = msg.get {
             let mut inner = lock_mut(&self.inner);
-            if let Some(peer) = inner.peers.get_mut(from_peer) {
+            if let Some(peer) = inner.peers.get_mut(from_peer)
+                && (peer.subscriptions.len() < MAX_SUBSCRIPTIONS_PER_PEER
+                    || peer.subscriptions.contains_key(&get.soul))
+            {
                 peer.subscriptions
                     .entry(get.soul.clone())
                     .or_default()
@@ -709,8 +736,9 @@ impl Mesh {
                     .collect()
             };
 
-            let Ok(raw) = wire::serialize_message(&msg) else {
-                return;
+            let raw: SharedFrame = match wire::serialize_message(&msg) {
+                Ok(json) => SharedFrame::from(json),
+                Err(_) => return,
             };
 
             let mut frames = Vec::new();
@@ -735,6 +763,10 @@ impl Mesh {
                         peer.batch_started_ms = now;
                     }
                     peer.batch.push(raw.clone());
+                    // flush_scheduled is reset by drain_batch(); if the
+                    // deadline fallback below drains first, the already-
+                    // scheduled timer becomes a harmless no-op flush and a
+                    // new timer is scheduled on the next batched say().
                     if !peer.flush_scheduled {
                         peer.flush_scheduled = self.schedule_flush(peer.id.clone(), gap);
                     }
@@ -818,7 +850,7 @@ impl Mesh {
                 .filter_map(|p| {
                     p.sender.as_ref().map(|s| OutFrame {
                         sender: s.clone(),
-                        raw: HEARTBEAT_RAW.to_string(),
+                        raw: SharedFrame::from(HEARTBEAT_RAW),
                     })
                 })
                 .collect()
@@ -863,10 +895,16 @@ fn drain_batch(peer: &mut MeshPeer) -> Option<OutFrame> {
         return None;
     }
     let sender = peer.sender.clone()?;
-    let raw = if peer.batch.len() == 1 {
-        peer.batch.drain(..).next().unwrap_or_default()
+    let raw: SharedFrame = if peer.batch.len() == 1 {
+        peer.batch.drain(..).next()?
     } else {
-        format!("[{}]", peer.batch.drain(..).collect::<Vec<_>>().join(","))
+        let joined = peer
+            .batch
+            .drain(..)
+            .map(|f| f.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        SharedFrame::from(format!("[{}]", joined))
     };
     Some(OutFrame { sender, raw })
 }
@@ -1117,22 +1155,54 @@ mod tests {
         attach_peer(&mesh, "peerA");
         attach_peer(&mesh, "peerB");
 
-        // Two peers answer the same GET (`@`: q1) with the same content
-        // hash (`##`). The first merges; the second MUST be dropped before
-        // reaching the graph — its (different) payload never lands.
+        // Two peers answer the same GET (`@`: q1) with IDENTICAL payloads.
+        // The dedup combo is built from a locally recomputed content hash,
+        // so the second redundant answer is dropped before processing.
+        let payload = r###""put":{"s":{"_":{"#":"s",">":{"k":100}},"k":"answer"}}"###;
         mesh.hear(
-            r###"{"#":"a1","@":"q1","##":12345,"put":{"s":{"_":{"#":"s",">":{"k":100}},"k":"first"}}}"###,
+            &format!(r###"{{"#":"a1","@":"q1","##":1,{}}}"###, payload),
             "peerA",
         );
+        // Track relay traffic to prove the duplicate is short-circuited.
+        let c_out = attach_peer(&mesh, "peerC");
+        c_out.lock().unwrap().clear();
         mesh.hear(
-            r###"{"#":"a2","@":"q1","##":12345,"put":{"s":{"_":{"#":"s",">":{"k":200}},"k":"second"}}}"###,
+            &format!(r###"{{"#":"a2","@":"q1","##":1,{}}}"###, payload),
             "peerB",
+        );
+        assert!(
+            !frames(&c_out).iter().any(|f| f.contains(r###""#":"a2""###)),
+            "redundant identical answer is dropped"
+        );
+        assert_eq!(
+            mesh.gun().get("s").get("k").val(),
+            Some(GunValue::Text("answer".into()))
+        );
+    }
+
+    #[test]
+    fn hash_dedup_cannot_be_poisoned_by_fake_hashes() {
+        let mesh = new_mesh();
+        attach_peer(&mesh, "attacker");
+        attach_peer(&mesh, "honest");
+
+        // The attacker claims the same `##` as the genuine answer but with
+        // garbage data. Because the dedup hash is recomputed locally from
+        // the payload, the genuine answer (different payload, later state)
+        // still lands.
+        mesh.hear(
+            r###"{"#":"evil1","@":"q9","##":777,"put":{"t":{"_":{"#":"t",">":{"k":100}},"k":"garbage"}}}"###,
+            "attacker",
+        );
+        mesh.hear(
+            r###"{"#":"real1","@":"q9","##":777,"put":{"t":{"_":{"#":"t",">":{"k":200}},"k":"genuine"}}}"###,
+            "honest",
         );
 
         assert_eq!(
-            mesh.gun().get("s").get("k").val(),
-            Some(GunValue::Text("first".into())),
-            "second answer with same @+## combo is dropped"
+            mesh.gun().get("t").get("k").val(),
+            Some(GunValue::Text("genuine".into())),
+            "a forged ## must not suppress the genuine answer"
         );
     }
 
@@ -1561,6 +1631,60 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(random.pid.len(), 9, "random pid generated");
+    }
+
+    #[test]
+    fn bye_writes_rejected_for_user_namespaces() {
+        let mesh = new_mesh();
+        attach_peer(&mesh, "attacker");
+
+        // Bye writes carry no signatures: letting them into `~pubKey/...`
+        // souls would bypass verify_user_node. They must be dropped.
+        mesh.hear(
+            r###"{"#":"byeu1","bye":{"~victimpubkey/profile":{"name":"hacked"},"plain":{"k":"ok"}}}"###,
+            "attacker",
+        );
+        mesh.bye("attacker");
+
+        assert_eq!(
+            mesh.gun().get("~victimpubkey/profile").get("name").val(),
+            None,
+            "user-namespace bye write must not apply"
+        );
+        assert_eq!(
+            mesh.gun().get("plain").get("k").val(),
+            Some(GunValue::Text("ok".into())),
+            "plain-soul bye write still applies"
+        );
+    }
+
+    #[test]
+    fn bye_write_registrations_are_capped() {
+        let mesh = new_mesh();
+        attach_peer(&mesh, "flooder");
+
+        for i in 0..300 {
+            mesh.hear(
+                &format!(
+                    r###"{{"#":"byec{}","bye":{{"flood{}":{{"k":"v"}}}}}}"###,
+                    i, i
+                ),
+                "flooder",
+            );
+        }
+        mesh.bye("flooder");
+
+        // Only the first MAX_BYE_WRITES_PER_PEER registrations applied.
+        let applied = (0..300)
+            .filter(|i| {
+                mesh.gun()
+                    .get(format!("flood{}", i))
+                    .get("k")
+                    .val()
+                    .is_some()
+            })
+            .count();
+        assert_eq!(applied, 100, "registry capped per peer");
     }
 
     #[test]

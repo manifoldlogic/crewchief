@@ -127,8 +127,9 @@ impl Radix {
 
     /// Serialize as GUN does: `JSON.stringify(radix.$)`.
     pub fn to_json(&self) -> Result<String, String> {
-        serde_json::to_string(&Value::Object(self.tree.clone()))
-            .map_err(|e| format!("Cannot radisk! {}", e))
+        // serde_json::Map serializes as a JSON object directly — no need
+        // to clone the tree into a Value first.
+        serde_json::to_string(&self.tree).map_err(|e| format!("Cannot radisk! {}", e))
     }
 
     /// Parse a chunk previously produced by [`Radix::to_json`] (or GUN.js).
@@ -162,8 +163,22 @@ fn common_prefix<'a>(a: &'a str, b: &str) -> &'a str {
 }
 
 fn insert_into(t: &mut Map<String, Value>, key: &str, val: Value) {
+    insert_into_depth(t, key, val, 0)
+}
+
+fn insert_into_depth(t: &mut Map<String, Value>, key: &str, val: Value, depth: usize) {
     if key.is_empty() {
         t.insert(String::new(), val);
+        return;
+    }
+
+    // Depth guard (see MAX_DEPTH): adversarial key sequences could grow
+    // the tree one level per insert; beyond the cap, store the remainder
+    // as a flat edge at this level instead of recursing further.
+    if depth >= MAX_DEPTH {
+        let mut leaf = Map::new();
+        leaf.insert(String::new(), val);
+        t.insert(key.to_string(), Value::Object(leaf));
         return;
     }
 
@@ -188,10 +203,10 @@ fn insert_into(t: &mut Map<String, Value>, key: &str, val: Value) {
             let k = key[..end].to_string();
             let rest = &key[end..];
             match t.get_mut(&k) {
-                Some(Value::Object(at)) => insert_into(at, rest, val),
+                Some(Value::Object(at)) => insert_into_depth(at, rest, val, depth + 1),
                 _ => {
                     let mut sub = Map::new();
-                    insert_into(&mut sub, rest, val);
+                    insert_into_depth(&mut sub, rest, val, depth + 1);
                     t.insert(k, Value::Object(sub));
                 }
             }
@@ -237,7 +252,20 @@ fn insert_into(t: &mut Map<String, Value>, key: &str, val: Value) {
 
 // ── Lookup (port of radix.js read path) ─────────────────────────────
 
+/// Maximum tree depth for recursive traversal. Real radix trees branch a
+/// handful of levels deep; this cap only exists so a malicious or corrupt
+/// chunk file (thousands of nested single-child edges) cannot overflow
+/// the stack. Traversal stops (returns None / skips the subtree) beyond it.
+const MAX_DEPTH: usize = 512;
+
 fn get_in(t: &Map<String, Value>, key: &str) -> Option<RadixGet> {
+    get_in_depth(t, key, 0)
+}
+
+fn get_in_depth(t: &Map<String, Value>, key: &str, depth: usize) -> Option<RadixGet> {
+    if depth > MAX_DEPTH {
+        return None;
+    }
     if key.is_empty() {
         // `if(!key && Object.keys(t).length){ return t }`
         if t.is_empty() {
@@ -263,7 +291,7 @@ fn get_in(t: &Map<String, Value>, key: &str) -> Option<RadixGet> {
             let Some(Value::Object(at)) = t.get(&key[..end]) else {
                 return None;
             };
-            get_in(at, &key[end..])
+            get_in_depth(at, &key[end..], depth + 1)
         }
         None => {
             // Prefix query ending inside an edge: synthesize a subtree
@@ -291,6 +319,22 @@ pub fn map_tree<R, F>(t: &Map<String, Value>, opt: &MapOpt, pre: &str, cb: &mut 
 where
     F: FnMut(&Value, &str) -> Option<R>,
 {
+    map_tree_depth(t, opt, pre, cb, 0)
+}
+
+fn map_tree_depth<R, F>(
+    t: &Map<String, Value>,
+    opt: &MapOpt,
+    pre: &str,
+    cb: &mut F,
+    depth: usize,
+) -> Option<R>
+where
+    F: FnMut(&Value, &str) -> Option<R>,
+{
+    if depth > MAX_DEPTH {
+        return None; // see MAX_DEPTH — corrupt/malicious chunk guard
+    }
     // serde_json's Map is sorted (BTreeMap) by default, but sort
     // explicitly so behavior never depends on the map implementation.
     let mut keys: Vec<&String> = t.keys().collect();
@@ -345,7 +389,7 @@ where
 
         if opt.reverse {
             // Children must be checked first when going in reverse.
-            if let Some(r) = map_tree(tree, opt, &pt, cb) {
+            if let Some(r) = map_tree_depth(tree, opt, &pt, cb, depth + 1) {
                 return Some(r);
             }
             if let Some(r) = visit_leaf(cb) {
@@ -355,7 +399,7 @@ where
             if let Some(r) = visit_leaf(cb) {
                 return Some(r);
             }
-            if let Some(r) = map_tree(tree, opt, &pt, cb) {
+            if let Some(r) = map_tree_depth(tree, opt, &pt, cb, depth + 1) {
                 return Some(r);
             }
         }
@@ -367,6 +411,27 @@ where
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn adversarial_deep_branching_does_not_overflow() {
+        // Progressively longer keys ("a", "aa", "aaa", …) grow the tree
+        // one level per insert. Beyond MAX_DEPTH the tree degrades to
+        // flat edges instead of recursing — no stack overflow on insert,
+        // lookup, or iteration.
+        let mut r = Radix::new();
+        let mut key = String::new();
+        for i in 0..(MAX_DEPTH + 100) {
+            key.push('a');
+            r.insert(&key, json!(i));
+        }
+        // Shallow entries stay retrievable.
+        assert_eq!(r.get("a"), Some(RadixGet::Leaf(json!(0))));
+        assert_eq!(r.get("aaa"), Some(RadixGet::Leaf(json!(2))));
+        // Full iteration completes without overflowing the stack.
+        let mut n = 0usize;
+        r.each(|_, _| n += 1);
+        assert!(n > MAX_DEPTH, "all inserts survive, got {}", n);
+    }
 
     fn demo_tree() -> Radix {
         let mut r = Radix::new();
