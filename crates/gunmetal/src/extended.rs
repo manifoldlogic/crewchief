@@ -36,7 +36,7 @@ use std::time::Duration;
 
 use serde_json::{Map, Value};
 
-use crate::concurrency::{lock_mut, new_shared_mut, read_lock, SharedMut};
+use crate::concurrency::{lock_mut, new_shared_mut, read_lock, MaybeSend, SharedMut};
 use crate::events::ListenerId;
 use crate::graph::Graph;
 use crate::instance::GunChain;
@@ -127,6 +127,9 @@ struct OpenState {
     last_fire_ms: Option<f64>,
     dirty: bool,
     done: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    cb: Box<dyn FnMut(&Value) + Send>,
+    #[cfg(target_arch = "wasm32")]
     cb: Box<dyn FnMut(&Value)>,
 }
 
@@ -192,7 +195,11 @@ impl GunChain {
     ///
     /// Returns an [`OpenHandle`]; dropping it (or calling
     /// [`OpenHandle::off`]) unsubscribes.
-    pub fn open(&self, opts: OpenOptions, cb: impl FnMut(&Value) + 'static) -> OpenHandle {
+    pub fn open(
+        &self,
+        opts: OpenOptions,
+        cb: impl FnMut(&Value) + MaybeSend + 'static,
+    ) -> OpenHandle {
         let state = new_shared_mut(OpenState {
             chain: self.clone(),
             opts: opts.clone(),

@@ -26,6 +26,19 @@ pub fn generate_uuid() -> String {
     format!("{}{}", ts_part, rand_part)
 }
 
+/// Generate a random alphanumeric message ID of the given length.
+///
+/// Equivalent to GUN's `String.random(9)` used by DAM for wire message
+/// IDs (`#` field). Mixed-case alphanumeric for a larger ID space than
+/// base36.
+pub fn random_message_id(len: usize) -> String {
+    const CHARS: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    let mut rng = OsRng;
+    (0..len)
+        .map(|_| CHARS[(rng.next_u32() as usize) % CHARS.len()] as char)
+        .collect()
+}
+
 /// Encode a u64 as a base-36 string (digits 0-9, letters a-z).
 fn base36_encode(mut n: u64) -> String {
     if n == 0 {

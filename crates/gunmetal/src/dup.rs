@@ -13,9 +13,18 @@
 //!     dup.drop = function(age){ ... }
 //! }
 //! ```
+//!
+//! For DAM (mesh routing) each entry can also record the peer the message
+//! was first heard from (`via`), enabling direct ACK routing: when an ACK
+//! references a message ID, the mesh traces the original sender through the
+//! dedup table instead of broadcasting (see `mesh.rs`).
+//!
+//! Timestamps use `state::now_ms()` (wall-clock f64 ms) instead of
+//! `std::time::Instant`, which is unavailable on `wasm32-unknown-unknown`.
 
 use std::collections::HashMap;
-use std::time::Instant;
+
+use crate::state::now_ms;
 
 /// Configuration for the deduplication tracker.
 #[derive(Debug, Clone)]
@@ -38,13 +47,22 @@ impl Default for DupConfig {
     }
 }
 
+/// A tracked message entry.
+#[derive(Debug, Clone)]
+struct DupEntry {
+    /// Wall-clock timestamp (ms) when the ID was last tracked.
+    when_ms: f64,
+    /// The peer this message was first heard from (DAM ACK routing).
+    via: Option<String>,
+}
+
 /// A message deduplication tracker.
 ///
 /// Tracks message IDs with timestamps, expiring entries older than `age_ms`.
 /// This prevents messages from bouncing endlessly between peers.
 pub struct Dup {
     config: DupConfig,
-    seen: HashMap<String, Instant>,
+    seen: HashMap<String, DupEntry>,
 }
 
 impl Dup {
@@ -69,8 +87,8 @@ impl Dup {
     /// Returns `true` if the ID is a duplicate (already tracked and not expired).
     /// Returns `false` if unseen or expired.
     pub fn check(&self, id: &str) -> bool {
-        if let Some(when) = self.seen.get(id) {
-            when.elapsed().as_millis() < self.config.age_ms as u128
+        if let Some(entry) = self.seen.get(id) {
+            now_ms() - entry.when_ms < self.config.age_ms as f64
         } else {
             false
         }
@@ -79,12 +97,29 @@ impl Dup {
     /// Track a message ID. Returns `true` if it was already tracked (duplicate).
     ///
     /// If the ID is new, it's added with the current timestamp.
-    /// If the ID exists, its timestamp is refreshed.
+    /// If the ID exists, its timestamp is refreshed (the `via` peer is kept).
     /// Triggers cleanup if over capacity.
     pub fn track(&mut self, id: impl Into<String>) -> bool {
+        self.track_from(id, None)
+    }
+
+    /// Track a message ID, recording the peer it was heard from.
+    ///
+    /// The first non-`None` `via` wins; refreshes keep the original sender
+    /// so ACK routing always targets the peer that introduced the message.
+    pub fn track_from(&mut self, id: impl Into<String>, via: Option<String>) -> bool {
         let id = id.into();
         let was_dup = self.check(&id);
-        self.seen.insert(id, Instant::now());
+        let now = now_ms();
+        self.seen
+            .entry(id)
+            .and_modify(|e| {
+                e.when_ms = now;
+                if e.via.is_none() {
+                    e.via = via.clone();
+                }
+            })
+            .or_insert(DupEntry { when_ms: now, via });
 
         if self.seen.len() > self.config.max {
             self.drop_expired();
@@ -93,20 +128,28 @@ impl Dup {
         was_dup
     }
 
+    /// The peer a tracked message was first heard from, if recorded.
+    ///
+    /// Used by the mesh for direct ACK routing (`mesh.say` with `@`).
+    pub fn via(&self, id: &str) -> Option<&str> {
+        self.seen.get(id).and_then(|e| e.via.as_deref())
+    }
+
     /// Remove expired entries. If still over capacity, evict the oldest.
     pub fn drop_expired(&mut self) {
-        let age = self.config.age_ms as u128;
-        self.seen.retain(|_, when| when.elapsed().as_millis() < age);
+        let age = self.config.age_ms as f64;
+        let now = now_ms();
+        self.seen.retain(|_, e| now - e.when_ms < age);
 
         // If still over max after removing expired, evict oldest entries
         // to prevent unbounded growth from high-frequency unique IDs.
         if self.seen.len() > self.config.max {
-            let mut entries: Vec<(String, Instant)> = self
+            let mut entries: Vec<(String, f64)> = self
                 .seen
                 .iter()
-                .map(|(k, v)| (k.clone(), *v))
+                .map(|(k, e)| (k.clone(), e.when_ms))
                 .collect();
-            entries.sort_by_key(|(_, when)| *when);
+            entries.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
             let to_remove = self.seen.len() - self.config.max;
             for (key, _) in entries.into_iter().take(to_remove) {
                 self.seen.remove(&key);
@@ -203,5 +246,47 @@ mod tests {
         assert_eq!(dup.len(), 1);
         assert!(dup.check("d"));
         assert!(!dup.check("a"));
+    }
+
+    #[test]
+    fn via_records_origin_peer() {
+        let mut dup = Dup::new();
+        dup.track_from("msg1", Some("peerA".into()));
+        assert_eq!(dup.via("msg1"), Some("peerA"));
+        assert_eq!(dup.via("unknown"), None);
+    }
+
+    #[test]
+    fn via_first_sender_wins() {
+        let mut dup = Dup::new();
+        dup.track_from("msg1", Some("peerA".into()));
+        dup.track_from("msg1", Some("peerB".into()));
+        assert_eq!(dup.via("msg1"), Some("peerA"), "original sender kept");
+    }
+
+    #[test]
+    fn via_backfilled_when_initially_unknown() {
+        let mut dup = Dup::new();
+        dup.track("msg1");
+        dup.track_from("msg1", Some("peerA".into()));
+        assert_eq!(dup.via("msg1"), Some("peerA"));
+    }
+
+    #[test]
+    fn eviction_removes_oldest_first() {
+        let mut dup = Dup::with_config(DupConfig {
+            age_ms: 60_000, // nothing expires during the test
+            max: 2,
+        });
+        dup.track("first");
+        thread::sleep(Duration::from_millis(2));
+        dup.track("second");
+        thread::sleep(Duration::from_millis(2));
+        dup.track("third"); // over max → oldest ("first") evicted
+
+        assert_eq!(dup.len(), 2);
+        assert!(!dup.check("first"));
+        assert!(dup.check("second"));
+        assert!(dup.check("third"));
     }
 }

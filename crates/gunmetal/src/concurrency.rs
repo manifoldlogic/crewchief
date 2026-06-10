@@ -86,6 +86,24 @@ mod platform {
 
 pub use platform::*;
 
+// ── Platform-conditional Send bound ─────────────────────────────────
+
+/// `Send` on native, no-op on WASM.
+///
+/// Use as a bound on callbacks that are stored in shared state: on native,
+/// `Gun` is `Send + Sync` so callbacks must be `Send`; on single-threaded
+/// WASM, `JsValue`-capturing closures are accepted as-is.
+#[cfg(not(target_arch = "wasm32"))]
+pub trait MaybeSend: Send {}
+#[cfg(not(target_arch = "wasm32"))]
+impl<T: Send> MaybeSend for T {}
+
+/// `Send` on native, no-op on WASM (WASM variant).
+#[cfg(target_arch = "wasm32")]
+pub trait MaybeSend {}
+#[cfg(target_arch = "wasm32")]
+impl<T> MaybeSend for T {}
+
 #[cfg(test)]
 mod tests {
     use super::*;

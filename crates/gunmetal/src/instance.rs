@@ -16,7 +16,8 @@
 //! This prevents deadlocks when callbacks read the graph.
 
 use crate::concurrency::{
-    lock_mut, new_shared_mut, new_shared_read, read_lock, write_lock, SharedMut, SharedRead,
+    lock_mut, new_shared_mut, new_shared_read, read_lock, write_lock, MaybeSend, SharedMut,
+    SharedRead,
 };
 use crate::dup::Dup;
 use crate::events::{Event, EventBus, ListenerId};
@@ -108,7 +109,7 @@ impl Gun {
     pub fn on_event(
         &self,
         tag: &str,
-        cb: impl FnMut(&Event) + 'static,
+        cb: impl FnMut(&Event) + MaybeSend + 'static,
     ) -> ListenerId {
         lock_mut(&self.events).on(tag, cb)
     }
@@ -482,7 +483,10 @@ impl GunChain {
     /// the subscription is active. Call `.off()` to unsubscribe and unpin.
     ///
     /// Returns a `ListenerId` for unsubscribing with `.off()`.
-    pub fn on(&self, mut cb: impl FnMut(GunValue, String) + 'static) -> ListenerId {
+    pub fn on(
+        &self,
+        mut cb: impl FnMut(GunValue, String) + MaybeSend + 'static,
+    ) -> ListenerId {
         let tag = match &self.key {
             Some(key) => EventBus::soul_tag(&self.soul, Some(key)),
             None => EventBus::soul_tag(&self.soul, None),
@@ -607,7 +611,7 @@ impl GunChain {
     pub fn map(
         &self,
         lex: Option<&Lex>,
-        mut cb: impl FnMut(GunValue, String) + 'static,
+        mut cb: impl FnMut(GunValue, String) + MaybeSend + 'static,
     ) -> ListenerId {
         // Auto-pin this soul to prevent eviction
         {

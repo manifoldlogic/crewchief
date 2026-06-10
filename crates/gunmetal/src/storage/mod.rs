@@ -42,7 +42,10 @@ pub struct StoredValue {
 /// - IndexedDB (WASM/browser)
 /// - Filesystem (native/Node.js)
 /// - SQLite, S3, etc.
-pub trait StorageAdapter {
+///
+/// `MaybeSend` requires `Send` on native (adapters are shared with the
+/// event bus, which is thread-safe there) and nothing on WASM.
+pub trait StorageAdapter: crate::concurrency::MaybeSend {
     /// Store a single key-value pair.
     ///
     /// The key is in `soul\x1Bproperty` format.

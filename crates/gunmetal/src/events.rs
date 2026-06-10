@@ -10,6 +10,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::concurrency::MaybeSend;
 use crate::types::GunValue;
 
 /// Globally unique listener ID counter.
@@ -67,8 +68,15 @@ impl Event {
 }
 
 /// Type alias for event listener callbacks.
-// No `Send` bound — WASM is single-threaded and JsValue isn't Send.
-// Native multi-threaded use should wrap Gun in its own synchronization.
+///
+/// `Send` on native so `Gun` (and anything holding an `EventBus`) is
+/// `Send + Sync` and can be shared across threads — required by the mesh
+/// and relay layers. On single-threaded WASM there is no `Send` bound so
+/// `JsValue`-capturing closures work. Use the `MaybeSend` bound from
+/// `concurrency` when accepting callbacks destined for the bus.
+#[cfg(not(target_arch = "wasm32"))]
+type Listener = Box<dyn FnMut(&Event) + Send>;
+#[cfg(target_arch = "wasm32")]
 type Listener = Box<dyn FnMut(&Event)>;
 
 /// An event emitter for a specific tag/channel.
@@ -154,7 +162,11 @@ impl EventBus {
     /// - `"bye"` — peer disconnected
     ///
     /// User-facing listeners (`.on()`, `.once()`) use soul-specific tags.
-    pub fn on(&mut self, tag: impl Into<String>, cb: impl FnMut(&Event) + 'static) -> ListenerId {
+    pub fn on(
+        &mut self,
+        tag: impl Into<String>,
+        cb: impl FnMut(&Event) + MaybeSend + 'static,
+    ) -> ListenerId {
         let tag = tag.into();
         self.tags
             .entry(tag)
@@ -182,7 +194,11 @@ impl EventBus {
     /// After firing, the closure short-circuits on subsequent calls.
     /// Callers should use the returned ListenerId with `off()` to reclaim
     /// the closure memory when done (M10: documented behavior).
-    pub fn once(&mut self, tag: impl Into<String>, cb: impl FnOnce(&Event) + 'static) -> ListenerId {
+    pub fn once(
+        &mut self,
+        tag: impl Into<String>,
+        cb: impl FnOnce(&Event) + MaybeSend + 'static,
+    ) -> ListenerId {
         let tag_str: String = tag.into();
         let mut cb_opt = Some(cb);
 
