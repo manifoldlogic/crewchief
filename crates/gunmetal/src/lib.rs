@@ -31,6 +31,7 @@
 //! | [`cert`] | Certificate system for delegated write permissions |
 //! | [`sync`] | Peer-to-peer replication with GET handling |
 //! | [`storage`] | Sync/async persistence adapters + `BatchWriter` |
+//! | [`rad`] | RAD radix storage engine (chunked, batched persistence) |
 //! | [`transport`] | WebSocket transport, reconnection, peer tracking |
 //! | [`wire`] | JSON wire protocol (PUT/GET/ACK messages) |
 //! | [`events`] | Pub-sub event bus |
@@ -55,6 +56,7 @@ pub mod graph;
 pub mod instance;
 pub mod lex;
 pub mod mesh;
+pub mod rad;
 #[cfg(all(feature = "relay", not(target_arch = "wasm32")))]
 pub mod relay;
 pub mod runtime;
