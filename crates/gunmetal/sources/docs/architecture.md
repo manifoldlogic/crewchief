@@ -1,0 +1,1327 @@
+# GUN Architecture and Internals
+
+## Overview
+
+GUN is a decentralized graph synchronization protocol with a lightweight embedded database engine. At roughly 9KB gzipped, it is capable of 20M+ API operations per second. GUN operates as a peer-to-peer database that works in any browser, syncs between any device, and is offline-first. There is no master node and no "single source of truth" -- every peer is equal. The underlying data model is a graph database that can represent key/value pairs, documents, tables, and arbitrary graph structures.
+
+GUN's design philosophy reduces all complexity to a single core algorithm (HAM) that resolves conflicts deterministically across any number of peers, with everything else being API surface wrapping that core.
+
+---
+
+## Data Model -- The Graph
+
+All data in GUN is represented as a graph of **nodes**. Each node has a **soul** (a unique identifier) stored in its `_` metadata property. Values within a node are either primitives (strings, numbers, booleans, null) or **references** to other nodes via soul pointers.
+
+### Node Structure
+
+Every node in the graph follows this shape:
+
+```javascript
+{
+  _: {
+    '#': 'unique-soul-id',    // The node's soul (unique identifier)
+    '>': {                     // State vectors: timestamps per property
+      propertyA: 1618033988,
+      propertyB: 1618033990
+    }
+  },
+  propertyA: "some string value",
+  propertyB: 42,
+  propertyC: true,
+  propertyD: null,
+  propertyE: { '#': 'other-soul-id' }  // Reference to another node
+}
+```
+
+### GunValueSimple -- Primitive Types
+
+GUN supports a strict subset of JSON as valid leaf values:
+
+```typescript
+type GunValueSimple = string | number | boolean | null;
+```
+
+From the source code's validation function:
+
+```javascript
+// Valid values are a subset of JSON: null, binary, number (!Infinity), text,
+// or a soul relation. Arrays need special algorithms to handle concurrency,
+// so they are not supported directly.
+module.exports = function(v) {
+  return v === null ||
+    "string" === typeof v ||
+    "boolean" === typeof v ||
+    // +/- Infinity is excluded because JSON does not support it.
+    // v === v filters out NaN (NaN !== NaN in JavaScript).
+    ("number" === typeof v && v != Infinity && v != -Infinity && v === v) ||
+    // Soul reference: an object with exactly one key '#' whose value is a string.
+    (!!v && "string" == typeof v["#"] && Object.keys(v).length === 1 && v["#"]);
+}
+```
+
+Arrays are intentionally not supported as primitive values because they require special concurrency algorithms. Use the `.set()` API or extensions for ordered/unordered collections.
+
+### GunSoul -- Node References
+
+A reference to another node in the graph is represented as an object with a single `#` property containing the target node's soul string:
+
+```typescript
+type GunSoul<_N extends GunSchema, Soul extends string = string> = {
+  '#': Soul;
+};
+```
+
+Example:
+
+```javascript
+// This property points to the node with soul 'user/alice'
+{ '#': 'user/alice' }
+```
+
+### Graph Normalization
+
+JSON does not allow circular references, but graphs are inherently full of them. GUN solves this by **normalizing** all data into flat nodes at the root level, replacing nested objects with soul reference pointers.
+
+Every object is assigned a unique identifier (soul), hoisted to the root of the graph, and any place that originally contained a nested object gets replaced with a `{'#': 'soul'}` pointer.
+
+```javascript
+// Original nested data with circular references:
+var mark = { name: "Mark Nadal", boss: fluffy };
+var fluffy = { name: "Fluffy", species: "kitty", slave: mark };
+
+// After normalization, the graph becomes:
+{
+  "ASDF": {
+    _: { '#': 'ASDF', '>': { name: 1618033988, boss: 1618033988 } },
+    name: "Mark Nadal",
+    boss: { '#': 'FDSA' }    // Reference pointer, not a nested object
+  },
+  "FDSA": {
+    _: { '#': 'FDSA', '>': { name: 1618033988, species: 1618033988, slave: 1618033988 } },
+    name: "Fluffy",
+    species: "kitty",
+    slave: { '#': 'ASDF' }   // Circular reference back to Mark
+  }
+}
+```
+
+This normalization has several important consequences:
+
+1. **No nesting on the wire** -- every node is flat with only primitive values or soul references.
+2. **Circular references work naturally** -- since everything is a pointer, cycles are trivially representable.
+3. **Conflict resolution operates per-property** -- because each property has its own state timestamp, merges happen at the finest granularity.
+4. **Partial sync is possible** -- only the modified portion of the graph needs to travel over the wire.
+
+---
+
+## Metadata
+
+Every node carries a `_` (underscore) metadata property that is excluded from normal data operations. The metadata contains two critical pieces of information:
+
+### Soul (`_['#']`)
+
+The node's globally unique identifier. This is how nodes are addressed across the entire peer network. Souls are strings and can be:
+
+- Random UUIDs generated by `Gun.state().toString(36) + String.random(12)`
+- User-defined keys (e.g., `'users/alice'`)
+- SEA public keys for user namespaces (e.g., `'~pubkeyhere'`)
+
+### State Vectors (`_['>']`)
+
+A map from property names to timestamps (numbers). Each property on the node has its own independent state timestamp, which is used by the HAM conflict resolution algorithm to determine which value wins during a merge.
+
+```javascript
+{
+  _: {
+    '#': 'user/alice',
+    '>': {
+      name: 1618033988749.001,   // When 'name' was last written
+      age: 1618033988750.002,    // When 'age' was last written
+      email: 1618033988751.003   // When 'email' was last written
+    }
+  },
+  name: "Alice",
+  age: 30,
+  email: "alice@example.com"
+}
+```
+
+The TypeScript type for metadata:
+
+```typescript
+interface IGunMeta<T extends object> {
+  _: {
+    '#': string;
+    '>': {
+      [key in keyof T]: number;
+    };
+  };
+}
+```
+
+---
+
+## Conflict Resolution -- HAM (Hypothetical Amnesia Machine)
+
+HAM is the core CRDT-based algorithm that makes GUN work. It is a deterministic conflict resolution algorithm that any peer can run independently to arrive at the same result, without coordination.
+
+### Core Principle
+
+HAM implements **last-write-wins per property** (not per node). This means if Alice updates `user.name` and Bob updates `user.age` simultaneously, both writes survive -- they do not conflict because they affect different properties.
+
+### The Five Parameters
+
+All data in GUN ultimately reduces to five parameters for comparison:
+
+| Parameter | Description |
+|---|---|
+| `machineState` | The current time on this machine (from `Gun.state()`) |
+| `incomingState` | The state timestamp on the incoming property |
+| `currentState` | The state timestamp on the locally stored property |
+| `incomingValue` | The incoming value for the property |
+| `currentValue` | The currently stored value for the property |
+
+### Algorithm Outcomes
+
+The HAM algorithm produces one of four outcomes for each property comparison:
+
+1. **Future**: The incoming state is ahead of machine time. Defer processing until the machine catches up. This prevents future-dated writes from being accepted prematurely.
+
+   ```javascript
+   if (state > now) {
+     // Defer: schedule re-processing when our clock catches up
+     setTimeout(function() { ham(val, key, soul, state, msg) },
+       (tmp = state - now) > MD ? MD : tmp);  // MD = 2^31-1 (max 32-bit defer)
+     return;
+   }
+   ```
+
+2. **Old**: The incoming state is older than what we already have. Discard it.
+
+   ```javascript
+   if (state < was) { return; }  // Old data, ignore
+   ```
+
+3. **Same**: The incoming state is identical to what we have. Break the tie using lexicographic comparison of the serialized values (the "smaller" value wins to ensure determinism).
+
+   ```javascript
+   if (state === was && (val === known || L(val) <= L(known))) {
+     return;  // Same state, current value wins the tie
+   }
+   ```
+
+4. **Accept**: The incoming state is newer. Accept the incoming value.
+
+### State Generation -- Hybrid Logical Clock
+
+State timestamps are generated by `Gun.state()`, which implements a Hybrid Logical Clock:
+
+```javascript
+function State() {
+  var t = +new Date;
+  if (last < t) {
+    return N = 0, last = t + State.drift;
+  }
+  // If multiple writes happen in the same millisecond,
+  // increment a sub-millisecond counter
+  return last = t + ((N += 1) / D) + State.drift;
+}
+State.drift = 0;
+var N = 0, D = 999;  // D = decimal resolution divisor
+```
+
+This ensures:
+- Timestamps are monotonically increasing on a single machine.
+- Multiple writes within the same millisecond get distinct, ordered timestamps via the `N/D` fractional component.
+- Clock drift between peers can be compensated via `State.drift`.
+- The `D` constant (999) assumes machines will not produce more than 999 writes per millisecond. On faster future hardware, this should be increased.
+
+### HAM in the Source
+
+The actual HAM implementation lives inside the `put` handler in the root module. Here is the critical path, condensed:
+
+```javascript
+function ham(val, key, soul, state, msg) {
+  var root = ctx.root, graph = root.graph;
+  var vertex = graph[soul] || empty;
+  var was = state_is(vertex, key, 1);  // Current state for this key
+  var known = vertex[key];              // Current value for this key
+  var now = State();
+
+  // FUTURE: defer if incoming state is ahead of our clock
+  if (state > now) {
+    setTimeout(function() { ham(val, key, soul, state, msg) },
+      (state - now) > MD ? MD : (state - now));
+    return;
+  }
+
+  // OLD: discard if incoming state is behind
+  if (state < was) { return; }
+
+  // SAME: tie-break with lexicographic value comparison
+  if (state === was && (val === known || L(val) <= L(known))) {
+    return;
+  }
+
+  // ACCEPT: merge the incoming value into the graph
+  root.on('put', {
+    '#': id, '@': msg['@'],
+    put: { '#': soul, '.': key, ':': val, '>': state },
+    ok: msg.ok, _: ctx
+  });
+}
+```
+
+---
+
+## Wire Protocol
+
+GUN's wire protocol consists of two fundamental operations: **PUT** (write) and **GET** (read). All messages are JSON objects with metadata fields for deduplication, acknowledgment, and routing.
+
+### Message Envelope
+
+Every message on the wire has these standard fields:
+
+| Field | Description |
+|---|---|
+| `#` | Message ID (random 9-character string for deduplication) |
+| `@` | ACK reference -- the message ID this is responding to |
+| `##` | Content hash (optional, for deduplication of identical data) |
+| `><` | Comma-separated list of peer IDs already sent to (prevents echo) |
+| `put` | The graph data being written (for PUT messages) |
+| `get` | The query being requested (for GET messages) |
+| `dam` | DAM (Daisy-chain Ad-hoc Mesh) control messages |
+| `ok` | Success/status metadata |
+| `err` | Error message |
+| `_` | Internal metadata (not serialized on wire) |
+
+### PUT -- Writing Data
+
+A PUT is any write to data. The data travels over the network as a partial graph containing only the modified portion.
+
+```javascript
+// Wire format for a PUT message:
+{
+  '#': 'msgId123',          // Unique message ID
+  put: {
+    'user/alice': {          // Soul of the node being written
+      _: {
+        '#': 'user/alice',
+        '>': {
+          name: 1618033988749,
+          age: 1618033988750
+        }
+      },
+      name: "Alice",
+      age: 30
+    }
+  }
+}
+```
+
+After HAM processing, individual property updates are emitted internally as:
+
+```javascript
+// Internal per-property PUT (after HAM decomposition):
+{
+  '#': soul,     // Node soul
+  '.': key,      // Property name
+  ':': val,      // Property value
+  '>': state     // State timestamp
+}
+```
+
+The corresponding TypeScript types:
+
+```typescript
+type GunNodePut = {
+  '#': string;              // Node path (soul)
+  '.': string;              // Leaf name (property key)
+  ':': GunValueSimple;      // Leaf value
+  '>': number;              // Leaf timestamp (state)
+};
+```
+
+PUT requires acknowledgment. Every peer that receives a PUT must:
+1. Run HAM on each property to determine accept/reject.
+2. Store accepted changes.
+3. Forward the PUT to all other connected peers.
+4. Send an ACK back to the originator.
+
+### GET -- Reading Data
+
+A GET is any read on data. It specifies what to retrieve using a **lexical cursor** that allows memory-efficient processing.
+
+```javascript
+// Wire format for a GET message:
+{
+  '#': 'msgId456',          // Unique message ID
+  get: {
+    '#': 'user/alice',      // Soul of the node to read
+    '.': 'name'             // Optional: specific property to read
+  }
+}
+```
+
+The GET cursor components:
+
+| Field | Description |
+|---|---|
+| `#` | Soul (UUID) of the node to retrieve |
+| `.` | Property name to match (optional -- omit to get full node) |
+| `=` | Value match (optional) |
+| `>` | State match (optional) |
+
+```typescript
+type GunNodeGet = {
+  '#': string;     // Node path (soul)
+  '.': string;     // Leaf name (property key)
+};
+```
+
+GET also requires acknowledgment. The response is a PUT message with the `@` field set to the GET's message ID:
+
+```javascript
+// Response to a GET (delivered as a PUT with @ack):
+{
+  '#': 'msgId789',
+  '@': 'msgId456',          // References the original GET
+  put: {
+    'user/alice': {
+      _: { '#': 'user/alice', '>': { name: 1618033988749 } },
+      name: "Alice"
+    }
+  }
+}
+```
+
+---
+
+## Deduplication (DUP)
+
+GUN uses a time-based deduplication system to prevent messages from being processed or relayed more than once:
+
+```javascript
+function Dup(opt) {
+  var dup = {s: {}};
+  opt = opt || {max: 999, age: 1000 * 9};  // Track for 9 seconds
+
+  dup.check = function(id) {
+    if (!s[id]) { return false }
+    return dt(id);
+  }
+
+  dup.track = function(id) {
+    var it = s[id] || (s[id] = {});
+    it.was = dup.now = +new Date;
+    // Schedule cleanup after age expires
+    if (!dup.to) { dup.to = setTimeout(dup.drop, opt.age + 9) }
+    return it;
+  }
+
+  dup.drop = function(age) {
+    // Remove entries older than opt.age
+    Object.keys(s).forEach(function(id) {
+      if ((age || opt.age) > (dup.now - s[id].was)) { return }
+      delete s[id];
+    });
+  }
+}
+```
+
+Every incoming message's `#` (message ID) is checked against the dedup table. If already seen, the message is silently dropped. Otherwise it is tracked for `opt.age` milliseconds (default: 9 seconds). Additionally, content hashes (`##`) on ACKs allow deduplication of responses that have the same data but different message IDs.
+
+---
+
+## Peer-to-Peer Architecture
+
+GUN is fully peer-to-peer. Even "server" nodes are just peers -- there is no special server role. The architecture follows these principles:
+
+### Peer Equality
+
+Every peer maintains its own copy of the graph (or a subset of it). When a peer writes data, it sends the PUT to all connected peers. When a peer reads data, it sends a GET to all connected peers and merges the responses using HAM.
+
+### GunPeer Type
+
+```typescript
+type GunPeer = {
+  id: string;                              // Unique peer identifier
+  url: string;                             // Connection URL
+  queue: string[];                         // Queued messages awaiting send
+  wire: null | WebSocket | RTCDataChannel; // Transport connection
+};
+```
+
+### Message Forwarding
+
+Every received command must be forwarded to all other peers (except the one that sent it). The `><` field in messages tracks which peers have already seen a message to prevent echo loops:
+
+```javascript
+// When sending, attach list of known peers:
+if (!msg.dam && !msg['@']) {
+  var to = [];
+  for (var k in opt.peers) {
+    to.push(opt.peers[k].url || opt.peers[k].pid || opt.peers[k].id);
+    if (to.length > 6) { break; }
+  }
+  if (to.length > 1) { msg['><'] = to.join(); }
+}
+```
+
+### Relay Peers
+
+Relay peers serve two purposes:
+1. **NAT traversal** -- browsers behind firewalls cannot directly connect to each other, so relay peers act as intermediaries.
+2. **Persistence** -- relay peers can run storage adapters (filesystem, S3, etc.) to persist data beyond browser session lifetimes.
+
+### Peer Discovery and Identity
+
+When a new peer connects, a handshake occurs via the `?` DAM message:
+
+```javascript
+mesh.hear['?'] = function(msg, peer) {
+  if (msg.pid) {
+    if (!peer.pid) { peer.pid = msg.pid; }
+    if (msg['@']) { return; }
+  }
+  mesh.say({dam: '?', pid: opt.pid, '@': msg['#']}, peer);
+};
+```
+
+Each GUN instance generates a random PID (`opt.pid = String.random(9)`) on creation, which is exchanged during this handshake.
+
+### Checking Peer Connectivity
+
+```javascript
+// Get currently connected peers:
+var opt_peers = gun.back('opt.peers');
+var connected = Object.values(opt_peers).filter(function(peer) {
+  return peer && peer.wire && peer.wire.readyState === 1;
+});
+console.log(connected.length + " peers connected");
+```
+
+### Reconnecting / Adding Peers
+
+```javascript
+// Add or re-add peers at runtime:
+gun.opt({
+  peers: ['http://server1.com/gun', 'http://server2.com/gun']
+});
+```
+
+---
+
+## Mesh Layer (DAM -- Daisy-chain Ad-hoc Mesh)
+
+The mesh layer handles serialization, transport, batching, and routing of messages between peers. It sits between the GUN core and the transport layer (WebSocket, WebRTC, etc.).
+
+### Message Batching
+
+To optimize bandwidth, the mesh batches multiple outgoing messages into JSON arrays:
+
+```javascript
+// Messages are batched within a configurable gap:
+if (peer.batch) {
+  peer.tail = (tmp = peer.tail || 0) + raw.length;
+  if (peer.tail <= opt.pack) {
+    peer.batch += (tmp ? ',' : '') + raw;
+    return;
+  }
+  flush(peer);  // Batch is full, send it
+}
+peer.batch = '[';  // Start new batch
+setTimeout(function() { flush(peer); }, opt.gap);  // Flush after gap
+```
+
+Configuration options:
+
+| Option | Default | Description |
+|---|---|---|
+| `opt.gap` | `0` | Milliseconds to wait before flushing a batch |
+| `opt.max` | ~90MB | Maximum message size (rejects larger messages) |
+| `opt.pack` | `opt.max * 0.0001` | Maximum batch size before forced flush |
+| `opt.puff` | `9` | Number of messages to process per tick |
+
+### DAM Control Messages
+
+The `dam` field identifies control messages that are handled by the mesh layer rather than the GUN core:
+
+| DAM Type | Purpose |
+|---|---|
+| `?` | Peer identity handshake (exchange PIDs) |
+| `!` | Error notification |
+| `mob` | Peer mobility/redirect (reconnect to a different peer) |
+| `hi` | Hello/announce (used in peer discovery) |
+
+### Content Hashing
+
+For ACK deduplication, the mesh can hash PUT content:
+
+```javascript
+mesh.hash = function(msg, peer) {
+  json(msg.put, function hash(err, text) {
+    var s = text || '';
+    var h;
+    // Hash in 32KB chunks to avoid blocking
+    while (s.length) {
+      h = String.hash(s.slice(0, 32768), h);
+      s = s.slice(32768);
+    }
+    msg['##'] = h;
+    mesh.say(msg, peer);
+  }, sort);
+}
+```
+
+---
+
+## Hook System (Internal Events)
+
+GUN exposes an internal event system that plugins and middleware use to intercept and transform data at various points in the pipeline. Events are implemented via a linked-list-based "onto" system that supports ordered handler chains.
+
+### Available Hooks
+
+| Hook | When Fired | Typical Use |
+|---|---|---|
+| `create` | GUN instance creation | Initialize plugins, set up storage |
+| `opt` | Options updated (`.opt()` called) | Configure transport, wire adapters |
+| `put` | Data write (after HAM acceptance) | Storage adapters, indexing |
+| `get` | Data read request | Storage adapters, cache lookup |
+| `in` | Incoming message (from wire or internal) | Security, transformation |
+| `out` | Outgoing message (to wire or internal) | Security, transformation, routing |
+| `hi` | New peer connected | Resync, logging |
+| `bye` | Peer disconnected | Cleanup, logging |
+
+### Using Hooks
+
+**IMPORTANT**: Never use arrow functions as hook callbacks. Arrow functions do not have their own `this` context, which breaks the handler chain. Always use `function` declarations and call `this.to.next(msg)` to pass messages to the next handler.
+
+```javascript
+// CORRECT: Using function declaration
+Gun.on('opt', function(root) {
+  this.to.next(root);  // Pass to next handler in chain
+  // ... your plugin logic
+});
+
+// WRONG: Arrow function loses `this` context
+Gun.on('opt', (root) => {
+  this.to.next(root);  // ERROR: `this` is not the handler context
+});
+```
+
+### Hook Registration on Root vs Instance
+
+```javascript
+// Global hook -- applies to all GUN instances:
+Gun.on('create', function(root) {
+  this.to.next(root);
+  console.log("New GUN instance created with PID:", root.opt.pid);
+});
+
+// Instance hook -- applies to one GUN instance:
+gun.on('put', function(msg) {
+  this.to.next(msg);
+  console.log("Data written:", msg.put);
+});
+```
+
+### Hook Message Types
+
+The TypeScript types define precise shapes for each hook's message:
+
+```typescript
+// PUT hook message:
+type GunHookMessagePut = {
+  $: { _: _GunRoot };
+  '#'?: string;
+  put: GunNodePut;        // { '#': soul, '.': key, ':': value, '>': state }
+};
+
+// GET hook message:
+type GunHookMessageGet = {
+  $: { _: _GunRoot };
+  '#': string;
+  get: GunNodeGet;        // { '#': soul, '.': key }
+};
+
+// IN/OUT hook message:
+type GunHookMessageIn = {
+  $: { _: _GunRoot };
+  '#': string;
+  get?: GunNodeGet;
+  put?: { [nodePath: string]: GunDataNode };
+};
+```
+
+### The "onto" Event System
+
+The event system uses a doubly-linked list where each handler has `to` (next) and `back` (previous) pointers. Calling `this.to.next(msg)` advances the message to the next handler. Calling `this.off()` removes the handler from the chain:
+
+```javascript
+// Simplified onto implementation:
+function onto(tag, arg, as) {
+  if (!tag) { return {to: onto} }
+  var f = 'function' == typeof arg;
+  var tag = this.tag[tag] || (this.tag[tag] = {
+    tag: tag,
+    to: { next: function(arg) {
+      if (this.to) { this.to.next(arg) }
+    }}
+  });
+  if (f) {
+    var be = {
+      off: function() { /* unlink from chain */ },
+      to: onto._,
+      next: arg,       // The actual callback function
+      the: tag,
+      on: this,
+      as: as
+    };
+    (be.back = tag.last || tag).to = be;
+    return tag.last = be;
+  }
+  if (tag.to && arg !== undefined) { tag.to.next(arg) }
+  return tag;
+}
+```
+
+---
+
+## Storage -- RAD (Radisk)
+
+RAD is GUN's default storage adapter. It uses a radix tree (via the Book data structure) to organize data into chunks that can be stored on any backend.
+
+### Architecture
+
+RAD is storage-agnostic: the core logic handles chunking, merging, and memory management, while the actual I/O is delegated to pluggable backends:
+
+- **Node.js**: Filesystem (`fs.writeFile` / `fs.readFile`)
+- **Browser**: `localStorage` (default) or `IndexedDB` (via plugin)
+- **Cloud**: Amazon S3 (via plugin)
+
+### How RAD Works
+
+1. **Data arrives** via the `put` hook as individual property updates.
+2. **Book** (the in-memory radix tree) receives the write: `book(word, value)`.
+3. **Pages** within the book accumulate changes until they exceed a size threshold.
+4. **Split** occurs when a page grows beyond `PAGE` bytes (default: 4096), creating two smaller pages.
+5. **Flush** writes dirty pages to the storage backend.
+6. **Reads** check in-memory cache first, then load the relevant page from disk.
+
+### Configuration
+
+```javascript
+var gun = Gun({
+  file: 'mydata',       // Folder/prefix name (default: 'radata')
+  radisk: true,          // Enable RAD storage (default: true on Node.js)
+  localStorage: true     // Enable localStorage (default: true in browser)
+});
+```
+
+RAD options:
+
+| Option | Default | Description |
+|---|---|---|
+| `file` | `'radata'` | Folder name for filesystem storage, prefix for other backends |
+| `radisk` | `true` | Whether to use RAD for persistence |
+| `localStorage` | `true` | Whether to use localStorage in the browser |
+
+### Book -- The In-Memory Radix Tree
+
+Book is a high-performance replacement for JavaScript objects/maps/dictionaries, optimized for sorted lexical operations. It organizes data into pages that can be serialized to and from a compact string format.
+
+```javascript
+var Book = function(text) {
+  var b = function book(word, is) {
+    // If `is` is undefined, this is a READ
+    // If `is` is provided, this is a WRITE
+    var has = b.all[word];
+    if (is === undefined) { return (has && has.is) || b.get(has || word) }
+    if (has) { has.is = is; return b; }
+    return b.set(word, is);
+  };
+  b.list = [/* pages */];
+  b.page = page;   // Find the page a word belongs to
+  b.set = set;     // Insert a new word
+  b.get = get;     // Retrieve a word's value
+  b.all = {};      // In-memory index of known words
+  return b;
+};
+```
+
+Book encoding uses a pipe-delimited format with type prefixes:
+
+```javascript
+B.encode = function(d, s) {
+  s = s || "|";
+  switch(typeof d) {
+    case 'string':  return '"' + d;           // Text: prefix with "
+    case 'number':  return (d < 0) ? '' + d : '+' + d;  // Numbers: + or -
+    case 'boolean': return d ? '+' : '-';      // Booleans: + or -
+    case 'object':  if (!d) { return ' ' }     // null: space
+  }
+}
+
+B.decode = function(t) {
+  switch(t) { case ' ': return null; case '-': return false; case '+': return true; }
+  switch(t[0]) {
+    case '-': case '+': return parseFloat(t);
+    case '"': return t.slice(1);
+  }
+}
+```
+
+### Filesystem Storage Backend
+
+```javascript
+// Node.js filesystem adapter:
+RAD.put = function(file, data, cb, opt) {
+  fs.writeFile(opt.file + '/' + file, data, cb);
+}
+RAD.get = function(file, cb, opt) {
+  fs.readFile(opt.file + '/' + file, function(err, data) {
+    if (err && 'ENOENT' === (err.code || '').toUpperCase()) { return cb() }
+    cb(err, (data || '').toString() || data);
+  });
+}
+```
+
+### localStorage Storage Backend
+
+The localStorage adapter is the default browser storage. It serializes the entire in-memory graph to a single localStorage key:
+
+```javascript
+Gun.on('create', function(root) {
+  this.to.next(root);
+  var opt = root.opt, graph = root.graph, disk;
+  opt.prefix = opt.file || 'gun/';
+  disk = JSON.parse(store.getItem(opt.prefix)) || {};
+
+  // Handle reads from localStorage:
+  root.on('get', function(msg) {
+    this.to.next(msg);
+    var soul = msg.get['#'];
+    var data = disk[soul];
+    Gun.on.get.ack(msg, data);
+  });
+
+  // Handle writes to localStorage:
+  root.on('put', function(msg) {
+    this.to.next(msg);
+    var put = msg.put;
+    disk[put['#']] = Gun.state.ify(
+      disk[put['#']], put['.'], put['>'], put[':'], put['#']
+    );
+    // Batch and flush with debounce
+    setTimeout(flush, 9 + (size / 333));
+  });
+});
+```
+
+Note: localStorage is limited to ~5MB in most browsers. For larger datasets, use the IndexedDB RAD plugin.
+
+---
+
+## LEX -- Lexical Expressions
+
+LEX provides a query language for pattern matching on keys. It supports exact match, prefix match, range queries, and reverse iteration.
+
+### LEX Type
+
+```typescript
+type LEX<T extends string = string> = {
+  '='?: T;        // Exact match
+  '*'?: string;   // Prefix match
+  '>'?: string;   // Greater-than-or-equal (range start)
+  '<'?: string;   // Less-than-or-equal (range end)
+  '-'?: number;   // 1 for reverse iteration
+};
+```
+
+### LEXQuery Type
+
+```typescript
+type LEXQuery<T extends string = string> = {
+  '.': LEX<T>;    // The lexical expression to match property names
+  ':'?: number;   // Optional limit on number of results
+};
+```
+
+### String.match -- LEX Evaluation
+
+The LEX evaluation is implemented as `String.match`:
+
+```javascript
+String.match = function(t, o) {
+  if ('string' !== typeof t) { return false }
+  if ('string' == typeof o) { o = {'=': o} }
+  o = o || {};
+
+  // Exact match
+  var tmp = (o['='] || o['*'] || o['>'] || o['<']);
+  if (t === tmp) { return true }
+  if (undefined !== o['=']) { return false }
+
+  // Prefix match
+  tmp = (o['*'] || o['>']);
+  if (t.slice(0, (tmp || '').length) === tmp) { return true }
+  if (undefined !== o['*']) { return false }
+
+  // Range match
+  if (undefined !== o['>'] && undefined !== o['<']) {
+    return (t >= o['>'] && t <= o['<']);
+  }
+  if (undefined !== o['>'] && t >= o['>']) { return true }
+  if (undefined !== o['<'] && t <= o['<']) { return true }
+
+  return false;
+}
+```
+
+### LEX Usage Examples
+
+```javascript
+// Get all users whose key starts with 'user/'
+gun.get({'#': {'*': 'user/'}});
+
+// Get properties starting with 'address'
+gun.get('user/alice').get({'.': {'*': 'address'}});
+
+// Range query: get keys between 'a' and 'm'
+gun.get({'.': {'>': 'a', '<': 'm'}});
+
+// Reverse iteration
+gun.get({'.': {'*': 'msg', '-': 1}});
+```
+
+---
+
+## Chain API
+
+GUN's JavaScript API is built around a **chaining** pattern where each operation returns a new chain context. Chains maintain back-references to their parent, forming a tree that mirrors the graph traversal path.
+
+### Chain Internals
+
+Every chain has an internal state object (`_`) with these key properties:
+
+| Property | Description |
+|---|---|
+| `$` | Reference back to the chain (gun instance) |
+| `root` | Reference to the root chain's internal state |
+| `back` | Reference to the parent chain's internal state |
+| `soul` | If this chain represents a root-level node, its soul |
+| `has` | If this chain represents a property on a node, the property name |
+| `get` | The key used to create this chain |
+| `put` | Cached data at this chain's position |
+| `on` | Event emitter for this chain |
+| `next` | Map of child chains (keyed by property name) |
+| `ask` | Map of pending GET requests |
+| `map` | Map tracking for `.map()` chains |
+| `ack` | ACK counter for determining "not found" |
+
+### Core Chain Methods
+
+#### `gun.get(key)`
+
+Navigate to a node or property in the graph:
+
+```javascript
+// Get a root-level node by soul:
+var alice = gun.get('user/alice');
+
+// Get a property on a node:
+var name = gun.get('user/alice').get('name');
+
+// Chained navigation:
+var color = gun.get('user/alice').get('car').get('color');
+```
+
+The chain is lazy -- no network request is made until a terminal operation (`.on()`, `.once()`, `.put()`) is called.
+
+#### `gun.put(data)`
+
+Write data into the graph:
+
+```javascript
+// Write to a node:
+gun.get('user/alice').put({
+  name: "Alice",
+  age: 30
+});
+
+// Write to a specific property:
+gun.get('user/alice').get('name').put("Alice Smith");
+
+// With acknowledgment callback:
+gun.get('user/alice').put({name: "Alice"}, function(ack) {
+  if (ack.err) { console.error("Write failed:", ack.err); }
+  else { console.log("Write acknowledged"); }
+});
+```
+
+Internally, `.put()` walks the data structure, resolves soul references, applies state timestamps via `Gun.state()`, and sends the resulting graph through the `out` hook.
+
+#### `gun.on(callback)`
+
+Subscribe to real-time updates:
+
+```javascript
+// Subscribe to all changes on a node:
+gun.get('user/alice').on(function(data, key) {
+  console.log("Alice updated:", data);
+});
+
+// Subscribe to a specific property:
+gun.get('user/alice').get('name').on(function(name, key) {
+  console.log("Name changed to:", name);
+});
+
+// With change-only option (only receive the changed properties):
+gun.get('user/alice').on(function(data, key) {
+  console.log("Changed:", data);
+}, {change: true});
+```
+
+`.on()` is reactive -- it fires immediately with cached data (if available) and then again whenever the data changes, from any peer.
+
+#### `gun.once(callback)`
+
+Get the current data without subscribing to future updates:
+
+```javascript
+gun.get('user/alice').once(function(data, key) {
+  console.log("Alice is:", data);
+});
+
+// With custom wait time (default: 99ms debounce):
+gun.get('user/alice').once(function(data, key) {
+  console.log("Alice is:", data);
+}, {wait: 500});
+```
+
+`.once()` uses a debounce timer because GUN streams data in partials. The callback waits until data stops arriving (for `wait` milliseconds) before firing, to give a more "complete" snapshot.
+
+#### `gun.map()`
+
+Iterate over each item in a node (like `forEach` for graph nodes):
+
+```javascript
+// Subscribe to all users and their changes:
+gun.get('users').map().on(function(user, id) {
+  console.log("User", id, ":", user);
+});
+
+// Get each user once, including newly added ones:
+gun.get('users').map().once(function(user, id) {
+  console.log("User", id, ":", user);
+});
+
+// With a transform function:
+gun.get('users').map(function(user, id) {
+  if (user.active) { return user; }
+  // Returning undefined filters out inactive users
+}).on(function(user, id) {
+  console.log("Active user:", id);
+});
+```
+
+Summary of `.map()` behavior depending on chain position:
+
+| Chain | Behavior |
+|---|---|
+| `users.map().on(cb)` | Subscribes to changes on every user and to users as they are added |
+| `users.map().once(cb)` | Gets each user once, including ones added over time |
+| `users.once().map().on(cb)` | Gets user list once, subscribes to changes on those users (not new ones) |
+| `users.once().map().once(cb)` | Gets user list once, gets each of those users once (not new ones) |
+
+#### `gun.set(item)`
+
+Add a unique item to an unordered set:
+
+```javascript
+// Add a message to a chat set:
+var msg = gun.get('chat').set({
+  who: "Alice",
+  what: "Hello!",
+  when: Gun.state()
+});
+
+// msg is a reference to the newly created node
+msg.once(function(data) {
+  console.log("Message stored with soul:", data._['#']);
+});
+```
+
+`.set()` works like a mathematical set -- each item gets a unique soul. If the same item is added twice, it merges rather than duplicating.
+
+#### `gun.back(n)`
+
+Navigate up the chain:
+
+```javascript
+var color = gun.get('user/alice').get('car').get('color');
+
+color.back();    // Returns the 'car' chain
+color.back(2);   // Returns the 'user/alice' chain
+color.back(-1);  // Returns the root gun instance
+```
+
+#### `gun.off()`
+
+Unsubscribe from all listeners on this chain:
+
+```javascript
+var ref = gun.get('user/alice').on(function(data) {
+  console.log(data);
+});
+
+// Later, stop listening:
+ref.off();
+```
+
+---
+
+## Security -- SEA (Security, Encryption, and Authorization)
+
+SEA is GUN's cryptographic layer. It provides user authentication, data signing, encryption, and certificate-based authorization.
+
+### SEA Key Pair
+
+```typescript
+interface ISEAPair {
+  priv: string;   // Private signing key (ECDSA)
+  pub: string;    // Public signing key (ECDSA)
+  epriv: string;  // Private encryption key (ECDH)
+  epub: string;   // Public encryption key (ECDH)
+}
+```
+
+### SEA Operations
+
+| Operation | Purpose | Cryptographic Primitive |
+|---|---|---|
+| `SEA.pair()` | Generate a new key pair | ECDSA + ECDH |
+| `SEA.sign(data, pair)` | Sign data to prove authorship | ECDSA / SHA-256 |
+| `SEA.verify(msg, pub)` | Verify a signature | ECDSA / SHA-256 |
+| `SEA.encrypt(data, pair)` | Encrypt data | AES-GCM |
+| `SEA.decrypt(msg, pair)` | Decrypt data | AES-GCM |
+| `SEA.work(data, salt)` | Proof of work / hashing | PBKDF2 / SHA-256 |
+| `SEA.secret(pub, pair)` | Derive shared secret (Diffie-Hellman) | ECDH |
+| `SEA.certify(who, policy, authority)` | Issue a write permission certificate | ECDSA |
+
+### Certificates
+
+Certificates allow fine-grained write permissions without sharing private keys:
+
+```javascript
+// Grant alice write access to the 'posts' path:
+var cert = await SEA.certify(
+  alicePub,                              // WHO can write
+  [{"*": "posts"}],                      // WHERE they can write
+  myKeyPair,                             // Authority (your key pair)
+  null,                                  // Callback (optional)
+  { expiry: Gun.state() + 86400000 }    // WHEN it expires (24 hours)
+);
+
+// Alice uses the certificate when writing:
+gun.get('~' + myPub).get('posts').get('hello').put(
+  "Hello World",
+  null,
+  { opt: { cert: cert } }
+);
+```
+
+Certificates are intentionally stored as plaintext so that every peer can independently verify and enforce the same authorization rules.
+
+---
+
+## GUN Instance Lifecycle
+
+### Creation
+
+```javascript
+var gun = Gun({
+  peers: ['http://relay1.com/gun', 'http://relay2.com/gun'],
+  file: 'mydata',
+  localStorage: true,
+  radisk: true
+});
+```
+
+During creation, the following happens in order:
+
+1. Internal state is initialized (`at.root`, `at.graph`, `at.on`, `at.dup`).
+2. Core event handlers are registered (`in`, `out`, `put`).
+3. The `create` hook fires, allowing plugins to initialize.
+4. `opt` is called with the provided options, firing the `opt` hook.
+5. Transport adapters (WebSocket) connect to specified peers.
+6. Storage adapters (localStorage, RAD) begin loading cached data.
+
+### The Root Graph
+
+The root of every GUN instance maintains an in-memory cache of the graph:
+
+```javascript
+at.root = at;
+at.graph = {};  // In-memory graph cache
+```
+
+This graph serves as a read-through cache. Reads check the in-memory graph first, then fall through to storage adapters. Writes update the in-memory graph immediately and then persist asynchronously.
+
+---
+
+## Transport -- WebSocket Adapter
+
+The default transport is WebSocket. GUN automatically converts HTTP peer URLs to WebSocket URLs:
+
+```javascript
+function open(peer) {
+  var url = peer.url.replace(/^http/, 'ws');
+  var wire = peer.wire = new WebSocket(url);
+
+  wire.onclose = function() {
+    reconnect(peer);
+    mesh.bye(peer);
+  };
+  wire.onopen = function() {
+    mesh.hi(peer);
+  };
+  wire.onmessage = function(msg) {
+    mesh.hear(msg.data || msg, peer);
+  };
+}
+```
+
+### Reconnection Logic
+
+When a connection drops, GUN automatically attempts to reconnect with exponential backoff:
+
+```javascript
+var wait = 2 * 999;  // ~2 seconds base wait
+function reconnect(peer) {
+  if (!opt.peers[peer.url]) { return }     // Peer was intentionally removed
+  peer.retry = (peer.retry || 60) - 1;     // Countdown retries
+  peer.defer = setTimeout(function to() {
+    if (document && document.hidden) {       // Don't reconnect if tab is hidden
+      return setTimeout(to, wait);
+    }
+    open(peer);
+  }, wait);
+}
+```
+
+### On Reconnect -- Resync
+
+When a peer reconnects (fires `hi`), GUN automatically re-requests all active subscriptions:
+
+```javascript
+root.on('hi', function(peer) {
+  this.to.next(peer);
+  var souls = Object.keys(root.next || {});
+  souls.forEach(function(soul) {
+    var node = root.next[soul];
+    if (node.ask && node.ask['']) {
+      // Full node subscription -- re-request entire node
+      mesh.say({get: {'#': soul}}, peer);
+    } else {
+      // Per-property subscriptions -- re-request each with hash for dedup
+      Object.keys(node.ask || {}).forEach(function(key) {
+        mesh.say({
+          '##': String.hash((root.graph[soul] || '')[key]),
+          get: {'#': soul, '.': key}
+        }, peer);
+      });
+    }
+  });
+});
+```
+
+---
+
+## Performance Characteristics
+
+### CPU Scheduling
+
+GUN uses a cooperative scheduling system to avoid blocking the main thread:
+
+- **`setTimeout.turn(fn)`** -- Schedules work in "turns" on a single thread, processing items from a queue.
+- **`setTimeout.each(list, fn, delay, batch)`** -- Iterates over arrays in batches, yielding between batches.
+- **`setTimeout.poll(fn)`** -- Executes a function immediately if within a time budget, otherwise defers.
+
+```javascript
+// setTimeout.turn queues functions and processes them cooperatively:
+var t = sT.turn = function(f) {
+  1 == s.push(f) && p(T)  // Start processing if queue was empty
+}
+var T = function() {
+  if (f = s[i++]) { f() }           // Execute one function
+  if (i == s.length || 99 == i) {    // Compact the queue periodically
+    s = s.slice(i); i = 0;
+  }
+  if (s.length) { p(T) }            // Continue if more work remains
+}
+```
+
+### Memory Management
+
+- The in-memory graph cache grows unboundedly by default. For large datasets, use `.off()` to release chains no longer needed.
+- RAD manages page splits to keep individual storage chunks within `PAGE` bytes (4KB default).
+- The dedup table auto-prunes entries older than 9 seconds.
+- GUN logs a warning if more than 1000 records/second are synced (faster than DOM can render).
+
+### Bandwidth Optimization
+
+- Messages include `><` (peers already sent to) to prevent echo.
+- Content hashing (`##`) allows deduplication of identical ACKs from different peers.
+- Batch mode combines multiple messages into a single JSON array transmission.
+- "Not found" ACKs are suppressed if another peer already provided the data.
+
+---
+
+## Module Structure
+
+The GUN source is organized as a series of `USE()` module definitions that are concatenated into a single file:
+
+| Module | Path | Purpose |
+|---|---|---|
+| `shim` | `./shim` | Polyfills: `String.random`, `String.match`, `String.hash`, `Object.plain`, `Object.empty`, scheduling |
+| `onto` | `./onto` | Event emitter (linked-list-based) |
+| `book` | `./book` | Radix tree / sorted key-value store |
+| `valid` | `./valid` | Value validation (is this a valid GUN value?) |
+| `state` | `./state` | Hybrid Logical Clock for state timestamps |
+| `dup` | `./dup` | Message deduplication |
+| `ask` | `./ask` | Request/response tracking (ask and ack) |
+| `root` | `./root` | Core GUN constructor, HAM algorithm, `put`/`get` on root |
+| `back` | `./back` | Chain navigation (`.back()`) |
+| `chain` | `./chain` | Chain creation, input/output routing, link/unlink |
+| `get` | `./get` | `.get()` chain method |
+| `put` | `./put` | `.put()` chain method with graph walking and soul resolution |
+| `core` | `./core` | Aggregates chain, back, put, get into core |
+| `on` | `./on` | `.on()`, `.once()`, `.off()` chain methods |
+| `map` | `./map` | `.map()` chain method with LEX support |
+| `set` | `./set` | `.set()` chain method |
+| `mesh` | `./mesh` | DAM mesh networking layer |
+| `websocket` | `./websocket` | WebSocket transport adapter |
+| `localStorage` | `./localStorage` | Browser localStorage storage adapter |
+
+Optional modules loaded separately:
+
+| Module | File | Purpose |
+|---|---|---|
+| SEA | `sea.js` | Security, Encryption, and Authorization |
+| RAD | `rad.js` | Radisk storage adapter with Book-based radix tree |
+| AXE | `axe.js` | Advanced eXchange Engine for smarter peer routing |
+| NTS | `nts.js` | Network Time Sync for clock drift compensation |
+
+---
+
+## Summary of Key Design Decisions
+
+1. **Property-level CRDT**: Conflicts resolve per-property, not per-document, maximizing concurrent write throughput.
+2. **No arrays**: Arrays have inherent ordering problems in distributed systems. GUN uses sets and lexical ordering instead.
+3. **Flat graph normalization**: All nesting is eliminated on the wire, making circular references trivial and enabling fine-grained sync.
+4. **Lazy evaluation**: Chain operations build a query plan but do not execute until a terminal operation is reached.
+5. **Pluggable everything**: Storage, transport, security, and routing are all implemented as hook-based plugins.
+6. **Offline-first**: All operations work locally first, then sync when connectivity is available.
+7. **No schema enforcement**: GUN is schema-free at the protocol level. TypeScript types exist for developer tooling but are not enforced at runtime.
