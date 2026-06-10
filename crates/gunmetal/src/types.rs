@@ -79,6 +79,22 @@ impl GunValue {
         }
     }
 
+    /// True if this value references a GUN node (it is a soul link).
+    ///
+    /// Rust equivalent of `Gun.node.is(value)` for the typed value model;
+    /// for raw wire JSON objects use [`crate::wire::is_node`].
+    pub fn is_node(&self) -> bool {
+        self.is_link()
+    }
+
+    /// Extract the soul this value points at, if it references a node.
+    ///
+    /// Rust equivalent of `Gun.node.soul(value)`; for raw wire JSON use
+    /// [`crate::wire::soul_of`].
+    pub fn soul(&self) -> Option<&str> {
+        self.as_link()
+    }
+
     /// Returns the JSON-serialized length, used for tie-breaking in HAM.
     /// In the JS source this is `JSON.stringify(val).length`.
     pub fn json_len(&self) -> usize {
@@ -253,6 +269,16 @@ mod tests {
     fn node_state_of_missing_key() {
         let node = Node::new("test");
         assert_eq!(node.state_of("missing"), f64::NEG_INFINITY);
+    }
+
+    #[test]
+    fn gun_value_node_introspection() {
+        let link = GunValue::Link("users/alice".into());
+        assert!(link.is_node());
+        assert_eq!(link.soul(), Some("users/alice"));
+
+        assert!(!GunValue::Text("users/alice".into()).is_node());
+        assert_eq!(GunValue::Number(1.0).soul(), None);
     }
 
     #[test]

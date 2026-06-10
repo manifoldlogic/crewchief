@@ -104,12 +104,41 @@ impl Default for RelayConfig {
             tls_key: None,
             max_peers: 999_999,
             peers: Vec::new(),
-            mesh: MeshConfig::default(),
+            // Relay peers run AXE: PUT updates are routed to subscribed
+            // peers (recorded from their GETs) instead of broadcast.
+            mesh: MeshConfig {
+                axe: true,
+                ..MeshConfig::default()
+            },
         }
     }
 }
 
 impl RelayConfig {
+    /// Derive a relay configuration from GUN constructor options: the
+    /// `web` listen address, `ws_path`, `file`, `mob`, and mesh tuning.
+    pub fn from_options(options: &GunOptions) -> Self {
+        let mut config = Self {
+            path: options.ws_path.clone(),
+            file: options
+                .file
+                .clone()
+                .unwrap_or_else(|| "radata".to_string()),
+            max_peers: options.mob,
+            mesh: MeshConfig::from_options(options),
+            ..Default::default()
+        };
+        if let Some(web) = &options.web {
+            if let Some((host, port)) = web.rsplit_once(':') {
+                if let Ok(port) = port.parse() {
+                    config.host = host.to_string();
+                    config.port = port;
+                }
+            }
+        }
+        config
+    }
+
     /// Apply environment variables (medium priority).
     pub fn apply_env(mut self) -> Self {
         if let Ok(port) = std::env::var("PORT") {
@@ -803,8 +832,14 @@ mod tests {
         let mut ws_a = ws_connect(handle.addr, "/gun").await;
         let mut ws_b = ws_connect(handle.addr, "/gun").await;
 
-        // Drain B's handshake first.
+        // Drain B's handshake, then subscribe B to the soul (AXE routes
+        // PUTs to subscribed peers, exactly like a GUN.js .on()).
         let _ = wait_for_frame(&mut ws_b, |f| f.contains(r###""dam":"?""###)).await;
+        ws_b.send(Message::Text(r###"{"#":"sub-b","get":{"#":"chat"}}"###.into()))
+            .await
+            .unwrap();
+        // Not-found ack confirms the subscription was processed.
+        let _ = wait_for_frame(&mut ws_b, |f| f.contains(r###""@":"sub-b""###)).await;
 
         ws_a.send(Message::Text(
             r###"{"#":"rel1","put":{"chat":{"_":{"#":"chat",">":{"msg":1700000000000}},"msg":"hello"}}}"###.into(),

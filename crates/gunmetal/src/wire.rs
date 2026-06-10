@@ -221,6 +221,28 @@ pub fn ack_err(ack_id: &str, error: &str) -> WireMessage {
     }
 }
 
+// ── Node introspection ──────────────────────────────────────────────────
+
+/// True if a JSON value is a GUN node object: an object carrying `_.#`
+/// soul metadata. Mirrors `Gun.node.is(value)`.
+pub fn is_node(value: &Value) -> bool {
+    soul_of(value).is_some()
+}
+
+/// Extract the soul from a JSON value: either a full node object
+/// (`{"_": {"#": soul, ...}, ...}`) or a bare link (`{"#": soul}`).
+/// Mirrors `Gun.node.soul(value)`.
+pub fn soul_of(value: &Value) -> Option<&str> {
+    let obj = value.as_object()?;
+    if let Some(meta) = obj.get("_").and_then(|m| m.as_object()) {
+        return meta.get("#").and_then(|s| s.as_str());
+    }
+    if obj.len() == 1 {
+        return obj.get("#").and_then(|s| s.as_str());
+    }
+    None
+}
+
 // ── Deserialization (JSON → Rust) ───────────────────────────────────────
 
 /// Parse a JSON `Value` into a `GunValue`.
@@ -558,6 +580,24 @@ mod tests {
         let get = msg.get.unwrap();
         assert_eq!(get.soul, "users");
         assert_eq!(get.key.as_deref(), Some("alice"));
+    }
+
+    #[test]
+    fn node_introspection_helpers() {
+        let mut node = Node::new("mark");
+        node.put("name", GunValue::Text("Mark".into()), 1.0);
+        let json = node_to_json(&node);
+        assert!(is_node(&json));
+        assert_eq!(soul_of(&json), Some("mark"));
+
+        // A bare link also resolves to its soul.
+        let link = value_to_json(&GunValue::Link("fluffy".into()));
+        assert_eq!(soul_of(&link), Some("fluffy"));
+
+        // Plain objects and primitives are not nodes.
+        assert!(!is_node(&serde_json::json!({"a": 1})));
+        assert!(!is_node(&serde_json::json!("text")));
+        assert_eq!(soul_of(&serde_json::json!({"a": 1, "#": "x"})), None);
     }
 
     #[test]

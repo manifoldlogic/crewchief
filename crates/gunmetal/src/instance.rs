@@ -26,19 +26,115 @@ use crate::lex::Lex;
 use crate::types::{GunValue, Soul};
 use crate::wire;
 
+/// WebRTC transport configuration (GUN's `opt.rtc`).
+///
+/// The WebRTC transport itself is optional (spec Phase 6); these options
+/// exist for constructor parity and for transports that implement it.
+#[derive(Debug, Clone)]
+pub struct RtcConfig {
+    /// STUN/TURN server URLs.
+    pub ice_servers: Vec<String>,
+    /// Data channel ordering (GUN default: unordered).
+    pub data_channel_ordered: bool,
+    /// Data channel max retransmits (GUN default: 2).
+    pub max_retransmits: u32,
+    /// Maximum WebRTC peer connections (GUN default: 55).
+    pub max_peers: usize,
+    /// Signaling room (GUN defaults to location.hash/pathname in browsers).
+    pub room: Option<String>,
+}
+
+impl Default for RtcConfig {
+    fn default() -> Self {
+        Self {
+            ice_servers: vec![
+                "stun:stun.l.google.com:19302".into(),
+                "stun:stun.cloudflare.com:3478".into(),
+            ],
+            data_channel_ordered: false,
+            max_retransmits: 2,
+            max_peers: 55,
+            room: None,
+        }
+    }
+}
+
 /// Configuration options for a GUN instance.
 ///
-/// Mirrors `GunOptions` from the JS source.
-#[derive(Debug, Clone, Default)]
+/// Mirrors the standard GUN constructor options:
+///
+/// | Option | GUN default | Here |
+/// |--------|-------------|------|
+/// | `peers` | `[]` | `peers` |
+/// | `file` | `"radata"` | `file` |
+/// | `localStorage` | `true` | `local_storage` |
+/// | `radisk` | `true` | `radisk` |
+/// | `axe` | `true` | `axe` |
+/// | `web` | none | `web` (listen address for the relay) |
+/// | `ws.path` | `"/gun"` | `ws_path` |
+/// | `multicast` | `true` (native) | `multicast` |
+/// | `rtc` | defaults | `rtc` |
+/// | `chunk` | `1_048_576` | `chunk` |
+/// | `mob` | `999999` | `mob` |
+/// | `gap` | `0ms` | `gap` |
+/// | `retry` | `60` | `retry` |
+/// | `pid` | random | `pid` |
+#[derive(Debug, Clone)]
 pub struct GunOptions {
     /// Peer URLs to connect to.
     pub peers: Vec<String>,
     /// Whether to persist to local storage (browser). Default: true.
     pub local_storage: bool,
-    /// Whether to persist to disk via RAD (Node.js). Default: true.
+    /// Whether to persist to disk via RAD (native). Default: true.
     pub radisk: bool,
-    /// Custom file path for storage.
+    /// Storage directory/database name. Default: `Some("radata")`.
     pub file: Option<String>,
+    /// AXE subscription routing on relay peers. Default: true.
+    pub axe: bool,
+    /// Listen address for the built-in relay server (the Rust equivalent
+    /// of GUN's `web` HTTP-server option), e.g. `"0.0.0.0:8765"`.
+    /// `None` (default) runs no server.
+    pub web: Option<String>,
+    /// WebSocket upgrade path served by the relay. Default: `"/gun"`.
+    pub ws_path: String,
+    /// LAN UDP multicast discovery (optional transport, native).
+    /// Default: true, matching GUN — only takes effect if a multicast
+    /// transport is wired up.
+    pub multicast: bool,
+    /// WebRTC configuration (optional transport).
+    pub rtc: RtcConfig,
+    /// RAD chunk size in bytes. Default: 1 MB.
+    pub chunk: usize,
+    /// Mob threshold: max peers before relays shed connections.
+    /// Default: 999999.
+    pub mob: usize,
+    /// Mesh batching window. Default: 0ms (immediate sends).
+    pub gap: std::time::Duration,
+    /// Max reconnection attempts for client transports. Default: 60.
+    pub retry: usize,
+    /// Process ID for the DAM handshake. `None` (default) = random.
+    pub pid: Option<String>,
+}
+
+impl Default for GunOptions {
+    fn default() -> Self {
+        Self {
+            peers: Vec::new(),
+            local_storage: true,
+            radisk: true,
+            file: Some("radata".into()),
+            axe: true,
+            web: None,
+            ws_path: "/gun".into(),
+            multicast: true,
+            rtc: RtcConfig::default(),
+            chunk: 1_048_576,
+            mob: 999_999,
+            gap: std::time::Duration::ZERO,
+            retry: 60,
+            pid: None,
+        }
+    }
 }
 
 /// A GUN database instance.
@@ -66,7 +162,6 @@ pub struct Gun {
     pub(crate) graph: SharedRead<Graph>,
     pub(crate) events: SharedMut<EventBus>,
     dup: SharedMut<Dup>,
-    #[allow(dead_code)]
     options: GunOptions,
 }
 
@@ -96,6 +191,11 @@ impl Gun {
             soul: soul.into(),
             key: None,
         }
+    }
+
+    /// The options this instance was constructed with.
+    pub fn options(&self) -> &GunOptions {
+        &self.options
     }
 
     /// Get the current state timestamp from the clock.
@@ -689,6 +789,36 @@ mod tests {
 
     fn gun() -> Gun {
         Gun::default_instance()
+    }
+
+    #[test]
+    fn gun_options_defaults_match_spec() {
+        let opts = GunOptions::default();
+        assert!(opts.peers.is_empty());
+        assert_eq!(opts.file.as_deref(), Some("radata"));
+        assert!(opts.local_storage);
+        assert!(opts.radisk);
+        assert!(opts.axe);
+        assert!(opts.web.is_none());
+        assert_eq!(opts.ws_path, "/gun");
+        assert!(opts.multicast);
+        assert_eq!(opts.chunk, 1_048_576);
+        assert_eq!(opts.mob, 999_999);
+        assert_eq!(opts.gap, std::time::Duration::ZERO);
+        assert_eq!(opts.retry, 60);
+        assert!(opts.pid.is_none());
+        assert_eq!(opts.rtc.max_peers, 55);
+        assert_eq!(opts.rtc.ice_servers.len(), 2);
+    }
+
+    #[test]
+    fn options_accessible_from_instance() {
+        let opts = GunOptions {
+            pid: Some("fixed-pid".into()),
+            ..Default::default()
+        };
+        let g = Gun::new(opts);
+        assert_eq!(g.options().pid.as_deref(), Some("fixed-pid"));
     }
 
     #[test]

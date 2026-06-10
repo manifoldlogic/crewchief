@@ -70,6 +70,10 @@ pub struct MeshConfig {
     pub seen_by_max_chars: usize,
     /// Acknowledge stored PUTs with `{@, ok}`. Default true.
     pub ack_puts: bool,
+    /// AXE subscription routing: when enabled (relay peers), PUT relays
+    /// are sent only to peers with a matching subscription (recorded from
+    /// their GETs) instead of broadcast. Default false (DAM broadcast).
+    pub axe: bool,
     /// Dedup table tuning.
     pub dup: DupConfig,
 }
@@ -84,7 +88,24 @@ impl Default for MeshConfig {
             seen_by_max_peers: 7,
             seen_by_max_chars: 99,
             ack_puts: true,
+            axe: false,
             dup: DupConfig::default(),
+        }
+    }
+}
+
+impl MeshConfig {
+    /// Derive a mesh configuration from GUN constructor options
+    /// (`pid`, `gap`, `axe`).
+    pub fn from_options(options: &crate::instance::GunOptions) -> Self {
+        Self {
+            pid: options
+                .pid
+                .clone()
+                .unwrap_or_else(|| random_message_id(9)),
+            gap: options.gap,
+            axe: options.axe,
+            ..Default::default()
         }
     }
 }
@@ -94,8 +115,8 @@ struct MeshPeer {
     id: String,
     /// Process ID learned from the `?` handshake.
     pid: Option<String>,
-    /// Peer URL, when dialed out.
-    #[allow(dead_code)]
+    /// Peer URL, when dialed out. Outbound connections (`Some`) matter
+    /// for duplicate-connection resolution.
     url: Option<String>,
     /// Outbound transport. `None` while the connection is opening.
     sender: Option<PeerSender>,
@@ -107,6 +128,9 @@ struct MeshPeer {
     batch_started_ms: f64,
     /// Whether an async flush has been scheduled for the current batch.
     flush_scheduled: bool,
+    /// AXE subscription table: soul → properties this peer asked for
+    /// (empty string = the whole node).
+    subscriptions: HashMap<String, HashSet<String>>,
 }
 
 impl MeshPeer {
@@ -120,6 +144,7 @@ impl MeshPeer {
             batch: Vec::new(),
             batch_started_ms: 0.0,
             flush_scheduled: false,
+            subscriptions: HashMap::new(),
         }
     }
 }
@@ -238,6 +263,20 @@ impl Mesh {
     /// Drain peer URLs suggested via `{dam:'opt'}` introductions.
     pub fn take_suggested_peers(&self) -> Vec<String> {
         std::mem::take(&mut lock_mut(&self.inner).suggested_peers)
+    }
+
+    /// Whether a peer is currently registered (connected or connecting).
+    pub fn is_peer(&self, peer_id: &str) -> bool {
+        lock_mut(&self.inner).peers.contains_key(peer_id)
+    }
+
+    /// The souls a peer has subscribed to (via GETs), AXE-style.
+    pub fn peer_subscriptions(&self, peer_id: &str) -> Vec<String> {
+        lock_mut(&self.inner)
+            .peers
+            .get(peer_id)
+            .map(|p| p.subscriptions.keys().cloned().collect())
+            .unwrap_or_default()
     }
 
     // ── hi / bye ────────────────────────────────────────────────────
@@ -421,6 +460,18 @@ impl Mesh {
         let is_put = msg.put.is_some();
         let is_get = msg.get.is_some();
 
+        // AXE: a GET doubles as a subscription — remember what this peer
+        // asked for so PUT updates can be routed instead of broadcast.
+        if let Some(ref get) = msg.get {
+            let mut inner = lock_mut(&self.inner);
+            if let Some(peer) = inner.peers.get_mut(from_peer) {
+                peer.subscriptions
+                    .entry(get.soul.clone())
+                    .or_default()
+                    .insert(get.key.clone().unwrap_or_default());
+            }
+        }
+
         // Dispatch into the GUN core. GET requests yield a PUT response.
         let response = self.gun.receive(&msg);
 
@@ -486,6 +537,44 @@ impl Mesh {
                     // AXE: connected to ourselves — drop the connection.
                     self.bye(from_peer);
                     return;
+                }
+                // AXE UP: duplicate connections to the same process are
+                // resolved deterministically — the link dialed by the
+                // higher-pid side survives, so both ends drop the same one.
+                if let Some(their_pid) = their_pid.as_deref() {
+                    let drop_id = {
+                        let inner = lock_mut(&self.inner);
+                        let new_outbound = inner
+                            .peers
+                            .get(from_peer)
+                            .is_some_and(|p| p.url.is_some());
+                        inner
+                            .peers
+                            .values()
+                            .find(|p| p.id != from_peer && p.pid.as_deref() == Some(their_pid))
+                            .map(|existing| {
+                                let existing_outbound = existing.url.is_some();
+                                if existing_outbound == new_outbound {
+                                    // Same direction: keep the older link.
+                                    from_peer.to_string()
+                                } else {
+                                    let keep_our_outbound =
+                                        inner.config.pid.as_str() > their_pid;
+                                    let drop_outbound = !keep_our_outbound;
+                                    if existing_outbound == drop_outbound {
+                                        existing.id.clone()
+                                    } else {
+                                        from_peer.to_string()
+                                    }
+                                }
+                            })
+                    };
+                    if let Some(drop_id) = drop_id {
+                        self.bye(&drop_id);
+                        if drop_id == from_peer {
+                            return;
+                        }
+                    }
                 }
                 // Reply with our pid unless this is already a reply.
                 if msg.ack.is_none() {
@@ -595,9 +684,25 @@ impl Mesh {
                     inner.config.seen_by_max_chars,
                 );
 
+                // AXE: PUT updates go only to peers subscribed to one of
+                // the souls being written. GETs and everything else stay
+                // broadcast (the subscription-miss fallback).
+                let put_souls: Option<Vec<String>> = if inner.config.axe && msg.ack.is_none() {
+                    msg.put.as_ref().and_then(|put| {
+                        put.as_object()
+                            .map(|obj| obj.keys().cloned().collect::<Vec<_>>())
+                    })
+                } else {
+                    None
+                };
+
                 inner
                     .peers
                     .values()
+                    .filter(|p| match &put_souls {
+                        Some(souls) => souls.iter().any(|s| p.subscriptions.contains_key(s)),
+                        None => true,
+                    })
                     .map(|p| p.id.clone())
                     .filter(|pid| {
                         // Self-send prevention: never send a message back to
@@ -1334,6 +1439,127 @@ mod tests {
             Some(GunValue::Text("offline".into()))
         );
         assert_eq!(mesh.near(), 0);
+    }
+
+    #[test]
+    fn axe_routes_puts_to_subscribers_only() {
+        let mut config = MeshConfig::default();
+        config.axe = true;
+        let mesh = Mesh::new(Gun::new(GunOptions::default()), config);
+        let writer = attach_peer(&mesh, "writer");
+        let subscribed = attach_peer(&mesh, "subscribed");
+        let bystander = attach_peer(&mesh, "bystander");
+
+        // "subscribed" asks for the soul — that records a subscription.
+        mesh.hear(r###"{"#":"sub-get","get":{"#":"feed"}}"###, "subscribed");
+        assert_eq!(
+            mesh.peer_subscriptions("subscribed"),
+            vec!["feed".to_string()]
+        );
+
+        writer.lock().unwrap().clear();
+        subscribed.lock().unwrap().clear();
+        bystander.lock().unwrap().clear();
+
+        mesh.hear(
+            &put_raw("axe1", "feed", "post", GunValue::Text("hi".into()), 100.0),
+            "writer",
+        );
+
+        assert!(
+            frames(&subscribed)
+                .iter()
+                .any(|f| f.contains(r###""#":"axe1""###)),
+            "subscribed peer receives the PUT"
+        );
+        assert!(
+            !frames(&bystander)
+                .iter()
+                .any(|f| f.contains(r###""#":"axe1""###)),
+            "unsubscribed peer is skipped under AXE"
+        );
+
+        // GETs still broadcast (the subscription-miss fallback).
+        bystander.lock().unwrap().clear();
+        mesh.hear(r###"{"#":"axe-get","get":{"#":"elsewhere"}}"###, "writer");
+        assert!(
+            frames(&bystander)
+                .iter()
+                .any(|f| f.contains(r###""#":"axe-get""###)),
+            "GETs broadcast to all peers"
+        );
+    }
+
+    #[test]
+    fn axe_disabled_broadcasts_puts() {
+        let mesh = new_mesh(); // axe: false
+        attach_peer(&mesh, "writer");
+        let bystander = attach_peer(&mesh, "bystander");
+        bystander.lock().unwrap().clear();
+
+        mesh.hear(
+            &put_raw("noaxe1", "feed", "post", GunValue::Text("hi".into()), 100.0),
+            "writer",
+        );
+        assert!(
+            frames(&bystander)
+                .iter()
+                .any(|f| f.contains(r###""#":"noaxe1""###)),
+            "DAM default is brute-force broadcast"
+        );
+    }
+
+    #[test]
+    fn duplicate_connection_resolved_deterministically() {
+        let mut config = MeshConfig::default();
+        config.pid = "ZZZ".into(); // our pid is higher than theirs
+        let mesh = Mesh::new(Gun::new(GunOptions::default()), config);
+
+        // Inbound link (no url) and outbound link (url) to the same process.
+        attach_peer(&mesh, "inbound-link");
+        let outbox: Outbox = Arc::new(Mutex::new(Vec::new()));
+        let o = outbox.clone();
+        mesh.hi(
+            "outbound-link",
+            Some("ws://them.example/gun".into()),
+            Some(std::sync::Arc::new(move |raw: &str| {
+                o.lock().unwrap().push(raw.to_string());
+            })),
+        );
+        assert_eq!(mesh.near(), 2);
+
+        // Both links report the same remote pid "AAA" (< ours): the
+        // connection dialed by the higher-pid side — our outbound link —
+        // survives; the inbound duplicate is dropped.
+        mesh.hear(r###"{"#":"dc1","dam":"?","pid":"AAA"}"###, "outbound-link");
+        mesh.hear(r###"{"#":"dc2","dam":"?","pid":"AAA"}"###, "inbound-link");
+
+        assert_eq!(mesh.near(), 1, "duplicate link dropped");
+        assert!(
+            mesh.is_peer("outbound-link"),
+            "outbound link kept (our pid is higher)"
+        );
+        assert!(!mesh.is_peer("inbound-link"));
+    }
+
+    #[test]
+    fn mesh_config_from_options() {
+        let opts = crate::instance::GunOptions {
+            pid: Some("opt-pid".into()),
+            gap: Duration::from_millis(25),
+            axe: true,
+            ..Default::default()
+        };
+        let config = MeshConfig::from_options(&opts);
+        assert_eq!(config.pid, "opt-pid");
+        assert_eq!(config.gap, Duration::from_millis(25));
+        assert!(config.axe);
+
+        let random = MeshConfig::from_options(&crate::instance::GunOptions {
+            pid: None,
+            ..Default::default()
+        });
+        assert_eq!(random.pid.len(), 9, "random pid generated");
     }
 
     #[test]
