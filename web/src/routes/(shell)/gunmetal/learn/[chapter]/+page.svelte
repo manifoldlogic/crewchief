@@ -1,8 +1,18 @@
 <script lang="ts">
 	import { demoBySlug } from '$lib/catalog';
+	import DemoStage from '$lib/demos/DemoStage.svelte';
+	import { implementedDemos } from '$lib/demos/implemented';
+	import { chapterContent } from '$lib/learn/content';
 	import { Separator } from '$lib/components/ui/separator';
 
 	let { data } = $props();
+
+	const Content = $derived(chapterContent[data.chapter.slug]);
+
+	// Single-frame variants before the sync chapter (num 5): nothing
+	// networked appears before peers are taught (spec §3.3).
+	const frameCount = (slug: string) =>
+		data.chapter.num < 5 || demoBySlug.get(slug)?.singleFrame ? 1 : 2;
 </script>
 
 <svelte:head><title>{data.chapter.title} — Learn gunmetal</title></svelte:head>
@@ -12,25 +22,39 @@
 </p>
 <h1 class="mt-1 text-3xl font-bold tracking-tight">{data.chapter.title}</h1>
 
-<div class="prose prose-neutral mt-6 dark:prose-invert">
-	<p>
-		<em>This chapter's full content lands with its demo phase. The structure below is generated
-		from the catalog manifest.</em>
-	</p>
+<div class="mt-6">
+	{#if Content}
+		<Content />
+	{:else}
+		<div class="prose prose-neutral dark:prose-invert">
+			<p>
+				<em>This chapter's full content lands with its demo phase. The structure below is
+				generated from the catalog manifest.</em>
+			</p>
+		</div>
+	{/if}
 </div>
 
 {#if data.chapter.embeds.length > 0}
-	<section class="mt-8" data-testid="chapter-embeds">
-		<h2 class="text-lg font-semibold">Try it</h2>
-		<ul class="mt-2 list-disc pl-6 text-sm">
-			{#each data.chapter.embeds as slug (slug)}
-				<li>
-					<a class="underline" href={'/gunmetal/demos/' + slug}>
-						{demoBySlug.get(slug)?.title ?? slug}
+	<section class="mt-8 space-y-6" data-testid="chapter-embeds">
+		{#each data.chapter.embeds as slug (slug)}
+			{@const demo = demoBySlug.get(slug)}
+			<div>
+				<h3 class="mb-2 text-sm font-semibold">
+					{demo?.title ?? slug}
+					<a class="ml-2 text-xs font-normal text-muted-foreground underline" href={'/gunmetal/demos/' + slug}>
+						full demo page →
 					</a>
-				</li>
-			{/each}
-		</ul>
+				</h3>
+				{#if implementedDemos.includes(slug)}
+					<DemoStage {slug} frames={frameCount(slug)} engines={demo?.engines ?? {}} />
+				{:else}
+					<p class="rounded border border-dashed p-3 text-sm text-muted-foreground">
+						This demo comes online in a later phase.
+					</p>
+				{/if}
+			</div>
+		{/each}
 	</section>
 {/if}
 

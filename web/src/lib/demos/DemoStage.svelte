@@ -27,7 +27,9 @@
 
 	function clientSrc(frameId: string): string {
 		const engine = engines[frameId] ? `&engine=${engines[frameId]}` : '';
-		return `/gunmetal/demos/${slug}/client?room=${room}&frameId=${frameId}&relay=${encodeURIComponent(relay)}${engine}`;
+		// Single-frame stages run relay-less (learn-chapter variants).
+		const single = frames === 1 ? '&frames=1' : '';
+		return `/gunmetal/demos/${slug}/client?room=${room}&frameId=${frameId}&relay=${encodeURIComponent(relay)}${engine}${single}`;
 	}
 </script>
 
