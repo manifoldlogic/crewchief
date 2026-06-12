@@ -3,4 +3,12 @@
  * component registry so shell pages can check implementation status
  * without pulling client components into their bundle.
  */
-export const implementedDemos: string[] = ['shared-input', 'gunjs-interop'];
+export const implementedDemos: string[] = [
+	'shared-input',
+	'gunjs-interop',
+	'graph-explorer',
+	'chat-room',
+	'todo-list',
+	'presence',
+	'profile-tree'
+];

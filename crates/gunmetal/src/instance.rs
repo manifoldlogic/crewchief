@@ -403,25 +403,25 @@ impl Gun {
         f(&graph)
     }
 
-    /// Emit events without holding the graph lock.
-    /// This is the key pattern that prevents re-entrant deadlocks:
-    /// callbacks can safely read the graph since only the events lock is held
-    /// during emission, and it's released between each emit call.
+    /// Emit events without holding the graph OR bus lock while listeners
+    /// run (snapshot-and-release): callbacks may read the graph, write
+    /// back, and subscribe/unsubscribe freely. The listener snapshot for
+    /// all three tags is taken under ONE bus lock acquisition per event
+    /// (the bus is the relay's hottest mutex); invocation happens after
+    /// release. Re-entrant fires of a still-running listener are skipped.
     fn emit_events(&self, events: &[Event]) {
         for event in events {
-            // One lock acquisition per event (the bus is the relay's
-            // hottest mutex). Callbacks run with the bus locked either
-            // way — they may read the graph, but must not subscribe or
-            // write (documented in `extended` and the chain API).
-            let mut bus = lock_mut(&self.events);
-            bus.emit("put", event);
-
-            let soul_tag = EventBus::soul_tag(&event.soul, None);
-            bus.emit(&soul_tag, event);
-
-            if let Some(ref key) = event.key {
-                let key_tag = EventBus::soul_tag(&event.soul, Some(key));
-                bus.emit(&key_tag, event);
+            let snapshot = {
+                let bus = lock_mut(&self.events);
+                let mut listeners = bus.snapshot("put");
+                listeners.extend(bus.snapshot(&EventBus::soul_tag(&event.soul, None)));
+                if let Some(ref key) = event.key {
+                    listeners.extend(bus.snapshot(&EventBus::soul_tag(&event.soul, Some(key))));
+                }
+                listeners
+            };
+            for listener in &snapshot {
+                crate::events::invoke(listener, event);
             }
         }
     }
@@ -787,6 +787,65 @@ mod tests {
 
     fn gun() -> Gun {
         Gun::default_instance()
+    }
+
+    #[test]
+    fn callbacks_may_subscribe_and_write_reentrantly() {
+        // Snapshot-and-release emission: a listener that SUBSCRIBES to
+        // another soul and WRITES from inside its callback must not
+        // deadlock (native) or panic on RefCell reentrancy (wasm). This
+        // is the discover-link-then-watch-item pattern every collection
+        // consumer uses.
+        let g = gun();
+        let inner_fires = new_shared_mut(0usize);
+
+        let g_for_cb = g.clone();
+        let fires = inner_fires.clone();
+        g.get("outer").get("link").on(move |_, _| {
+            let fires_inner = fires.clone();
+            // Subscribe from within a callback…
+            g_for_cb.get("inner-item").get("text").on(move |_, _| {
+                *crate::concurrency::lock_mut(&fires_inner) += 1;
+            });
+            // …and write from within a callback.
+            g_for_cb
+                .get("inner-item")
+                .put_kv("text", GunValue::Text("hello".into()));
+        });
+
+        g.get("outer").put_kv("link", GunValue::Link("inner-item".into()));
+
+        assert!(
+            *crate::concurrency::lock_mut(&inner_fires) >= 1,
+            "inner subscription registered and fired from within a callback"
+        );
+        // A subsequent direct write still reaches the inner listener.
+        g.get("inner-item")
+            .put_kv("text", GunValue::Text("again".into()));
+        assert!(*crate::concurrency::lock_mut(&inner_fires) >= 2);
+    }
+
+    #[test]
+    fn reentrant_self_write_does_not_recurse_forever() {
+        // A listener writing to ITS OWN tag is skipped on the re-entrant
+        // fire (try-lock) instead of recursing.
+        let g = gun();
+        let count = new_shared_mut(0usize);
+        let g_for_cb = g.clone();
+        let count_inner = count.clone();
+        g.get("loop").get("n").on(move |_, _| {
+            let n = {
+                let mut c = crate::concurrency::lock_mut(&count_inner);
+                *c += 1;
+                *c
+            };
+            if n < 100 {
+                g_for_cb.get("loop").put_kv("n", GunValue::Number(n as f64));
+            }
+        });
+        g.get("loop").put_kv("n", GunValue::Number(0.0));
+        let total = *crate::concurrency::lock_mut(&count);
+        assert!((1..100).contains(&total), "no unbounded recursion, got {}", total);
     }
 
     #[test]

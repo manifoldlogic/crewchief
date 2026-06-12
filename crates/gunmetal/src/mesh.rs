@@ -347,7 +347,7 @@ impl Mesh {
         };
         self.say(handshake, Some(peer_id));
 
-        lock_mut(&self.gun.events).emit("hi", &Event::node(peer_id));
+        crate::events::emit_unlocked(&self.gun.events, "hi", &Event::node(peer_id));
     }
 
     /// Disconnect a peer: apply registered `bye` writes, drop state, emit
@@ -366,7 +366,7 @@ impl Mesh {
             self.apply_bye_graph(&graph);
         }
 
-        lock_mut(&self.gun.events).emit("bye", &Event::node(peer_id));
+        crate::events::emit_unlocked(&self.gun.events, "bye", &Event::node(peer_id));
     }
 
     fn apply_bye_graph(&self, graph: &Value) {

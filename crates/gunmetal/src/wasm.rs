@@ -177,6 +177,33 @@ impl WasmGun {
         }
     }
 
+    // ── Collections ─────────────────────────────────────────────────
+
+    /// Add a JSON object to a set: creates an item node under a
+    /// time-sortable unique soul, links it into the set node, and
+    /// returns the item's soul. Equivalent to `gun.get(set).set(obj)`.
+    #[wasm_bindgen(js_name = "setObject")]
+    pub fn set_object(&self, set_soul: &str, json: &str) -> Result<String, JsValue> {
+        let item_soul = format!("{}/{}", set_soul, crate::uuid::generate_uuid());
+        self.put_object(&item_soul, json)?;
+        self.inner
+            .get(set_soul)
+            .put_kv(&item_soul, GunValue::Link(item_soul.clone()));
+        Ok(item_soul)
+    }
+
+    /// Add a primitive JSON value to a set under a generated
+    /// time-sortable UUID key (keys sort in insertion-time order).
+    /// Returns the key.
+    #[wasm_bindgen(js_name = "setValue")]
+    pub fn set_value(&self, set_soul: &str, json_value: &str) -> Result<String, JsValue> {
+        let parsed: serde_json::Value = serde_json::from_str(json_value)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let value = wire::json_to_value(&parsed)
+            .ok_or_else(|| JsValue::from_str("Unsupported value type"))?;
+        Ok(self.inner.get(set_soul).set_value(value))
+    }
+
     // ── Read operations ─────────────────────────────────────────────
 
     /// Read a value. Returns JSON string or null.
@@ -488,6 +515,45 @@ impl WasmGun {
     pub fn unset(&self, set_soul: &str, item_soul: &str) {
         let item = self.inner.get(item_soul);
         self.inner.get(set_soul).unset(&item);
+    }
+
+    /// Absence detection (`gun/lib/not.js`): resolves `true` if no data
+    /// exists at `soul.key` (or at the soul when `key` is empty) within
+    /// `timeout_ms`, `false` once data is present. Cannot GUARANTEE
+    /// absence in a distributed system — peers may hold data we haven't
+    /// seen (documented caveat).
+    #[wasm_bindgen(js_name = "notWithin")]
+    pub fn not_within(&self, soul: &str, key: &str, timeout_ms: f64) -> js_sys::Promise {
+        let chain = if key.is_empty() {
+            self.inner.get(soul)
+        } else {
+            self.inner.get(soul).get(key)
+        };
+        let timeout = std::time::Duration::from_millis(timeout_ms.max(0.0) as u64);
+        wasm_bindgen_futures::future_to_promise(async move {
+            let absent = std::rc::Rc::new(std::cell::Cell::new(false));
+            let flag = absent.clone();
+            chain.not_within(timeout, move |_| flag.set(true)).await;
+            Ok(JsValue::from_bool(absent.get()))
+        })
+    }
+
+    /// Register a disconnect write (`gun/lib/bye.js`): when this client's
+    /// relay connection drops, the relay writes `json_value` to
+    /// `soul.key`. Requires an active `connect()`; the registration is
+    /// sent to every connected relay.
+    #[wasm_bindgen(js_name = "registerBye")]
+    pub fn register_bye(&self, soul: &str, key: &str, json_value: &str) -> Result<(), JsValue> {
+        let parsed: serde_json::Value = serde_json::from_str(json_value)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let value = wire::json_to_value(&parsed)
+            .ok_or_else(|| JsValue::from_str("Unsupported value type"))?;
+        let msg = self.inner.get(soul).get(key).bye().put(value);
+        let Some(net) = self.net.borrow().as_ref().map(|n| n.mesh.clone()) else {
+            return Err(JsValue::from_str("registerBye requires connect() first"));
+        };
+        net.say(msg, None);
+        Ok(())
     }
 }
 
