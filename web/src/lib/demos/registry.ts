@@ -4,7 +4,9 @@
  */
 import type { Component } from 'svelte';
 import SharedInputClient from './shared-input/SharedInputClient.svelte';
+import InteropClient from './gunjs-interop/InteropClient.svelte';
 
-export const clientRegistry: Record<string, Component> = {
-	'shared-input': SharedInputClient
+export const clientRegistry: Record<string, Component<{ slug?: string }>> = {
+	'shared-input': SharedInputClient,
+	'gunjs-interop': InteropClient
 };

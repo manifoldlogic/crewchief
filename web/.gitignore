@@ -29,3 +29,6 @@ radata*/
 
 # generated wasm bundle (bun run wasm)
 src/lib/wasm/
+
+# vendored gun.js (copied by scripts/build-wasm.sh)
+static/vendor/

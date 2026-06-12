@@ -22,7 +22,11 @@
 <!-- (a) live demo — implemented per phase; placeholder until then -->
 <section class="mt-8" data-testid="demo-stage">
 	{#if isLive}
-		<DemoStage slug={data.demo.slug} frames={data.demo.singleFrame ? 1 : 2} />
+		<DemoStage
+			slug={data.demo.slug}
+			frames={data.demo.singleFrame ? 1 : 2}
+			engines={data.demo.engines ?? {}}
+		/>
 	{:else}
 		<Alert.Root>
 			<Alert.Title>Demo coming online</Alert.Title>

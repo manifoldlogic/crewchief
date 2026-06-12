@@ -15,7 +15,7 @@
 <svelte:head><title>{data.demo.title} — client</title></svelte:head>
 
 {#if Client}
-	<Client />
+	<Client slug={data.demo.slug} />
 {:else}
 	<div class="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
 		<p class="text-sm text-muted-foreground" data-testid="client-placeholder">

@@ -48,6 +48,9 @@ export interface Demo {
 	flagship?: boolean;
 	/** Runs without a relay in a single frame (early learn chapters). */
 	singleFrame?: boolean;
+	/** Per-frame engine overrides (frameId → engine), e.g. gunjs-interop
+	 * boots real GUN.js in frame "a" and gunmetal wasm in frame "b". */
+	engines?: Record<string, 'gun' | 'gunmetal'>;
 	/** Search aliases: API symbols, synonyms, symptoms. */
 	keywords: string[];
 }
@@ -101,6 +104,7 @@ export const demos: Demo[] = [
 		modules: ['wire', 'mesh', 'relay'],
 		chapter: 'gun-mesh',
 		flagship: true,
+		engines: { a: 'gun', b: 'gunmetal' },
 		keywords: ['gun.js', 'interop', 'wire', 'compatibility', 'parity', 'flagship']
 	},
 	{

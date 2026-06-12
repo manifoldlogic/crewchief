@@ -11,6 +11,8 @@
 	} from '$lib/gun/client';
 	import { sendToParent } from '$lib/gun/frame-protocol';
 
+	let { slug = 'shared-input' }: { slug?: string } = $props();
+
 	let value = $state('');
 	let status = $state<'booting' | 'ready' | 'degraded'>('booting');
 	let hint = $state('');
@@ -23,7 +25,7 @@
 		installReadyPromise();
 		const params = parseClientParams(window.location);
 		frameId = params.frameId;
-		soul = `demo/shared-input/${params.room}`;
+		soul = `demo/${slug}/${params.room}`;
 
 		try {
 			gun = await bootGunmetal(params);

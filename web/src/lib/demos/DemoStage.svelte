@@ -3,10 +3,12 @@
 
 	let {
 		slug,
-		frames = 2
+		frames = 2,
+		engines = {}
 	}: {
 		slug: string;
 		frames?: number;
+		engines?: Record<string, string>;
 	} = $props();
 
 	// Room + relay resolve at runtime (static-safe): ?room= and ?relay=
@@ -24,7 +26,8 @@
 	const frameIds = ['a', 'b', 'c', 'd'];
 
 	function clientSrc(frameId: string): string {
-		return `/gunmetal/demos/${slug}/client?room=${room}&frameId=${frameId}&relay=${encodeURIComponent(relay)}`;
+		const engine = engines[frameId] ? `&engine=${engines[frameId]}` : '';
+		return `/gunmetal/demos/${slug}/client?room=${room}&frameId=${frameId}&relay=${encodeURIComponent(relay)}${engine}`;
 	}
 </script>
 

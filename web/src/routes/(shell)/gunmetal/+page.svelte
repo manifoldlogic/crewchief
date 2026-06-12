@@ -1,7 +1,10 @@
 <script lang="ts">
-	import { capabilities } from '$lib/catalog';
+	import { capabilities, demoBySlug } from '$lib/catalog';
+	import DemoStage from '$lib/demos/DemoStage.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
+
+	const interop = demoBySlug.get('gunjs-interop');
 </script>
 
 <svelte:head><title>Gunmetal — crewchief docs</title></svelte:head>
@@ -19,17 +22,19 @@
 	</div>
 </section>
 
-<!-- §3.4 block 2: flagship demo (live embed lands in P3) -->
+<!-- §3.4 block 2: the flagship demo, live above the fold -->
 <section class="mt-10" data-testid="flagship-embed">
 	<Card.Root>
 		<Card.Header>
 			<Card.Title>Watch gunmetal join a real GUN.js mesh</Card.Title>
 			<Card.Description>
-				The left client is GUN.js. The right is gunmetal. Same mesh. (Live demo coming online
-				with the demo catalog —
-				<a class="underline" href="/gunmetal/demos/gunjs-interop">see the demo page</a>.)
+				The left client is GUN.js. The right is gunmetal. Same mesh — type in either.
+				<a class="underline" href="/gunmetal/demos/gunjs-interop">Full demo page →</a>
 			</Card.Description>
 		</Card.Header>
+		<Card.Content>
+			<DemoStage slug="gunjs-interop" frames={2} engines={interop?.engines ?? {}} />
+		</Card.Content>
 	</Card.Root>
 </section>
 
