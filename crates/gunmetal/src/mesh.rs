@@ -347,7 +347,7 @@ impl Mesh {
         };
         self.say(handshake, Some(peer_id));
 
-        lock_mut(&self.gun.events).emit("hi", &Event::node(peer_id));
+        crate::events::emit_unlocked(&self.gun.events, "hi", &Event::node(peer_id));
     }
 
     /// Disconnect a peer: apply registered `bye` writes, drop state, emit
@@ -366,7 +366,7 @@ impl Mesh {
             self.apply_bye_graph(&graph);
         }
 
-        lock_mut(&self.gun.events).emit("bye", &Event::node(peer_id));
+        crate::events::emit_unlocked(&self.gun.events, "bye", &Event::node(peer_id));
     }
 
     fn apply_bye_graph(&self, graph: &Value) {
@@ -616,8 +616,14 @@ impl Mesh {
                             .map(|existing| {
                                 let existing_outbound = existing.url.is_some();
                                 if existing_outbound == new_outbound {
-                                    // Same direction: keep the older link.
-                                    from_peer.to_string()
+                                    // Same direction: the NEW link wins. A
+                                    // same-direction duplicate is almost
+                                    // always a reconnect superseding a dead
+                                    // socket whose close hasn't been
+                                    // processed yet — keeping the older
+                                    // link would strand the live client on
+                                    // a connection we're about to drop.
+                                    existing.id.clone()
                                 } else {
                                     let keep_our_outbound =
                                         inner.config.pid.as_str() > their_pid;
@@ -1593,9 +1599,12 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_same_direction_connection_keeps_older_link() {
+    fn duplicate_same_direction_connection_keeps_newer_link() {
         // §5.4: two links in the SAME direction to one process — the
-        // older link survives, the newly-handshaking one is dropped.
+        // NEWLY-handshaking link supersedes the older one. This is the
+        // reconnect case: the old socket is usually already dead, its
+        // close just hasn't been processed; keeping it would strand the
+        // reconnecting client (observed as a conflict-lab e2e flake).
         let mesh = Mesh::new(Gun::new(GunOptions::default()), MeshConfig::default());
         attach_peer(&mesh, "inbound-old");
         attach_peer(&mesh, "inbound-new");
@@ -1605,8 +1614,8 @@ mod tests {
         mesh.hear(r###"{"#":"sd2","dam":"?","pid":"AAA"}"###, "inbound-new");
 
         assert_eq!(mesh.near(), 1, "duplicate link dropped");
-        assert!(mesh.is_peer("inbound-old"), "older link kept");
-        assert!(!mesh.is_peer("inbound-new"));
+        assert!(mesh.is_peer("inbound-new"), "newer link kept (reconnect wins)");
+        assert!(!mesh.is_peer("inbound-old"));
     }
 
     #[test]

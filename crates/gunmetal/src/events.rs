@@ -79,12 +79,60 @@ type Listener = Box<dyn FnMut(&Event) + Send>;
 #[cfg(target_arch = "wasm32")]
 type Listener = Box<dyn FnMut(&Event)>;
 
+/// A listener wrapped for shared invocation outside the bus lock.
+/// Snapshot-and-release emission clones these handles, drops the bus
+/// lock, then invokes — so listeners may freely subscribe, unsubscribe,
+/// or write back into the graph. Re-entrant fires of a listener that is
+/// already running are skipped (try-lock), preventing self-recursion.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) type SharedListener = std::sync::Arc<std::sync::Mutex<Listener>>;
+#[cfg(target_arch = "wasm32")]
+pub(crate) type SharedListener = std::rc::Rc<std::cell::RefCell<Listener>>;
+
+fn share(cb: Listener) -> SharedListener {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::sync::Arc::new(std::sync::Mutex::new(cb))
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        std::rc::Rc::new(std::cell::RefCell::new(cb))
+    }
+}
+
+/// Invoke a shared listener, skipping re-entrant fires.
+pub(crate) fn invoke(listener: &SharedListener, event: &Event) {
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Ok(mut cb) = listener.try_lock() {
+        cb(event);
+    }
+    #[cfg(target_arch = "wasm32")]
+    if let Ok(mut cb) = listener.try_borrow_mut() {
+        cb(event);
+    }
+}
+
+/// Emit WITHOUT holding the bus lock while listeners run: the listener
+/// list is snapshotted under the lock, the lock is released, and the
+/// snapshot is invoked. This is the only safe way to emit when listeners
+/// may subscribe/unsubscribe or write (which user callbacks do).
+pub fn emit_unlocked(
+    bus: &crate::concurrency::SharedMut<EventBus>,
+    tag: &str,
+    event: &Event,
+) {
+    let snapshot = { crate::concurrency::lock_mut(bus).snapshot(tag) };
+    for listener in &snapshot {
+        invoke(listener, event);
+    }
+}
+
 /// An event emitter for a specific tag/channel.
 ///
 /// Listeners are stored in insertion order and called sequentially.
 /// Each listener has a unique `ListenerId` for removal.
 struct TagEmitter {
-    listeners: Vec<(ListenerId, Listener)>,
+    listeners: Vec<(ListenerId, SharedListener)>,
 }
 
 impl TagEmitter {
@@ -101,7 +149,7 @@ impl TagEmitter {
         let id = ListenerId(next_id());
         // H8: cap listener count per tag to prevent memory exhaustion
         if self.listeners.len() < Self::MAX_LISTENERS {
-            self.listeners.push((id, cb));
+            self.listeners.push((id, share(cb)));
         }
         id
     }
@@ -113,9 +161,13 @@ impl TagEmitter {
     }
 
     fn emit(&mut self, event: &Event) {
-        for (_, cb) in &mut self.listeners {
-            cb(event);
+        for (_, cb) in &self.listeners {
+            invoke(cb, event);
         }
+    }
+
+    fn snapshot(&self) -> Vec<SharedListener> {
+        self.listeners.iter().map(|(_, cb)| cb.clone()).collect()
     }
 
     fn is_empty(&self) -> bool {
@@ -210,10 +262,20 @@ impl EventBus {
     }
 
     /// Emit an event to all listeners on a tag.
+    ///
+    /// NOTE: runs listeners while the caller's bus borrow is held. For
+    /// emission paths where listeners may subscribe or write back (all
+    /// user-facing callbacks), use [`emit_unlocked`] instead.
     pub fn emit(&mut self, tag: &str, event: &Event) {
         if let Some(emitter) = self.tags.get_mut(tag) {
             emitter.emit(event);
         }
+    }
+
+    /// Clone the listener handles for a tag (for lock-free invocation —
+    /// see [`emit_unlocked`]).
+    pub(crate) fn snapshot(&self, tag: &str) -> Vec<SharedListener> {
+        self.tags.get(tag).map(|e| e.snapshot()).unwrap_or_default()
     }
 
     /// Emit an event to multiple tags.

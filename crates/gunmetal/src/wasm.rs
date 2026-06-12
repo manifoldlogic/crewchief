@@ -48,10 +48,22 @@ use crate::wire;
 // WasmGun — Core database operations
 // ═══════════════════════════════════════════════════════════════════════
 
+/// Live networking state: the DAM mesh plus the browser WebSocket
+/// transport feeding it. Created lazily on the first `connect()`.
+#[cfg(target_arch = "wasm32")]
+struct WasmNet {
+    mesh: crate::mesh::Mesh,
+    transport: std::rc::Rc<crate::transport::ws_wasm::WsWasmTransport>,
+}
+
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub struct WasmGun {
     inner: Gun,
+    net: std::rc::Rc<std::cell::RefCell<Option<WasmNet>>>,
+    status: std::rc::Rc<std::cell::RefCell<Option<js_sys::Function>>>,
+    /// `(direction, peer, raw)` wire tap — see [`Self::on_wire`].
+    wire_tap: std::rc::Rc<std::cell::RefCell<Option<js_sys::Function>>>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -59,9 +71,62 @@ pub struct WasmGun {
 impl WasmGun {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
+        Self::from_gun(Gun::new(GunOptions::default()))
+    }
+
+    fn from_gun(gun: Gun) -> Self {
         Self {
-            inner: Gun::new(GunOptions::default()),
+            inner: gun,
+            net: std::rc::Rc::new(std::cell::RefCell::new(None)),
+            status: std::rc::Rc::new(std::cell::RefCell::new(None)),
+            wire_tap: std::rc::Rc::new(std::cell::RefCell::new(None)),
         }
+    }
+
+    /// Construct with a JSON options object — the wasm analogue of
+    /// `Gun(options)`. Recognized keys (all optional):
+    /// `{"peers": [..], "localStorage": bool, "radisk": bool,
+    ///   "axe": bool, "pid": "..", "gap": ms, "mob": n}`.
+    /// Peers are recorded in the options; call `connect(url)` to dial.
+    #[wasm_bindgen(js_name = "withOptions")]
+    pub fn with_options(json: &str) -> Result<WasmGun, JsValue> {
+        #[derive(serde::Deserialize)]
+        struct JsOptions {
+            peers: Option<Vec<String>>,
+            #[serde(alias = "localStorage")]
+            local_storage: Option<bool>,
+            radisk: Option<bool>,
+            axe: Option<bool>,
+            pid: Option<String>,
+            /// Batching gap window in milliseconds.
+            gap: Option<f64>,
+            mob: Option<usize>,
+        }
+        let parsed: JsOptions = serde_json::from_str(json)
+            .map_err(|e| JsValue::from_str(&format!("Invalid options: {}", e)))?;
+        let mut options = GunOptions::default();
+        if let Some(peers) = parsed.peers {
+            options.peers = peers;
+        }
+        if let Some(v) = parsed.local_storage {
+            options.local_storage = v;
+        }
+        if let Some(v) = parsed.radisk {
+            options.radisk = v;
+        }
+        if let Some(v) = parsed.axe {
+            options.axe = v;
+        }
+        if parsed.pid.is_some() {
+            options.pid = parsed.pid;
+        }
+        if let Some(ms) = parsed.gap {
+            options.gap = std::time::Duration::from_millis(ms.max(0.0) as u64);
+        }
+        if let Some(mob) = parsed.mob {
+            options.mob = mob;
+        }
+        Ok(Self::from_gun(Gun::new(options)))
     }
 
     // ── Write operations ────────────────────────────────────────────
@@ -113,6 +178,106 @@ impl WasmGun {
         } else {
             Err(JsValue::from_str("Expected a JSON object"))
         }
+    }
+
+    // ── Collections ─────────────────────────────────────────────────
+
+    /// Add a JSON object to a set: creates an item node under a
+    /// time-sortable unique soul, links it into the set node, and
+    /// returns the item's soul. Equivalent to `gun.get(set).set(obj)`.
+    #[wasm_bindgen(js_name = "setObject")]
+    pub fn set_object(&self, set_soul: &str, json: &str) -> Result<String, JsValue> {
+        let item_soul = format!("{}/{}", set_soul, crate::uuid::generate_uuid());
+        self.put_object(&item_soul, json)?;
+        self.inner
+            .get(set_soul)
+            .put_kv(&item_soul, GunValue::Link(item_soul.clone()));
+        Ok(item_soul)
+    }
+
+    /// Add a primitive JSON value to a set under a generated
+    /// time-sortable UUID key (keys sort in insertion-time order).
+    /// Returns the key.
+    #[wasm_bindgen(js_name = "setValue")]
+    pub fn set_value(&self, set_soul: &str, json_value: &str) -> Result<String, JsValue> {
+        let parsed: serde_json::Value = serde_json::from_str(json_value)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let value = wire::json_to_value(&parsed)
+            .ok_or_else(|| JsValue::from_str("Unsupported value type"))?;
+        Ok(self.inner.get(set_soul).set_value(value))
+    }
+
+    // ── Persistence ─────────────────────────────────────────────────
+
+    /// Wire IndexedDB-backed persistence into this instance: existing
+    /// rows hydrate through the normal merge path (HAM applies; nothing
+    /// re-broadcasts), then every accepted write persists. `db_name`
+    /// namespaces the store — callers sharing an origin (e.g. iframes)
+    /// MUST use distinct names per logical session. Resolves once
+    /// hydration completes.
+    #[wasm_bindgen(js_name = "enablePersistence")]
+    pub fn enable_persistence(&self, db_name: &str) -> js_sys::Promise {
+        use crate::storage::indexeddb::IndexedDbStorage;
+        use crate::storage::StoredValue;
+
+        const ROW_PREFIX: &str = "n!";
+        let gun = self.inner.clone();
+        let config = crate::storage::indexeddb::IndexedDbConfig {
+            db_name: db_name.to_string(),
+            ..Default::default()
+        };
+
+        wasm_bindgen_futures::future_to_promise(async move {
+            let mut idb = IndexedDbStorage::new(config);
+            idb.open().await.map_err(|e| JsValue::from_str(&e))?;
+
+            // Hydrate: rebuild nodes with their ORIGINAL states and
+            // replay them through receive() — the same code path a
+            // network put takes, so HAM and subscriptions behave
+            // identically.
+            let rows = idb
+                .get_all_with_prefix(ROW_PREFIX)
+                .await
+                .map_err(|e| JsValue::from_str(&e))?;
+            let mut nodes: std::collections::HashMap<String, crate::types::Node> =
+                std::collections::HashMap::new();
+            for (row_key, stored) in rows {
+                let Some(rest) = row_key.strip_prefix(ROW_PREFIX) else {
+                    continue;
+                };
+                let Some((soul, key)) = rest.split_once('\u{1B}') else {
+                    continue;
+                };
+                nodes
+                    .entry(soul.to_string())
+                    .or_insert_with(|| crate::types::Node::new(soul))
+                    .put(key, stored.value, stored.state);
+            }
+            if !nodes.is_empty() {
+                let refs: Vec<&crate::types::Node> = nodes.values().collect();
+                let msg = wire::put_message(&crate::uuid::random_message_id(9), &refs);
+                let _ = gun.receive(&msg);
+            }
+
+            // Persist every accepted write from here on.
+            let idb = std::rc::Rc::new(idb);
+            crate::concurrency::lock_mut(&gun.events).on("put", move |event| {
+                let (Some(value), Some(key)) = (&event.value, &event.key) else {
+                    return;
+                };
+                let row_key = format!("{}{}\u{1B}{}", ROW_PREFIX, event.soul, key);
+                let stored = StoredValue {
+                    value: value.clone(),
+                    state: event.state,
+                };
+                let idb = idb.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    let _ = idb.put(&row_key, &stored).await;
+                });
+            });
+
+            Ok(JsValue::TRUE)
+        })
     }
 
     // ── Read operations ─────────────────────────────────────────────
@@ -224,6 +389,189 @@ impl Default for WasmGun {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// WasmGun networking — DAM mesh over browser WebSockets
+// ═══════════════════════════════════════════════════════════════════════
+
+#[cfg(target_arch = "wasm32")]
+fn fire_wire_tap(
+    slot: &std::rc::Rc<std::cell::RefCell<Option<js_sys::Function>>>,
+    direction: &str,
+    peer: &str,
+    raw: &str,
+) {
+    if let Some(cb) = slot.borrow().as_ref() {
+        let _ = cb.call3(
+            &JsValue::NULL,
+            &JsValue::from_str(direction),
+            &JsValue::from_str(peer),
+            &JsValue::from_str(raw),
+        );
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn fire_status(
+    slot: &std::rc::Rc<std::cell::RefCell<Option<js_sys::Function>>>,
+    event: &str,
+    url: &str,
+) {
+    if let Some(cb) = slot.borrow().as_ref() {
+        let _ = cb.call2(
+            &JsValue::NULL,
+            &JsValue::from_str(event),
+            &JsValue::from_str(url),
+        );
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl WasmGun {
+    /// Lazily build the mesh + transport pair and wire their callbacks.
+    /// The mesh handshake (`hi`) runs on the transport's open callback —
+    /// a browser WebSocket throws on send before OPEN. The peer id is
+    /// the relay URL.
+    fn ensure_net(&self) -> (crate::mesh::Mesh, std::rc::Rc<crate::transport::ws_wasm::WsWasmTransport>) {
+        use crate::transport::ws_wasm::WsWasmTransport;
+        use std::rc::Rc;
+
+        if self.net.borrow().is_none() {
+            let config = crate::mesh::MeshConfig::from_options(self.inner.options());
+            let mesh = crate::mesh::Mesh::new(self.inner.clone(), config);
+            let transport = Rc::new(WsWasmTransport::new(Default::default()));
+
+            let mesh_for_msg = mesh.clone();
+            let tap_in = self.wire_tap.clone();
+            transport.set_on_message(move |peer, raw| {
+                fire_wire_tap(&tap_in, "in", &peer, &raw);
+                mesh_for_msg.hear(&raw, &peer);
+            });
+
+            let mesh_for_open = mesh.clone();
+            let transport_for_open = transport.clone();
+            let status_open = self.status.clone();
+            let tap_out = self.wire_tap.clone();
+            transport.set_on_open(move |url| {
+                let t = transport_for_open.clone();
+                let target = url.clone();
+                let tap = tap_out.clone();
+                let sender: crate::mesh::PeerSender = Rc::new(move |raw: &str| {
+                    fire_wire_tap(&tap, "out", &target, raw);
+                    let _ = t.send(&target, raw);
+                });
+                mesh_for_open.hi(&url, Some(url.clone()), Some(sender));
+                fire_status(&status_open, "open", &url);
+            });
+
+            let mesh_for_close = mesh.clone();
+            let status_close = self.status.clone();
+            transport.set_on_close(move |url, _code, _reason| {
+                mesh_for_close.bye(&url);
+                fire_status(&status_close, "close", &url);
+            });
+
+            let status_err = self.status.clone();
+            transport.set_on_error(move |url, _message| {
+                fire_status(&status_err, "error", &url);
+            });
+
+            *self.net.borrow_mut() = Some(WasmNet { mesh, transport });
+        }
+
+        let net = self.net.borrow();
+        let net = net.as_ref().expect("net initialized above");
+        (net.mesh.clone(), net.transport.clone())
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+impl WasmGun {
+    /// Dial a relay (`ws://host:8765/gun`). Idempotent per URL. The DAM
+    /// handshake runs automatically on open; `peerPid(url)` turning
+    /// non-null is the "handshake acked" signal.
+    #[wasm_bindgen(js_name = "connect")]
+    pub fn connect(&self, url: &str) -> Result<(), JsValue> {
+        let (_mesh, transport) = self.ensure_net();
+        if transport.is_connected(url) {
+            return Ok(());
+        }
+        transport.connect(url).map_err(|e| JsValue::from_str(&e))
+    }
+
+    #[wasm_bindgen(js_name = "disconnect")]
+    pub fn disconnect(&self, url: &str) {
+        if let Some(net) = self.net.borrow().as_ref() {
+            net.transport.close(url);
+            net.mesh.bye(url);
+        }
+    }
+
+    #[wasm_bindgen(js_name = "isConnected")]
+    pub fn is_connected(&self, url: &str) -> bool {
+        self.net
+            .borrow()
+            .as_ref()
+            .is_some_and(|net| net.transport.is_connected(url))
+    }
+
+    /// URLs of peers with an OPEN WebSocket.
+    #[wasm_bindgen(js_name = "connectedPeers")]
+    pub fn connected_peers(&self) -> js_sys::Array {
+        let out = js_sys::Array::new();
+        if let Some(net) = self.net.borrow().as_ref() {
+            for url in net.transport.connected_urls() {
+                out.push(&JsValue::from_str(&url));
+            }
+        }
+        out
+    }
+
+    /// The remote process id learned from the DAM `?` handshake, or null
+    /// while the handshake hasn't completed.
+    #[wasm_bindgen(js_name = "peerPid")]
+    pub fn peer_pid(&self, url: &str) -> Option<String> {
+        self.net.borrow().as_ref().and_then(|net| net.mesh.peer_pid(url))
+    }
+
+    /// Register a `(event, url)` callback for connection lifecycle:
+    /// "open" | "close" | "error".
+    #[wasm_bindgen(js_name = "onStatus")]
+    pub fn on_status(&self, callback: js_sys::Function) {
+        *self.status.borrow_mut() = Some(callback);
+    }
+
+    /// Wire tap: `(direction, peer, raw)` for every frame this client
+    /// sends ("out") or receives ("in") — heartbeats, DAM handshakes,
+    /// puts, gets, and acks, exactly as they cross the WebSocket. This
+    /// is the wire-inspector's feed; register before `connect()` to see
+    /// the handshake itself.
+    #[wasm_bindgen(js_name = "onWire")]
+    pub fn on_wire(&self, callback: js_sys::Function) {
+        *self.wire_tap.borrow_mut() = Some(callback);
+    }
+
+    /// Ask the mesh for a soul's current state (an outgoing GET). Pair
+    /// with `on()` to receive the answer when it arrives.
+    #[wasm_bindgen(js_name = "fetchSoul")]
+    pub fn fetch_soul(&self, soul: &str) {
+        if let Some(net) = self.net.borrow().as_ref() {
+            net.mesh.say(
+                crate::wire::get_message(&crate::uuid::random_message_id(9), soul, None),
+                None,
+            );
+        }
+    }
+
+    /// Flush any gap-batched outgoing frames immediately.
+    #[wasm_bindgen(js_name = "flushMesh")]
+    pub fn flush_mesh(&self) {
+        if let Some(net) = self.net.borrow().as_ref() {
+            net.mesh.flush();
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // WasmGun — Extended chain API (gun/lib/* equivalents)
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -232,7 +580,12 @@ impl Default for WasmGun {
 impl WasmGun {
     /// Promise-based read (`gun/lib/then.js`): resolves with the JSON value
     /// at `soul.key` (or `null` if missing), using `.once()` semantics.
-    #[wasm_bindgen(js_name = "then")]
+    ///
+    /// Exported as `once`, NOT `then`: a `then` method would make every
+    /// `WasmGun` a JS thenable, so `await somePromise` resolving to a gun
+    /// instance would invoke it with resolver functions and corrupt the
+    /// await. (GUN.js carries this foot-gun; we don't.)
+    #[wasm_bindgen(js_name = "once")]
     pub fn then_promise(&self, soul: &str, key: &str) -> js_sys::Promise {
         let chain = self.inner.get(soul).get(key);
         wasm_bindgen_futures::future_to_promise(async move {
@@ -270,6 +623,45 @@ impl WasmGun {
     pub fn unset(&self, set_soul: &str, item_soul: &str) {
         let item = self.inner.get(item_soul);
         self.inner.get(set_soul).unset(&item);
+    }
+
+    /// Absence detection (`gun/lib/not.js`): resolves `true` if no data
+    /// exists at `soul.key` (or at the soul when `key` is empty) within
+    /// `timeout_ms`, `false` once data is present. Cannot GUARANTEE
+    /// absence in a distributed system — peers may hold data we haven't
+    /// seen (documented caveat).
+    #[wasm_bindgen(js_name = "notWithin")]
+    pub fn not_within(&self, soul: &str, key: &str, timeout_ms: f64) -> js_sys::Promise {
+        let chain = if key.is_empty() {
+            self.inner.get(soul)
+        } else {
+            self.inner.get(soul).get(key)
+        };
+        let timeout = std::time::Duration::from_millis(timeout_ms.max(0.0) as u64);
+        wasm_bindgen_futures::future_to_promise(async move {
+            let absent = std::rc::Rc::new(std::cell::Cell::new(false));
+            let flag = absent.clone();
+            chain.not_within(timeout, move |_| flag.set(true)).await;
+            Ok(JsValue::from_bool(absent.get()))
+        })
+    }
+
+    /// Register a disconnect write (`gun/lib/bye.js`): when this client's
+    /// relay connection drops, the relay writes `json_value` to
+    /// `soul.key`. Requires an active `connect()`; the registration is
+    /// sent to every connected relay.
+    #[wasm_bindgen(js_name = "registerBye")]
+    pub fn register_bye(&self, soul: &str, key: &str, json_value: &str) -> Result<(), JsValue> {
+        let parsed: serde_json::Value = serde_json::from_str(json_value)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let value = wire::json_to_value(&parsed)
+            .ok_or_else(|| JsValue::from_str("Unsupported value type"))?;
+        let msg = self.inner.get(soul).get(key).bye().put(value);
+        let Some(net) = self.net.borrow().as_ref().map(|n| n.mesh.clone()) else {
+            return Err(JsValue::from_str("registerBye requires connect() first"));
+        };
+        net.say(msg, None);
+        Ok(())
     }
 }
 
@@ -532,6 +924,26 @@ impl WasmUser {
     }
 
     /// Check if authenticated. Returns JSON `{ pub, epub, alias }` or null.
+    /// The authenticated key pair as `{pub, priv, epub, epriv}` JSON
+    /// (the `authPair` input shape), or null when not authenticated.
+    /// This is how sessions restore without re-entering the password —
+    /// the caller owns where it persists (and the risk of where).
+    #[wasm_bindgen(js_name = "pairJson")]
+    pub fn pair_json(&self) -> JsValue {
+        match self.inner.is_authenticated() {
+            Some(auth) => {
+                let json = serde_json::json!({
+                    "pub": auth.pair.pub_key,
+                    "priv": auth.pair.priv_key,
+                    "epub": auth.pair.epub,
+                    "epriv": auth.pair.epriv,
+                });
+                JsValue::from_str(&json.to_string())
+            }
+            None => JsValue::NULL,
+        }
+    }
+
     #[wasm_bindgen(js_name = "isAuthenticated")]
     pub fn is_authenticated(&self) -> JsValue {
         match self.inner.is_authenticated() {
@@ -750,6 +1162,49 @@ impl WasmCert {
         };
 
         cert.verify().map_err(|e| JsValue::from_str(&e))
+    }
+
+    /// Full read-side check: does this certificate (signature-valid,
+    /// unexpired) grant `writer_pub` write access to `path`? This is
+    /// what consumers run before trusting a cert-carrying write.
+    #[wasm_bindgen(js_name = "grantsAccess")]
+    pub fn grants_access(
+        &self,
+        cert_json: &str,
+        writer_pub: &str,
+        path: &str,
+    ) -> Result<bool, JsValue> {
+        let parsed: serde_json::Value = serde_json::from_str(cert_json)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+        let who_str = parsed["who"].as_str().unwrap_or("");
+        let what_str = parsed["what"].as_str().unwrap_or("");
+
+        let who = if who_str == "*" {
+            CertWho::Anyone
+        } else {
+            CertWho::PubKey(who_str.to_string())
+        };
+        let what = if what_str == "*" {
+            CertWhat::All
+        } else if what_str.ends_with('*') {
+            CertWhat::Prefix(what_str.trim_end_matches('*').to_string())
+        } else {
+            CertWhat::Exact(what_str.to_string())
+        };
+
+        let cert = Certificate {
+            who,
+            what,
+            expiry: parsed["expiry"].as_f64(),
+            issuer: parsed["issuer"].as_str().unwrap_or("").to_string(),
+            signature: parsed["signature"].as_str().unwrap_or("").to_string(),
+        };
+
+        if !cert.verify().map_err(|e| JsValue::from_str(&e))? {
+            return Ok(false);
+        }
+        Ok(cert.grants_access(writer_pub, path, crate::state::now_ms()))
     }
 }
 

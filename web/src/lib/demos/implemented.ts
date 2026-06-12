@@ -1,0 +1,21 @@
+/**
+ * Demos with a live client implementation. Kept separate from the
+ * component registry so shell pages can check implementation status
+ * without pulling client components into their bundle.
+ */
+export const implementedDemos: string[] = [
+	'shared-input',
+	'gunjs-interop',
+	'graph-explorer',
+	'chat-room',
+	'todo-list',
+	'presence',
+	'profile-tree',
+	'conflict-lab',
+	'offline-first',
+	'login',
+	'private-notes',
+	'secret-handshake',
+	'doc-permissions',
+	'wire-inspector'
+];

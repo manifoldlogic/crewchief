@@ -48,6 +48,12 @@ mod implementation {
 
     /// Shared `(peer_id, message)` callback slot.
     type MessageHandler = Rc<RefCell<Option<Box<dyn Fn(String, String)>>>>;
+    /// Shared `(url)` open callback slot.
+    type OpenHandler = Rc<RefCell<Option<Box<dyn Fn(String)>>>>;
+    /// Shared `(url, code, reason)` close callback slot.
+    type CloseHandler = Rc<RefCell<Option<Box<dyn Fn(String, u16, String)>>>>;
+    /// Shared `(url, message)` error callback slot.
+    type ErrorHandler = Rc<RefCell<Option<Box<dyn Fn(String, String)>>>>;
 
     struct PeerConnection {
         ws: WebSocket,
@@ -66,6 +72,9 @@ mod implementation {
         connections: Rc<RefCell<HashMap<String, PeerConnection>>>,
         events: Rc<RefCell<Vec<WsWasmEvent>>>,
         on_message: MessageHandler,
+        on_open: OpenHandler,
+        on_close: CloseHandler,
+        on_error: ErrorHandler,
     }
 
     impl WsWasmTransport {
@@ -75,11 +84,29 @@ mod implementation {
                 connections: Rc::new(RefCell::new(HashMap::new())),
                 events: Rc::new(RefCell::new(Vec::new())),
                 on_message: Rc::new(RefCell::new(None)),
+                on_open: Rc::new(RefCell::new(None)),
+                on_close: Rc::new(RefCell::new(None)),
+                on_error: Rc::new(RefCell::new(None)),
             }
         }
 
         pub fn set_on_message(&self, callback: impl Fn(String, String) + 'static) {
             *self.on_message.borrow_mut() = Some(Box::new(callback));
+        }
+
+        /// Register a callback fired when a connection opens. This is the
+        /// moment to run the mesh handshake (`hi`) — sending before open
+        /// would throw on a browser WebSocket.
+        pub fn set_on_open(&self, callback: impl Fn(String) + 'static) {
+            *self.on_open.borrow_mut() = Some(Box::new(callback));
+        }
+
+        pub fn set_on_close(&self, callback: impl Fn(String, u16, String) + 'static) {
+            *self.on_close.borrow_mut() = Some(Box::new(callback));
+        }
+
+        pub fn set_on_error(&self, callback: impl Fn(String, String) + 'static) {
+            *self.on_error.borrow_mut() = Some(Box::new(callback));
         }
 
         pub fn connect(&self, url: &str) -> Result<(), String> {
@@ -92,10 +119,14 @@ mod implementation {
 
             let url_for_open = url_str.clone();
             let events_for_open = events.clone();
+            let on_open_cb = self.on_open.clone();
             let on_open = Closure::wrap(Box::new(move || {
                 events_for_open.borrow_mut().push(WsWasmEvent::Open {
                     url: url_for_open.clone(),
                 });
+                if let Some(ref cb) = *on_open_cb.borrow() {
+                    cb(url_for_open.clone());
+                }
             }) as Box<dyn FnMut()>);
 
             let url_for_msg = url_str.clone();
@@ -116,21 +147,29 @@ mod implementation {
 
             let url_for_close = url_str.clone();
             let events_for_close = self.events.clone();
+            let on_close_cb = self.on_close.clone();
             let on_close = Closure::wrap(Box::new(move |e: web_sys::CloseEvent| {
                 events_for_close.borrow_mut().push(WsWasmEvent::Close {
                     url: url_for_close.clone(),
                     code: e.code(),
                     reason: e.reason(),
                 });
+                if let Some(ref cb) = *on_close_cb.borrow() {
+                    cb(url_for_close.clone(), e.code(), e.reason());
+                }
             }) as Box<dyn FnMut(web_sys::CloseEvent)>);
 
             let url_for_error = url_str.clone();
             let events_for_error = self.events.clone();
+            let on_error_cb = self.on_error.clone();
             let on_error = Closure::wrap(Box::new(move |e: ErrorEvent| {
                 events_for_error.borrow_mut().push(WsWasmEvent::Error {
                     url: url_for_error.clone(),
                     message: e.message(),
                 });
+                if let Some(ref cb) = *on_error_cb.borrow() {
+                    cb(url_for_error.clone(), e.message());
+                }
             }) as Box<dyn FnMut(ErrorEvent)>);
 
             ws.set_onopen(Some(on_open.as_ref().unchecked_ref()));
@@ -147,7 +186,10 @@ mod implementation {
                 _on_error: on_error,
             };
 
-            self.connections.borrow_mut().insert(url_str, conn);
+            if let Some(replaced) = self.connections.borrow_mut().insert(url_str, conn) {
+                Self::detach(&replaced);
+                let _ = replaced.ws.close();
+            }
             Ok(())
         }
 
@@ -174,9 +216,21 @@ mod implementation {
             Ok(())
         }
 
+        /// Detach the JS event handlers before the owning closures drop:
+        /// the browser fires `close` asynchronously, and a handler whose
+        /// `Closure` has been dropped throws "closure invoked after
+        /// being dropped".
+        fn detach(conn: &PeerConnection) {
+            conn.ws.set_onopen(None);
+            conn.ws.set_onmessage(None);
+            conn.ws.set_onclose(None);
+            conn.ws.set_onerror(None);
+        }
+
         pub fn close(&self, url: &str) {
             let mut conns = self.connections.borrow_mut();
             if let Some(conn) = conns.remove(url) {
+                Self::detach(&conn);
                 let _ = conn.ws.close();
             }
         }
@@ -184,6 +238,7 @@ mod implementation {
         pub fn close_all(&self) {
             let mut conns = self.connections.borrow_mut();
             for (_, conn) in conns.drain() {
+                Self::detach(&conn);
                 let _ = conn.ws.close();
             }
         }
