@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { capabilityById } from '$lib/catalog';
 	import DemoStage from '$lib/demos/DemoStage.svelte';
+	import { demoContent } from '$lib/demos/content';
 	import { implementedDemos } from '$lib/demos/implemented';
 	import * as Alert from '$lib/components/ui/alert';
 	import { Badge } from '$lib/components/ui/badge';
@@ -9,6 +10,7 @@
 	let { data } = $props();
 
 	const isLive = $derived(implementedDemos.includes(data.demo.slug));
+	const content = $derived(demoContent[data.demo.slug]);
 </script>
 
 <svelte:head><title>{data.demo.title} — Gunmetal demos</title></svelte:head>
@@ -38,6 +40,44 @@
 		</Alert.Root>
 	{/if}
 </section>
+
+{#if content}
+	<!-- (b) why this pattern exists -->
+	<section class="mt-8" data-testid="demo-why">
+		<h2 class="text-lg font-semibold">Why this pattern</h2>
+		<p class="mt-2 max-w-3xl text-sm text-muted-foreground">{content.why}</p>
+	</section>
+
+	<!-- (c) minimal copy-paste snippets (no site glue) -->
+	<section class="mt-8" data-testid="demo-snippets">
+		<h2 class="text-lg font-semibold">Use it yourself</h2>
+		<p class="mt-1 text-xs text-muted-foreground">
+			Runnable against a local relay — no site harness required. The full client source
+			(including the demo's iframe/room glue, which yours won't need) lives in
+			<code>web/src/lib/demos/{data.demo.slug}/</code>.
+		</p>
+		<div class="mt-3 space-y-4">
+			{#each content.snippets as snippet (snippet.label)}
+				<div>
+					<h3 class="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+						{snippet.label}
+					</h3>
+					<pre class="overflow-x-auto rounded-lg border bg-muted/40 p-3 text-xs"><code>{snippet.code}</code></pre>
+				</div>
+			{/each}
+		</div>
+	</section>
+
+	<!-- (e) gotchas & limits -->
+	<section class="mt-8" data-testid="demo-gotchas">
+		<h2 class="text-lg font-semibold">Gotchas &amp; limits</h2>
+		<ul class="mt-2 list-disc space-y-1 pl-6 text-sm text-muted-foreground">
+			{#each content.gotchas as gotcha, i (i)}
+				<li>{gotcha}</li>
+			{/each}
+		</ul>
+	</section>
+{/if}
 
 <Separator class="my-8" />
 

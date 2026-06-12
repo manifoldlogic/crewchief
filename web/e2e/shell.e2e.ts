@@ -67,6 +67,30 @@ test.describe('shell', () => {
 		await expect(first.getByTestId('flagship-badge')).toBeVisible();
 	});
 
+	test('demo pages carry the full §4 format: why, snippets, gotchas', async ({ page }) => {
+		// Spot-check two demos with different shapes; the content map is
+		// keyed by slug, so coverage of all 14 is asserted statically below.
+		for (const slug of ['shared-input', 'doc-permissions']) {
+			await page.goto(`/gunmetal/demos/${slug}`);
+			await expect(page.getByTestId('demo-why')).toBeVisible();
+			await expect(page.getByTestId('demo-snippets').locator('pre').first()).toBeVisible();
+			await expect(page.getByTestId('demo-gotchas').locator('li').first()).toBeVisible();
+		}
+	});
+
+	test('every implemented demo has page content (why/snippets/gotchas)', async ({ request }) => {
+		// The content map must cover every demo in the manifest — a demo
+		// without its why/snippets/gotchas sections fails §4 acceptance.
+		const { demos } = await import('../src/lib/catalog');
+		const { demoContent } = await import('../src/lib/demos/content');
+		for (const demo of demos) {
+			expect(demoContent[demo.slug], `content for ${demo.slug}`).toBeTruthy();
+			expect(demoContent[demo.slug].snippets.length, `snippets for ${demo.slug}`).toBeGreaterThan(0);
+			expect(demoContent[demo.slug].gotchas.length, `gotchas for ${demo.slug}`).toBeGreaterThan(0);
+		}
+		void request;
+	});
+
 	test('build provenance footer is present', async ({ page }) => {
 		await page.goto('/gunmetal');
 		await expect(page.getByTestId('build-info')).toContainText(/gunmetal v\d+\.\d+\.\d+/);
