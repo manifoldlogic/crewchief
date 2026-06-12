@@ -276,7 +276,9 @@ console.log(3000 / ((performance.now() - start) / 1000), 'ops/s');`
 		],
 		gotchas: [
 			'The wasm bundle is built with opt-level=z (size-optimized): gunmetal CPU numbers here are conservative versus an -O3 build.',
-			'GUN.js SEA uses native WebCrypto — expect it to win some crypto rows; that is the honest result, not a bug.',
+			'GUN.js SEA rides native WebCrypto: expect it to win sign/verify/PBKDF2 by ~10x, and expect gunmetal to win AES encrypt/decrypt (WebCrypto pays per-call async overhead). Both are honest results.',
+			"The put loops measure different pipelines: gun.js defers most graph/wire work behind timers (you measure an enqueue), while gunmetal does HAM, events, and wire serialization inline (you measure the work). The gunmetal client runs with gap:10 wire batching here, matching GUN's default ~1ms outbound drain.",
+			'RTT is measured FIRST on a clean socket — after the put floods it would report queue-drain time, not round-trip time.',
 			'Numbers vary with machine load — run on an idle machine and compare medians of several runs.'
 		]
 	},

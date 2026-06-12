@@ -57,8 +57,13 @@ export function markDegraded(): void {
 }
 
 /** Boot the gunmetal wasm engine; connect to the relay unless this is a
- * single-frame (relay-less) variant. Throws on handshake timeout. */
-export async function bootGunmetal(params: ClientParams): Promise<WasmGunInstance> {
+ * single-frame (relay-less) variant. Throws on handshake timeout.
+ * `extraOptions` merges into the GunOptions JSON (e.g. `{gap: 10}` for
+ * wire batching). */
+export async function bootGunmetal(
+	params: ClientParams,
+	extraOptions: Record<string, unknown> = {}
+): Promise<WasmGunInstance> {
 	const wasm = await import('$lib/wasm/gunmetal.js');
 	const wasmUrl = (await import('$lib/wasm/gunmetal_bg.wasm?url')).default;
 	await wasm.default({ module_or_path: wasmUrl });
@@ -66,7 +71,7 @@ export async function bootGunmetal(params: ClientParams): Promise<WasmGunInstanc
 	// Demo clients are ephemeral: storage stays off until the
 	// persistence demos wire it explicitly (with per-frame namespacing).
 	const gun = wasm.WasmGun.withOptions(
-		JSON.stringify({ localStorage: false, radisk: false, axe: false })
+		JSON.stringify({ localStorage: false, radisk: false, axe: false, ...extraOptions })
 	);
 
 	if (!params.singleFrame) {

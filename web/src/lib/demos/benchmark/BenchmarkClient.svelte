@@ -64,7 +64,10 @@
 
 		try {
 			if (engine === 'gunmetal') {
-				gmGun = await bootGunmetal(params);
+				// gap:10 enables wire batching — GUN.js batches its outbound
+				// by default (~1ms drain), so unbatched gunmetal would
+				// benchmark a per-put network flood against an enqueue.
+				gmGun = await bootGunmetal(params, { gap: 10 });
 				gmSea = new (await wasmModule()).WasmSEA();
 				gmGun.onWire((dir: string, _peer: string, raw: string) => {
 					try {
@@ -129,9 +132,27 @@
 
 	async function runGunmetal() {
 		const gun = gmGun!;
+		// RTT first, on a clean socket — measured after the put floods it
+		// would report queue-drain time, not round-trip time.
+		if (gun.isConnected(params.relay)) {
+			await measure('put→ack RTT ×20 (median)', null, async () => {
+				gmAckRtts.length = 0;
+				for (let i = 0; i < 20; i++) {
+					gun.putText(`${base}/ack`, 'v', `rtt-${i}`);
+					gun.flushMesh();
+					await new Promise((r) => setTimeout(r, 60));
+				}
+				const deadline = Date.now() + 5000;
+				while (gmAckRtts.length < 15 && Date.now() < deadline)
+					await new Promise((r) => setTimeout(r, 50));
+			});
+			rows = [...rows.slice(0, -1), { label: 'put→ack RTT (median ms)', ms: median(gmAckRtts) }];
+		}
 		await measure('local puts ×3000', 3000, () => {
 			for (let i = 0; i < 3000; i++) gun.putText(`${base}/local`, `k${i}`, `v${i}`);
 		});
+		gun.flushMesh();
+		await new Promise((r) => setTimeout(r, 300)); // drain before next workload
 		await measure('subscription fires ×1000', 1000, async () => {
 			let fires = 0;
 			gun.on(`${base}/subs`, 'v', () => fires++);
@@ -139,6 +160,8 @@
 			const deadline = Date.now() + 5000;
 			while (fires < 1000 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 10));
 		});
+		gun.flushMesh();
+		await new Promise((r) => setTimeout(r, 300));
 		const pair = JSON.parse(gmSea.pair());
 		await measure('SEA pair', null, () => void gmSea.pair());
 		let signed = '';
@@ -158,25 +181,30 @@
 		await measure('SEA work (PBKDF2) ×3', 3, () => {
 			for (let i = 0; i < 3; i++) gmSea.work('a passphrase', 'fixed-salt');
 		});
-		if (gun.isConnected(params.relay)) {
-			await measure('put→ack RTT ×20 (median)', null, async () => {
-				gmAckRtts.length = 0;
-				for (let i = 0; i < 20; i++) {
-					gun.putText(`${base}/ack`, 'v', `rtt-${i}`);
-					await new Promise((r) => setTimeout(r, 60));
-				}
-				const deadline = Date.now() + 5000;
-				while (gmAckRtts.length < 15 && Date.now() < deadline)
-					await new Promise((r) => setTimeout(r, 50));
-			});
-			rows = [...rows.slice(0, -1), { label: 'put→ack RTT (median ms)', ms: median(gmAckRtts) }];
-		}
 	}
 
 	async function runGunJs() {
+		// RTT first, on a clean socket (matching the gunmetal ordering).
+		const rtts: number[] = [];
+		await measure('put→ack RTT ×20 (median)', null, async () => {
+			for (let i = 0; i < 20; i++) {
+				const start = performance.now();
+				await new Promise<void>((resolve) => {
+					gunJs.get(`${base}/ack`).get('v').put(`rtt-${i}`, () => {
+						rtts.push(performance.now() - start);
+						resolve();
+					});
+					setTimeout(resolve, 2000); // never hang a workload on a lost ack
+				});
+				await new Promise((r) => setTimeout(r, 60));
+			}
+		});
+		rows = [...rows.slice(0, -1), { label: 'put→ack RTT (median ms)', ms: median(rtts) }];
+
 		await measure('local puts ×3000', 3000, () => {
 			for (let i = 0; i < 3000; i++) gunJs.get(`${base}/local`).get(`k${i}`).put(`v${i}`);
 		});
+		await new Promise((r) => setTimeout(r, 300)); // drain before next workload
 		await measure('subscription fires ×1000', 1000, async () => {
 			let fires = 0;
 			gunJs.get(`${base}/subs`).get('v').on(() => fires++);
@@ -184,6 +212,7 @@
 			const deadline = Date.now() + 5000;
 			while (fires < 1000 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 10));
 		});
+		await new Promise((r) => setTimeout(r, 300));
 		const pair = await gunSEA.pair();
 		await measure('SEA pair', null, async () => void (await gunSEA.pair()));
 		let signed: unknown;
@@ -203,21 +232,6 @@
 		await measure('SEA work (PBKDF2) ×3', 3, async () => {
 			for (let i = 0; i < 3; i++) await gunSEA.work('a passphrase', 'fixed-salt');
 		});
-		const rtts: number[] = [];
-		await measure('put→ack RTT ×20 (median)', null, async () => {
-			for (let i = 0; i < 20; i++) {
-				const start = performance.now();
-				await new Promise<void>((resolve) => {
-					gunJs.get(`${base}/ack`).get('v').put(`rtt-${i}`, () => {
-						rtts.push(performance.now() - start);
-						resolve();
-					});
-					setTimeout(resolve, 2000); // never hang a workload on a lost ack
-				});
-				await new Promise((r) => setTimeout(r, 60));
-			}
-		});
-		rows = [...rows.slice(0, -1), { label: 'put→ack RTT (median ms)', ms: median(rtts) }];
 	}
 
 	async function run() {
