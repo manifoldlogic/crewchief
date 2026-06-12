@@ -62,6 +62,16 @@ pub const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(20);
 /// Maximum disconnect-write registrations kept per peer.
 const MAX_BYE_WRITES_PER_PEER: usize = 100;
 
+/// Maximum total serialized bytes of disconnect-write payloads retained
+/// per peer. Bounds bye-write memory in bytes alongside the count cap:
+/// 100 registrations of near-wire-cap graphs would otherwise hold ~1 GB.
+const MAX_BYE_BYTES_PER_PEER: usize = 1_048_576;
+
+/// Maximum distinct keys retained per subscribed soul. PUT routing only
+/// consults souls (`contains_key`), so excess keys are dropped without
+/// affecting delivery — this bounds the second dimension of the table.
+const MAX_KEYS_PER_SOUL: usize = 100;
+
 /// Maximum souls a single peer may hold AXE subscriptions for. Beyond
 /// this, further GETs are still answered but no longer recorded (the
 /// peer simply misses pushed updates for the extra souls).
@@ -170,6 +180,8 @@ struct MeshInner {
     peers: HashMap<String, MeshPeer>,
     /// Disconnect writes registered via `bye` wire messages, per peer.
     bye_writes: HashMap<String, Vec<Value>>,
+    /// Cumulative serialized bytes of registered bye writes, per peer.
+    bye_write_bytes: HashMap<String, usize>,
     /// Last `{dam:'!'}` error received.
     last_error: Option<String>,
     /// Last `{dam:'mob'}` redirect: alternative peer URLs to dial instead.
@@ -209,6 +221,7 @@ impl Mesh {
                 dup,
                 peers: HashMap::new(),
                 bye_writes: HashMap::new(),
+                bye_write_bytes: HashMap::new(),
                 last_error: None,
                 mob_redirect: None,
                 suggested_peers: Vec::new(),
@@ -343,6 +356,7 @@ impl Mesh {
         let bye_graphs = {
             let mut inner = lock_mut(&self.inner);
             inner.peers.remove(peer_id);
+            inner.bye_write_bytes.remove(peer_id);
             inner.bye_writes.remove(peer_id).unwrap_or_default()
         };
 
@@ -410,7 +424,16 @@ impl Mesh {
         let trimmed = raw.trim_start();
         if trimmed.starts_with('[') {
             // Empty array == heartbeat == no items; parse errors yield none.
-            serde_json::from_str::<Vec<WireMessage>>(trimmed).unwrap_or_default()
+            // Elements decode individually: one malformed message must not
+            // discard the legitimate messages batched alongside it.
+            serde_json::from_str::<Vec<serde_json::Value>>(trimmed)
+                .map(|elems| {
+                    elems
+                        .into_iter()
+                        .filter_map(|e| serde_json::from_value::<WireMessage>(e).ok())
+                        .collect()
+                })
+                .unwrap_or_default()
         } else if trimmed.starts_with('{') {
             match serde_json::from_str::<WireMessage>(trimmed) {
                 Ok(msg) => vec![msg],
@@ -472,10 +495,23 @@ impl Mesh {
         // Disconnect-write registration rides on data messages. Capped
         // per peer so a client cannot grow the registry without bound.
         if let Some(ref bye_graph) = msg.bye {
+            // Byte-account with the serialized size; an unserializable
+            // graph counts as oversized and is rejected.
+            let graph_bytes = serde_json::to_string(bye_graph)
+                .map(|s| s.len())
+                .unwrap_or(usize::MAX);
             let mut inner = lock_mut(&self.inner);
+            let used = inner
+                .bye_write_bytes
+                .get(from_peer)
+                .copied()
+                .unwrap_or_default();
             let writes = inner.bye_writes.entry(from_peer.to_string()).or_default();
-            if writes.len() < MAX_BYE_WRITES_PER_PEER {
+            if writes.len() < MAX_BYE_WRITES_PER_PEER
+                && graph_bytes.saturating_add(used) <= MAX_BYE_BYTES_PER_PEER
+            {
                 writes.push(bye_graph.clone());
+                *inner.bye_write_bytes.entry(from_peer.to_string()).or_default() += graph_bytes;
             }
         }
 
@@ -490,10 +526,10 @@ impl Mesh {
                 && (peer.subscriptions.len() < MAX_SUBSCRIPTIONS_PER_PEER
                     || peer.subscriptions.contains_key(&get.soul))
             {
-                peer.subscriptions
-                    .entry(get.soul.clone())
-                    .or_default()
-                    .insert(get.key.clone().unwrap_or_default());
+                let keys = peer.subscriptions.entry(get.soul.clone()).or_default();
+                if keys.len() < MAX_KEYS_PER_SOUL {
+                    keys.insert(get.key.clone().unwrap_or_default());
+                }
             }
         }
 
@@ -1488,6 +1524,164 @@ mod tests {
         assert_eq!(items.len(), 2);
     }
 
+    #[tokio::test]
+    async fn timed_gap_window_flushes_without_explicit_flush() {
+        // §2.3: messages queued within the gap window are sent as one
+        // array by the TIMER, not only by an explicit flush() call.
+        let config = MeshConfig {
+            gap: Duration::from_millis(20),
+            ..Default::default()
+        };
+        let mesh = Mesh::new(Gun::new(GunOptions::default()), config);
+        let outbox = attach_peer(&mesh, "peerA");
+        mesh.flush(); // deliver the handshake so only test traffic batches
+        outbox.lock().unwrap().clear();
+
+        let mut n1 = Node::new("tg1");
+        n1.put("k", GunValue::Number(1.0), 100.0);
+        let mut n2 = Node::new("tg2");
+        n2.put("k", GunValue::Number(2.0), 100.0);
+        mesh.say(wire::put_message("tgm1", &[&n1]), Some("peerA"));
+        mesh.say(wire::put_message("tgm2", &[&n2]), Some("peerA"));
+        assert!(frames(&outbox).is_empty(), "held in gap window");
+
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        let sent = frames(&outbox);
+        assert_eq!(sent.len(), 1, "timer flushed one combined frame");
+        let items: Vec<Value> = serde_json::from_str(&sent[0]).unwrap();
+        assert_eq!(items.len(), 2);
+    }
+
+    #[test]
+    fn multi_hop_ack_routed_to_requester_via_dup_trace() {
+        // §2.5: an answer arriving from a third peer is traced through
+        // the dup table back to the original requester only — never
+        // broadcast to bystanders.
+        let mesh = Mesh::new(Gun::new(GunOptions::default()), MeshConfig::default());
+        let requester = attach_peer(&mesh, "requester");
+        let answerer = attach_peer(&mesh, "answerer");
+        let bystander = attach_peer(&mesh, "bystander");
+        for o in [&requester, &answerer, &bystander] {
+            o.lock().unwrap().clear();
+        }
+
+        // Requester asks for a soul this mesh has no data for: the GET is
+        // relayed to the other peers.
+        mesh.hear(r###"{"#":"q1","get":{"#":"mh-soul"}}"###, "requester");
+        assert!(
+            frames(&answerer).iter().any(|f| f.contains("mh-soul")),
+            "GET relayed to answerer"
+        );
+        requester.lock().unwrap().clear();
+        bystander.lock().unwrap().clear();
+
+        // Answerer responds with an ACK-carrying PUT referencing q1.
+        mesh.hear(
+            r###"{"#":"ans1","@":"q1","put":{"mh-soul":{"_":{"#":"mh-soul",">":{"k":100}},"k":42}}}"###,
+            "answerer",
+        );
+
+        assert!(
+            frames(&requester).iter().any(|f| f.contains("ans1")),
+            "answer routed back to the requester"
+        );
+        assert!(
+            !frames(&bystander).iter().any(|f| f.contains("ans1")),
+            "answer not broadcast to bystanders"
+        );
+    }
+
+    #[test]
+    fn duplicate_same_direction_connection_keeps_older_link() {
+        // §5.4: two links in the SAME direction to one process — the
+        // older link survives, the newly-handshaking one is dropped.
+        let mesh = Mesh::new(Gun::new(GunOptions::default()), MeshConfig::default());
+        attach_peer(&mesh, "inbound-old");
+        attach_peer(&mesh, "inbound-new");
+        assert_eq!(mesh.near(), 2);
+
+        mesh.hear(r###"{"#":"sd1","dam":"?","pid":"AAA"}"###, "inbound-old");
+        mesh.hear(r###"{"#":"sd2","dam":"?","pid":"AAA"}"###, "inbound-new");
+
+        assert_eq!(mesh.near(), 1, "duplicate link dropped");
+        assert!(mesh.is_peer("inbound-old"), "older link kept");
+        assert!(!mesh.is_peer("inbound-new"));
+    }
+
+    #[test]
+    fn duplicate_connection_their_pid_higher_drops_our_outbound() {
+        // §5.4: the link dialed by the higher-pid side survives. Their
+        // pid is higher, so the link THEY dialed (our inbound) is kept
+        // and our outbound dial is dropped.
+        let config = MeshConfig {
+            pid: "AAA".into(), // our pid is lower than theirs
+            ..Default::default()
+        };
+        let mesh = Mesh::new(Gun::new(GunOptions::default()), config);
+        let outbox: Outbox = Arc::new(Mutex::new(Vec::new()));
+        let o = outbox.clone();
+        mesh.hi(
+            "outbound-link",
+            Some("ws://them.example/gun".into()),
+            Some(std::sync::Arc::new(move |raw: &str| {
+                o.lock().unwrap().push(raw.to_string());
+            })),
+        );
+        attach_peer(&mesh, "inbound-link");
+        assert_eq!(mesh.near(), 2);
+
+        mesh.hear(r###"{"#":"th1","dam":"?","pid":"ZZZ"}"###, "outbound-link");
+        mesh.hear(r###"{"#":"th2","dam":"?","pid":"ZZZ"}"###, "inbound-link");
+
+        assert_eq!(mesh.near(), 1, "duplicate link dropped");
+        assert!(
+            mesh.is_peer("inbound-link"),
+            "their dial kept (their pid is higher)"
+        );
+        assert!(!mesh.is_peer("outbound-link"));
+    }
+
+    #[test]
+    fn malformed_batch_element_does_not_drop_siblings() {
+        // One type-invalid element in a batch must not discard the
+        // legitimate messages batched alongside it.
+        let mesh = Mesh::new(Gun::new(GunOptions::default()), MeshConfig::default());
+        mesh.hear(
+            r###"[{"get":{"bad":1}},{"#":"ok1","put":{"sib-soul":{"_":{"#":"sib-soul",">":{"k":100}},"k":7}}}]"###,
+            "peerA",
+        );
+        assert_eq!(
+            mesh.gun().get("sib-soul").get("k").val(),
+            Some(GunValue::Number(7.0)),
+            "valid sibling message landed"
+        );
+    }
+
+    #[test]
+    fn axe_subscription_keys_capped_per_soul() {
+        // The subscription table is bounded in BOTH dimensions: souls per
+        // peer and keys per soul. Routing only consults souls, so excess
+        // keys are dropped without affecting delivery.
+        let mesh = Mesh::new(Gun::new(GunOptions::default()), MeshConfig::default());
+        attach_peer(&mesh, "subscriber");
+        for i in 0..(MAX_KEYS_PER_SOUL + 50) {
+            let frame = format!(
+                r###"{{"#":"kc{i}","get":{{"#":"kc-soul",".":"key{i}"}}}}"###
+            );
+            mesh.hear(&frame, "subscriber");
+        }
+        let inner = lock_mut(&mesh.inner);
+        let keys = inner
+            .peers
+            .get("subscriber")
+            .and_then(|p| p.subscriptions.get("kc-soul"))
+            .map(|s| s.len())
+            .unwrap_or(0);
+        assert!(keys <= MAX_KEYS_PER_SOUL, "keys bounded, got {}", keys);
+        assert!(keys >= MAX_KEYS_PER_SOUL - 1, "cap not off-by-many: {}", keys);
+    }
+
     #[test]
     fn bye_applies_registered_writes() {
         let mesh = new_mesh();
@@ -1685,6 +1879,35 @@ mod tests {
             })
             .count();
         assert_eq!(applied, 100, "registry capped per peer");
+    }
+
+    #[test]
+    fn bye_writes_capped_by_bytes_per_peer() {
+        // The registry is bounded in bytes as well as count: a handful of
+        // near-wire-cap graphs must not pin ~1 GB per peer until
+        // disconnect.
+        let mesh = Mesh::new(Gun::new(GunOptions::default()), MeshConfig::default());
+        attach_peer(&mesh, "peerA");
+
+        let small = r###"{"#":"bb1","put":{"x":{"_":{"#":"x",">":{"k":1}},"k":1}},"bye":{"bbs":{"k":"small"}}}"###;
+        mesh.hear(small, "peerA");
+
+        // ~2 MB payload blows the 1 MB per-peer byte budget — rejected.
+        let blob = "B".repeat(2 * 1_048_576);
+        let big = format!(
+            r###"{{"#":"bb2","put":{{"y":{{"_":{{"#":"y",">":{{"k":1}}}},"k":1}}}},"bye":{{"bbl":{{"k":"{blob}"}}}}}}"###
+        );
+        mesh.hear(&big, "peerA");
+
+        mesh.bye("peerA");
+        assert!(
+            mesh.gun().get("bbs").get("k").val().is_some(),
+            "in-budget bye write applied"
+        );
+        assert!(
+            mesh.gun().get("bbl").get("k").val().is_none(),
+            "over-budget bye write rejected"
+        );
     }
 
     #[test]

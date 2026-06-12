@@ -467,14 +467,14 @@ SeaError::KeyError(format!("Invalid private key: {}", e))
 | Finding | Severity | Status | Fix Applied |
 |---------|----------|--------|-------------|
 | Bye-writes bypass user-namespace signature verification | CRITICAL | **FIXED** | `apply_bye_graph` rejects `~pubKey/...` souls — unsigned disconnect writes can no longer bypass `verify_user_node` |
-| Radix recursion stack overflow (adversarial deep trees) | CRITICAL | **FIXED** | `MAX_DEPTH` (512) caps `get_in`, `map_tree`, and `insert_into`; insert degrades to flat edges, traversal stops gracefully |
+| Radix recursion stack overflow (adversarial deep trees) | CRITICAL | **FIXED** | `MAX_DEPTH` caps `get_in`, `map_tree`, and `insert_into`; inserts at the cap are rejected (cap/serde coordination revised by the merge-gate review below) |
 | Hash-dedup poisoning via forged `##` | HIGH | **FIXED** | The `@`+`##` dedup combo is keyed on a locally recomputed hash of the `put` payload; a forged `##` cannot suppress a genuine answer |
 | Unbounded `bye` registration growth per peer | HIGH | **FIXED** | `MAX_BYE_WRITES_PER_PEER` (100); excess registrations dropped |
 | Unbounded AXE subscription tables per peer | HIGH | **FIXED** | `MAX_SUBSCRIPTIONS_PER_PEER` (10 000); further GETs answered but not recorded |
 | Dup table O(N log N) sort on every track at capacity | PERF-HIGH | **FIXED** | Insertion-order `VecDeque` gives O(1) oldest-first eviction |
 | Per-peer frame body cloning in broadcast path | PERF-HIGH | **FIXED** | Frames are `Arc<str>`/`Rc<str>` (`SharedFrame`); per-target clone is a refcount bump |
 | 3 event-bus lock acquisitions per emitted event | PERF-HIGH | **FIXED** | `emit_events` takes the bus lock once per event |
-| Batch frames double-decoded via `serde_json::Value` | PERF-MED | **FIXED** | `parse_frame` deserializes straight to `Vec<WireMessage>` |
+| Batch frames double-decoded via `serde_json::Value` | PERF-MED | **REVERTED** | The single-pass decode silently dropped every sibling message when one batch element was malformed; per-element decode restored (merge-gate review) |
 | Radix chunk tree cloned on every flush serialization | PERF-LOW | **FIXED** | `to_json` serializes the map in place |
 | Null bytes accepted in RAD file names | MEDIUM | **FIXED** | `FsStore::check_name` rejects `\0` |
 | Oversized wire message produced a misleading parse error | LOW | **FIXED** | `parse_message` returns an explicit "exceeds size limit" error |
@@ -482,8 +482,36 @@ SeaError::KeyError(format!("Invalid private key: {}", e))
 ## Accepted / documented behaviors
 
 - **Open-write plain souls**: any peer may PUT (or bye-write) non-`~` souls. This is the GUN data model; access control is SEA user namespaces and certificates.
-- **Slowloris on the relay HTTP head**: bounded — the whole request head must arrive within 10 s (`HTTP_HEAD_TIMEOUT`) and 8 KB; a connection can stall at most one task for 10 s.
+- **Slowloris on the relay HTTP head**: bounded — all head reads go through a `take(MAX_HTTP_HEAD_BYTES)`-limited reader (8 KB hard allocation cap enforced *before* buffering, including unterminated lines) and the whole head must arrive within 10 s (`HTTP_HEAD_TIMEOUT`); a connection stalls at most one task for 10 s and 8 KB. (An earlier version of this note claimed the 8 KB cap without the byte-budgeted reader; that was incorrect — `read_line` buffered unbounded single lines. Fixed in the merge-gate review.)
 - **Dup TTL (9 s) bounds ACK tracing**: ACKs arriving after the dedup entry expires fall back to broadcast. Matches GUN; relevant only on >9 s round-trips.
 - **Writes from inside `.on()`/`open()` callbacks deadlock** (events lock is held during emission). Documented on the chain API and `extended`; matches the existing core constraint (H8-era design).
 - **Mesh peer count is bounded by the transport** (relay `--mob` shedding); `Mesh::hi` itself trusts local callers.
 - **`open()` reassembles the full document per delivery** — bounded by the coalescing window (`wait`, default 9 ms); avoid `open()` on a relay's hot write path.
+
+---
+
+# Merge-Gate Review Addendum
+
+**Date:** 2026-06-12
+**Scope:** Final pre-merge review of the GUNMETAL branch: adversarial verification of the 2026-06-10 remediations plus fresh-eyes security (relay) and spec-conformance (mesh) passes.
+
+## Remediation Status
+
+| Finding | Severity | Status | Fix Applied |
+|---------|----------|--------|-------------|
+| HTTP head 8 KB cap did not bound single-line reads (`read_line` buffers unbounded until `\n`; remote memory exhaustion pre-auth, pre-mob) | CRITICAL | **FIXED** | All head reads go through a `take(MAX_HTTP_HEAD_BYTES)` budget; an unterminated line within the budget is rejected (`read_capped_line`). Regression test `oversized_head_line_rejected_within_budget` |
+| Whole-batch drop on one malformed batch element (regression from PERF-MED single-pass decode) | HIGH | **FIXED** | `parse_frame` decodes elements individually again; test `malformed_batch_element_does_not_drop_siblings` |
+| Radix `MAX_DEPTH` (512) exceeded serde_json's parse recursion limit (128): a tree insert() accepted could serialize but never re-parse, and radisk heals unparseable chunks away → silent whole-chunk data loss; flat-edge fallback also stored lookup-shadowed keys | HIGH | **FIXED** | `MAX_DEPTH` = 100 (coordinated with serde limit incl. envelope nesting); inserts at the cap rejected so insert/lookup agree; round-trip regression test `max_depth_tree_round_trips_through_json` |
+| AXE subscription table unbounded in keys-per-soul dimension | HIGH | **FIXED** | `MAX_KEYS_PER_SOUL` (100); routing consults souls only, so dropped keys never affect delivery. Test `axe_subscription_keys_capped_per_soul` |
+| Relay per-peer outbound queue unbounded (slow/non-reading client grows relay memory) | HIGH | **FIXED** | Bounded `mpsc::channel(256)` + `try_send` (best-effort drop on full), matching `ws_native` |
+| tungstenite default 64 MiB message buffer despite 10 MB wire cap | MEDIUM | **FIXED** | `ws_config()` sets `max_message_size`/`max_frame_size` to `wire::MAX_MESSAGE_BYTES` on both server upgrades and upstream dials |
+| Bye-write registry bounded by count but not bytes (100 × ~10 MB ≈ 1 GB per peer) | MEDIUM | **FIXED** | `MAX_BYE_BYTES_PER_PEER` (1 MB) cumulative budget; test `bye_writes_capped_by_bytes_per_peer` |
+| Upstream relay links sent no heartbeats (spec §2.6 MUST; idle `up` links depended on remote traffic) | MEDIUM | **FIXED** | `dial_upstream` select loop gained the same 20 s heartbeat arm as `serve_ws` |
+| Untested MUSTs: timed gap flush (§2.3), multi-hop ACK via-trace (§2.5), dup-connection same-direction + their-pid-higher branches (§5.4) | TEST | **FIXED** | Tests `timed_gap_window_flushes_without_explicit_flush`, `multi_hop_ack_routed_to_requester_via_dup_trace`, `duplicate_same_direction_connection_keeps_older_link`, `duplicate_connection_their_pid_higher_drops_our_outbound` |
+
+## Accepted / documented (merge-gate)
+
+- **`@`+`##` dedup deviates from the parity-spec letter** (recomputes the hash locally instead of trusting `##`): intentional anti-poisoning hardening, recorded as a spec-deviation note in `gunmetal-parity.md` §2.2.
+- **Same-direction duplicate links resolve by local arrival order**, which can differ between the two ends under racing handshakes (each end may drop a different link, costing one reconnect). Matches GUN's practical behavior; revisit if relay-to-relay meshes grow.
+- **Mesh⇄Gun reference cycle + heartbeat task have no teardown path** (`Mesh::new` registers a listener whose id is discarded; `start_heartbeat` loops forever). Irrelevant for the one-relay-per-process and one-instance-per-page (wasm) lifecycles shipped today; add `Mesh::close()` when embedders need teardown.
+- **EventBus holds its lock while listeners run** — listeners must not subscribe or write back into the bus (documented constraint). The mesh put-listener path was traced safe; `hi`/`bye` emissions follow the same rule.

@@ -173,12 +173,11 @@ fn insert_into_depth(t: &mut Map<String, Value>, key: &str, val: Value, depth: u
     }
 
     // Depth guard (see MAX_DEPTH): adversarial key sequences could grow
-    // the tree one level per insert; beyond the cap, store the remainder
-    // as a flat edge at this level instead of recursing further.
+    // the tree one level per insert. The insert is REJECTED at the cap —
+    // a flat-edge fallback here would store entries that lookup descent
+    // shadows behind shorter prefix edges, and grow the tree past what
+    // from_json() can re-parse (whole-chunk loss in radisk).
     if depth >= MAX_DEPTH {
-        let mut leaf = Map::new();
-        leaf.insert(String::new(), val);
-        t.insert(key.to_string(), Value::Object(leaf));
         return;
     }
 
@@ -252,11 +251,17 @@ fn insert_into_depth(t: &mut Map<String, Value>, key: &str, val: Value, depth: u
 
 // ── Lookup (port of radix.js read path) ─────────────────────────────
 
-/// Maximum tree depth for recursive traversal. Real radix trees branch a
-/// handful of levels deep; this cap only exists so a malicious or corrupt
-/// chunk file (thousands of nested single-child edges) cannot overflow
-/// the stack. Traversal stops (returns None / skips the subtree) beyond it.
-const MAX_DEPTH: usize = 512;
+/// Maximum tree depth for inserts and recursive traversal. Real radix
+/// trees branch a handful of levels deep; the cap exists so a malicious
+/// or corrupt chunk file (thousands of nested single-child edges) cannot
+/// overflow the stack, and is deliberately set BELOW serde_json's parse
+/// recursion limit (128): one radix level is one JSON nesting level, so
+/// anything insert() accepts must survive a to_json()/from_json()
+/// round-trip — radisk treats an unparseable chunk as corrupt and drops
+/// it, which would turn a too-deep tree into silent whole-chunk data
+/// loss. Inserts at the cap are rejected; traversal of foreign trees
+/// stops (returns None / skips the subtree) beyond it.
+const MAX_DEPTH: usize = 100;
 
 fn get_in(t: &Map<String, Value>, key: &str) -> Option<RadixGet> {
     get_in_depth(t, key, 0)
@@ -415,9 +420,9 @@ mod tests {
     #[test]
     fn adversarial_deep_branching_does_not_overflow() {
         // Progressively longer keys ("a", "aa", "aaa", …) grow the tree
-        // one level per insert. Beyond MAX_DEPTH the tree degrades to
-        // flat edges instead of recursing — no stack overflow on insert,
-        // lookup, or iteration.
+        // one level per insert. At MAX_DEPTH further inserts are rejected
+        // — no stack overflow on insert, lookup, or iteration, and
+        // everything stored remains readable.
         let mut r = Radix::new();
         let mut key = String::new();
         for i in 0..(MAX_DEPTH + 100) {
@@ -427,10 +432,36 @@ mod tests {
         // Shallow entries stay retrievable.
         assert_eq!(r.get("a"), Some(RadixGet::Leaf(json!(0))));
         assert_eq!(r.get("aaa"), Some(RadixGet::Leaf(json!(2))));
-        // Full iteration completes without overflowing the stack.
-        let mut n = 0usize;
-        r.each(|_, _| n += 1);
-        assert!(n > MAX_DEPTH, "all inserts survive, got {}", n);
+        // Insert and lookup agree at the boundary: every key the
+        // iterator yields is also retrievable via get(), and no rejected
+        // key is present.
+        let mut stored = Vec::new();
+        r.each(|_, k| stored.push(k.to_string()));
+        for k in &stored {
+            assert!(r.get(k).is_some(), "stored key unreadable: len {}", k.len());
+        }
+        assert!(stored.len() >= MAX_DEPTH - 1, "stored {}", stored.len());
+        assert!(stored.len() < MAX_DEPTH + 100, "cap not applied");
+    }
+
+    #[test]
+    fn max_depth_tree_round_trips_through_json() {
+        // Anything insert() accepts MUST survive to_json()/from_json():
+        // radisk classifies an unparseable chunk as corrupt and heals it
+        // away, so a tree deeper than serde_json's recursion limit would
+        // mean silent whole-chunk data loss on reload.
+        let mut r = Radix::new();
+        let mut key = String::new();
+        for i in 0..(MAX_DEPTH + 100) {
+            key.push('a');
+            // Envelope-shaped leaves ({":": v, ">": s}) add the same JSON
+            // nesting radisk produces.
+            r.insert(&key, json!({":": i, ">": 1.0}));
+        }
+        let json = r.to_json().expect("serialize");
+        let back = Radix::from_json(&json).expect("max-depth tree must re-parse");
+        assert_eq!(back.count(), r.count());
+        assert_eq!(back.get("a"), r.get("a"));
     }
 
     fn demo_tree() -> Radix {

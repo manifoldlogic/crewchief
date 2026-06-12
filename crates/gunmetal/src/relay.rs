@@ -43,7 +43,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, watch};
 use tokio_tungstenite::tungstenite::handshake::derive_accept_key;
@@ -65,6 +65,20 @@ const MAX_HTTP_HEAD_LINES: usize = 100;
 
 /// Timeout for reading the HTTP request head.
 const HTTP_HEAD_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Per-peer outbound frame queue depth. A peer that stops reading fills
+/// its queue and further frames to it are dropped (best-effort gossip),
+/// bounding relay memory instead of buffering indefinitely.
+const OUTBOUND_QUEUE_FRAMES: usize = 256;
+
+/// WebSocket protocol config: reject messages above the wire cap at the
+/// protocol layer instead of buffering tungstenite's 64 MiB default.
+fn ws_config() -> tokio_tungstenite::tungstenite::protocol::WebSocketConfig {
+    let mut cfg = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default();
+    cfg.max_message_size = Some(wire::MAX_MESSAGE_BYTES);
+    cfg.max_frame_size = Some(wire::MAX_MESSAGE_BYTES);
+    cfg
+}
 
 /// Relay configuration. See the module docs for the option table.
 #[derive(Debug, Clone)]
@@ -365,18 +379,33 @@ impl RequestHead {
     }
 }
 
+/// Read one head line from a byte-budgeted reader. The budget (`take`)
+/// bounds allocation BEFORE the read: `read_line` on its own buffers an
+/// entire line of unbounded length, so a missing terminating newline here
+/// means either EOF or a head that blew the budget — both are rejected.
+async fn read_capped_line<R>(reader: &mut R, line: &mut String) -> Result<(), String>
+where
+    R: AsyncBufRead + Unpin,
+{
+    let n = reader.read_line(line).await.map_err(|e| e.to_string())?;
+    if n == 0 || !line.ends_with('\n') {
+        return Err("request head too large or truncated".to_string());
+    }
+    Ok(())
+}
+
 /// Read and parse the HTTP request head from a buffered stream, leaving
-/// the body/frames buffered for the WebSocket layer.
+/// the body/frames buffered for the WebSocket layer. All reads go through
+/// a `take()`-limited view so no single line can exceed the head budget.
 async fn read_head<S>(reader: &mut BufReader<S>) -> Result<RequestHead, String>
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
     let head = tokio::time::timeout(HTTP_HEAD_TIMEOUT, async {
+        let mut limited = (&mut *reader).take(MAX_HTTP_HEAD_BYTES as u64);
+
         let mut request_line = String::new();
-        reader
-            .read_line(&mut request_line)
-            .await
-            .map_err(|e| e.to_string())?;
+        read_capped_line(&mut limited, &mut request_line).await?;
 
         let mut parts = request_line.split_whitespace();
         let method = parts.next().unwrap_or_default().to_string();
@@ -386,14 +415,9 @@ where
         }
 
         let mut headers = HashMap::new();
-        let mut total = request_line.len();
         for _ in 0..MAX_HTTP_HEAD_LINES {
             let mut line = String::new();
-            reader.read_line(&mut line).await.map_err(|e| e.to_string())?;
-            total += line.len();
-            if total > MAX_HTTP_HEAD_BYTES {
-                return Err("request head too large".to_string());
-            }
+            read_capped_line(&mut limited, &mut line).await?;
             let trimmed = line.trim_end();
             if trimmed.is_empty() {
                 return Ok(RequestHead {
@@ -485,7 +509,7 @@ where
             return;
         }
 
-        let ws = WebSocketStream::from_raw_socket(reader, Role::Server, None).await;
+        let ws = WebSocketStream::from_raw_socket(reader, Role::Server, Some(ws_config())).await;
         serve_ws(ws, peer_addr, ctx).await;
         return;
     }
@@ -525,10 +549,11 @@ where
     let peer_id = format!("{}#{}", peer_addr, random_message_id(4));
 
     // Outbound: mesh pushes frames into the channel; this task drains it
-    // into the socket.
-    let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+    // into the socket. Bounded: a non-reading client drops frames once the
+    // queue fills instead of growing relay memory without limit.
+    let (tx, mut rx) = mpsc::channel::<String>(OUTBOUND_QUEUE_FRAMES);
     let sender: PeerSender = Arc::new(move |raw: &str| {
-        let _ = tx.send(raw.to_string());
+        let _ = tx.try_send(raw.to_string());
     });
     ctx.mesh.hi(&peer_id, None, Some(sender));
 
@@ -578,21 +603,33 @@ where
 async fn dial_upstream(ctx: RelayCtx, url: String) {
     let mut backoff = Duration::from_secs(1);
     loop {
-        if let Ok((ws, _)) = tokio_tungstenite::connect_async(&url).await {
+        if let Ok((ws, _)) =
+            tokio_tungstenite::connect_async_with_config(&url, Some(ws_config()), false).await
+        {
             backoff = Duration::from_secs(1);
             let peer_id = format!("up:{}", url);
             let (mut sink, mut source) = ws.split();
-            let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+            let (tx, mut rx) = mpsc::channel::<String>(OUTBOUND_QUEUE_FRAMES);
             let sender: PeerSender = Arc::new(move |raw: &str| {
-                let _ = tx.send(raw.to_string());
+                let _ = tx.try_send(raw.to_string());
             });
             ctx.mesh.hi(&peer_id, Some(url.clone()), Some(sender));
+
+            let mut heartbeat = tokio::time::interval_at(
+                tokio::time::Instant::now() + HEARTBEAT_INTERVAL,
+                HEARTBEAT_INTERVAL,
+            );
 
             loop {
                 tokio::select! {
                     outbound = rx.recv() => {
                         let Some(raw) = outbound else { break };
                         if sink.send(Message::Text(raw.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    _ = heartbeat.tick() => {
+                        if sink.send(Message::Text(HEARTBEAT_RAW.into())).await.is_err() {
                             break;
                         }
                     }
@@ -759,6 +796,35 @@ mod tests {
             .await
             .unwrap();
         assert!(String::from_utf8_lossy(&buf).starts_with("HTTP/1.1 404"));
+
+        handle.shutdown();
+    }
+
+    #[tokio::test]
+    async fn oversized_head_line_rejected_within_budget() {
+        // A request line with no terminating newline must be rejected
+        // once the head byte budget is consumed — read_line on its own
+        // would otherwise buffer the entire line into memory unbounded.
+        let handle = spawn_in_memory(test_config()).await.unwrap();
+
+        let mut stream = TcpStream::connect(handle.addr).await.unwrap();
+        let blob = vec![b'A'; MAX_HTTP_HEAD_BYTES * 4]; // no newline anywhere
+        stream.write_all(&blob).await.unwrap();
+        stream.flush().await.unwrap();
+
+        // The relay drops the connection without waiting out the 10s head
+        // timeout: EOF (or reset) arrives promptly.
+        let mut buf = Vec::new();
+        let read = tokio::time::timeout(
+            Duration::from_secs(5),
+            tokio::io::AsyncReadExt::read_to_end(&mut stream, &mut buf),
+        )
+        .await;
+        match read {
+            Ok(Ok(_)) => assert!(buf.is_empty(), "no response expected"),
+            Ok(Err(_)) => {} // connection reset is equally fine
+            Err(_) => panic!("relay kept buffering an unterminated head line"),
+        }
 
         handle.shutdown();
     }
