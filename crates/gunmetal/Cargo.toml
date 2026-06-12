@@ -1,0 +1,62 @@
+[package]
+name = "gunmetal"
+version = "0.1.0"
+edition = "2024"
+description = "A Rust/WASM implementation of the GUN decentralized graph database protocol"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+getrandom = { version = "0.2", features = ["js"], optional = true }
+
+# SEA crypto dependencies (pure Rust, WASM-compatible)
+p256 = { version = "0.13", features = ["ecdsa", "ecdh", "jwk"] }
+aes-gcm = "0.10"
+pbkdf2 = { version = "0.12", features = ["simple"] }
+sha2 = "0.10"
+hmac = "0.12"
+rand = "0.8"
+base64 = "0.22"
+indexmap = "2"
+
+[features]
+default = ["extended-api", "relay"]
+wasm = ["wasm-bindgen", "js-sys", "getrandom"]
+# Extended chain API: path(), open(), load(), not(), unset(), then(), later(), bye().
+# Mirrors GUN's gun/lib/* plugins. Disable with default-features = false for a lean core.
+extended-api = []
+# Relay server (native only): WebSocket relay wire-compatible with GUN.js.
+relay = []
+# TLS support for the relay via rustls.
+relay-tls = ["relay", "dep:tokio-rustls", "dep:rustls-pemfile"]
+
+[[bin]]
+name = "gunmetal-relay"
+path = "src/bin/gunmetal-relay.rs"
+required-features = ["relay"]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "time", "sync", "macros", "io-util", "signal"] }
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
+tokio-rustls = { version = "0.26", optional = true }
+rustls-pemfile = { version = "2", optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+getrandom = { version = "0.2", features = ["js"] }
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = [
+    "WebSocket", "MessageEvent", "CloseEvent", "ErrorEvent", "BinaryType",
+    "IdbDatabase", "IdbFactory", "IdbObjectStore", "IdbObjectStoreParameters",
+    "IdbRequest", "IdbTransaction", "IdbTransactionMode", "IdbOpenDbRequest",
+    "IdbCursorWithValue", "IdbCursorDirection", "IdbKeyRange",
+    "IdbVersionChangeEvent", "Window", "DomException", "Event",
+] }

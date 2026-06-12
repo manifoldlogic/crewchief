@@ -46,6 +46,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
+      gunmetal: ${{ steps.filter.outputs.gunmetal }}
       typescript: ${{ steps.filter.outputs.typescript }}
       cli: ${{ steps.filter.outputs.cli }}
       vscode: ${{ steps.filter.outputs.vscode }}
@@ -59,6 +60,10 @@ jobs:
           filters: |
             rust:
               - 'crates/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+            gunmetal:
+              - 'crates/gunmetal/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
             typescript:
@@ -161,6 +166,54 @@ jobs:
           echo "**Dependencies:** None - uses in-memory database" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Tests Rust \`maproom\` crate (SQLite is the only backend)." >> $GITHUB_STEP_SUMMARY
+
+  # Gunmetal crate tests (native + wasm32 check + GUN.js wire interop)
+  # Submodule checkout provides crates/gunmetal/sources/gun for the interop
+  # test; the test self-skips if gun.js or node are unavailable.
+  test-gunmetal:
+    name: Gunmetal Tests
+    needs: changes
+    if: ${{ needs.changes.outputs.gunmetal == 'true' || needs.changes.outputs.workflow == 'true' }}
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup Node (interop test needs global WebSocket, Node 22+)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+          key: gunmetal
+
+      - name: Run gunmetal tests
+        run: cargo test -p gunmetal
+
+      - name: Check wasm32 target
+        run: |
+          cargo check --target wasm32-unknown-unknown -p gunmetal
+          cargo check --target wasm32-unknown-unknown -p gunmetal --features wasm
+
+      - name: Job Summary
+        if: always()
+        run: |
+          echo "## 🔫 Gunmetal Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Native test suite + wasm32 checks + GUN.js wire interop." >> $GITHUB_STEP_SUMMARY
 
   # =============================================================================
   # PERFORMANCE REGRESSION TESTS - Validates performance budgets

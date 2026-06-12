@@ -1,5 +1,5 @@
 [workspace]
-members = [
+members = ["crates/gunmetal",
     "crates/maproom",
     "crates/maproom/examples/prototype-sqlite-vec",
 ]
