@@ -66,16 +66,24 @@
 			gun.putText(keysSoul, frameId, myPair.epub);
 			gun.onNode(keysSoul, (json: string, who: string) => {
 				if (who === frameId) return;
-				const epub = JSON.parse(json);
-				if (typeof epub === 'string') theirEpub = epub;
+				try {
+					const epub = JSON.parse(json);
+					if (typeof epub === 'string') theirEpub = epub;
+				} catch {
+					// malformed peer value — ignore
+				}
 			});
 			gun.onNode(msgsSoul, (json: string, msgKey: string) => {
-				const env = JSON.parse(json);
-				if (typeof env === 'string') {
-					const parsed = JSON.parse(env);
-					if (parsed && typeof parsed.ct === 'string') {
-						envelopes = { ...envelopes, [msgKey]: parsed };
+				try {
+					const env = JSON.parse(json);
+					if (typeof env === 'string') {
+						const parsed = JSON.parse(env);
+						if (parsed && typeof parsed.ct === 'string') {
+							envelopes = { ...envelopes, [msgKey]: parsed };
+						}
 					}
+				} catch {
+					// malformed peer value — ignore
 				}
 			});
 			gun.fetchSoul(keysSoul);

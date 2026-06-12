@@ -80,23 +80,35 @@
 
 			gun.putText(idsSoul, frameId, myPair.pub);
 			gun.onNode(idsSoul, (json: string, who: string) => {
-				const pub = JSON.parse(json);
-				if (typeof pub !== 'string') return;
-				if (who === 'a') ownerPub = pub;
-				if (who === 'b') guestPub = pub;
+				try {
+					const pub = JSON.parse(json);
+					if (typeof pub !== 'string') return;
+					if (who === 'a') ownerPub = pub;
+					if (who === 'b') guestPub = pub;
+				} catch {
+					// malformed peer value — ignore
+				}
 			});
 			gun.onNode(certSoul, (json: string, key: string) => {
 				if (key !== 'guest') return;
-				const value = JSON.parse(json);
-				if (typeof value === 'string') certJson = value;
+				try {
+					const value = JSON.parse(json);
+					if (typeof value === 'string') certJson = value;
+				} catch {
+					// malformed peer value — ignore
+				}
 			});
 			gun.onNode(entriesSoul, (json: string, entryKey: string) => {
-				const value = JSON.parse(json);
-				if (typeof value === 'string') {
-					const env = JSON.parse(value);
-					if (env && typeof env.sig === 'string') {
-						entries = { ...entries, [entryKey]: env };
+				try {
+					const value = JSON.parse(json);
+					if (typeof value === 'string') {
+						const env = JSON.parse(value);
+						if (env && typeof env.sig === 'string') {
+							entries = { ...entries, [entryKey]: env };
+						}
 					}
+				} catch {
+					// malformed peer value — ignore
 				}
 			});
 			gun.fetchSoul(idsSoul);

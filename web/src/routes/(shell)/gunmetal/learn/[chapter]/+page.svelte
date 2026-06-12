@@ -62,6 +62,10 @@
 
 <!-- Required per-chapter footer (spec §3.3): prev/next + triangle links -->
 <footer data-testid="chapter-footer">
+	<p class="text-sm" data-testid="chapter-recap">
+		<span class="font-semibold">What you can now do:</span>
+		<span class="text-muted-foreground">{data.chapter.recap}</span>
+	</p>
 	{#if data.chapter.refs.length > 0}
 		<p class="text-sm text-muted-foreground">
 			Reference for this chapter:

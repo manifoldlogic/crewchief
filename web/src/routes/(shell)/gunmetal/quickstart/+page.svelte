@@ -41,9 +41,18 @@ assert_eq!(
 			<pre><code>{`cargo build --target wasm32-unknown-unknown -p gunmetal --features wasm --release
 wasm-bindgen --target web --out-dir pkg \\
   target/wasm32-unknown-unknown/release/gunmetal.wasm`}</code></pre>
+			<p>Then use it:</p>
+			<pre><code>{`import init, { WasmGun } from './pkg/gunmetal.js';
+
+await init();
+const gun = WasmGun.withOptions(JSON.stringify({ localStorage: false }));
+gun.connect('ws://localhost:8765/gun');
+gun.on('people/ada', 'name', (json) => console.log(JSON.parse(json)));
+gun.putText('people/ada', 'name', 'Ada');`}</code></pre>
 			<p>
-				<em>The full browser walkthrough (init, connect to a relay, subscribe) lands with the
-				demo catalog — every demo's annotated source doubles as the example.</em>
+				Every demo page's annotated source shows the same calls in context — the
+				<a href="/gunmetal/demos/shared-input">shared input</a> is the smallest complete
+				example.
 			</p>
 		</div>
 	</Tabs.Content>

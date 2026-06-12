@@ -826,6 +826,43 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_emits_never_drop_events() {
+        // Cross-thread contention must BLOCK, not skip: a try-lock here
+        // silently lost ~half the events for a slow listener (the relay
+        // persists through exactly such a listener — silent data loss).
+        let g = gun();
+        let seen = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let seen_inner = seen.clone();
+        // Soul-level subscription: fires once per written key.
+        g.get("ct").on(move |_, _| {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+            seen_inner.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        });
+
+        let threads: Vec<_> = (0..2)
+            .map(|t| {
+                let g = g.clone();
+                std::thread::spawn(move || {
+                    for i in 0..50 {
+                        // Distinct keys: every write is a fresh key, so
+                        // HAM accepts all 100 and all 100 must emit.
+                        g.get("ct").put_kv(
+                            format!("k-{}-{}", t, i),
+                            GunValue::Number(i as f64),
+                        );
+                    }
+                })
+            })
+            .collect();
+        for t in threads {
+            t.join().unwrap();
+        }
+
+        let total = seen.load(std::sync::atomic::Ordering::SeqCst);
+        assert_eq!(total, 100, "listener missed events under contention");
+    }
+
+    #[test]
     fn reentrant_self_write_does_not_recurse_forever() {
         // A listener writing to ITS OWN tag is skipped on the re-entrant
         // fire (try-lock) instead of recursing.

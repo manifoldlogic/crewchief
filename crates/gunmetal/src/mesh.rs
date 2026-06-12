@@ -623,6 +623,11 @@ impl Mesh {
                                     // processed yet — keeping the older
                                     // link would strand the live client on
                                     // a connection we're about to drop.
+                                    // Caveat: with a CONFIGURED static pid
+                                    // (GunOptions.pid), anyone who knows it
+                                    // can evict the holder's connection;
+                                    // the default random pid is not
+                                    // practically guessable.
                                     existing.id.clone()
                                 } else {
                                     let keep_our_outbound =

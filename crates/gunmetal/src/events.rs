@@ -82,17 +82,33 @@ type Listener = Box<dyn FnMut(&Event)>;
 /// A listener wrapped for shared invocation outside the bus lock.
 /// Snapshot-and-release emission clones these handles, drops the bus
 /// lock, then invokes — so listeners may freely subscribe, unsubscribe,
-/// or write back into the graph. Re-entrant fires of a listener that is
-/// already running are skipped (try-lock), preventing self-recursion.
+/// or write back into the graph. ONLY re-entrant fires (the same thread
+/// re-emitting from inside the listener) are skipped; emits from OTHER
+/// threads block until the listener is free — a try-lock there would
+/// silently drop events under concurrency (the relay persists through a
+/// listener; dropped events would be silent data loss).
+///
+/// Removal via `off()` does not cancel in-flight snapshot deliveries and
+/// does not wait for a running listener to finish; the closure and its
+/// captures stay alive until the last snapshot drops.
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) type SharedListener = std::sync::Arc<std::sync::Mutex<Listener>>;
+pub(crate) struct SharedListenerInner {
+    cb: std::sync::Mutex<Listener>,
+    /// Thread currently executing this listener (re-entrancy guard).
+    running_on: std::sync::Mutex<Option<std::thread::ThreadId>>,
+}
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) type SharedListener = std::sync::Arc<SharedListenerInner>;
 #[cfg(target_arch = "wasm32")]
 pub(crate) type SharedListener = std::rc::Rc<std::cell::RefCell<Listener>>;
 
 fn share(cb: Listener) -> SharedListener {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        std::sync::Arc::new(std::sync::Mutex::new(cb))
+        std::sync::Arc::new(SharedListenerInner {
+            cb: std::sync::Mutex::new(cb),
+            running_on: std::sync::Mutex::new(None),
+        })
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -100,13 +116,36 @@ fn share(cb: Listener) -> SharedListener {
     }
 }
 
-/// Invoke a shared listener, skipping re-entrant fires.
+/// Invoke a shared listener. Skips ONLY self-recursive fires; concurrent
+/// fires from other threads wait their turn (never dropped).
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn invoke(listener: &SharedListener, event: &Event) {
-    #[cfg(not(target_arch = "wasm32"))]
-    if let Ok(mut cb) = listener.try_lock() {
-        cb(event);
+    fn relock<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+        m.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
-    #[cfg(target_arch = "wasm32")]
+
+    let me = std::thread::current().id();
+    if *relock(&listener.running_on) == Some(me) {
+        return; // self-recursion: this thread is already inside this listener
+    }
+    let mut cb = relock(&listener.cb); // blocks behind OTHER threads
+    *relock(&listener.running_on) = Some(me);
+    // Reset the owner marker even if the listener panics — a stale
+    // marker would silently skip this listener forever on this thread.
+    struct ResetOwner<'a>(&'a std::sync::Mutex<Option<std::thread::ThreadId>>);
+    impl Drop for ResetOwner<'_> {
+        fn drop(&mut self) {
+            *self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+        }
+    }
+    let _reset = ResetOwner(&listener.running_on);
+    cb(event);
+}
+
+/// Invoke a shared listener (wasm: single-threaded, so a failed borrow
+/// can only mean self-recursion — skip it).
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn invoke(listener: &SharedListener, event: &Event) {
     if let Ok(mut cb) = listener.try_borrow_mut() {
         cb(event);
     }
@@ -229,6 +268,11 @@ impl EventBus {
     /// Remove a listener by its ID.
     ///
     /// Returns `true` if the listener was found and removed.
+    ///
+    /// Removal does NOT cancel in-flight snapshot deliveries and does
+    /// not wait for a currently-running listener to finish (native);
+    /// the closure and its captures stay alive until the last
+    /// emission snapshot holding it drops.
     pub fn off(&mut self, tag: &str, id: ListenerId) -> bool {
         if let Some(emitter) = self.tags.get_mut(tag) {
             let removed = emitter.remove(id);

@@ -21,6 +21,8 @@
 	let status = $state<'booting' | 'ready' | 'degraded'>('booting');
 	let hint = $state('');
 	let frameId = $state('');
+	// History window over the time-sortable keys — slicing the sorted
+	// key range IS the LEX range idiom (key range == time range).
 	let limit = $state(50);
 
 	let gun: WasmGunInstance | undefined;
@@ -46,9 +48,13 @@
 		try {
 			gun = await bootGunmetal(params);
 			gun.onNode(soul, (json: string, msgKey: string) => {
-				const incoming = JSON.parse(json);
-				if (typeof incoming === 'string') {
-					raw = { ...raw, [msgKey]: incoming };
+				try {
+					const incoming = JSON.parse(json);
+					if (typeof incoming === 'string') {
+						raw = { ...raw, [msgKey]: incoming };
+					}
+				} catch {
+					// peer-written values may be malformed — drop, don't die
 				}
 			});
 			gun.fetchSoul(soul);
@@ -79,7 +85,25 @@
 			<pre class="mt-2 whitespace-pre-wrap text-xs text-muted-foreground">{hint}</pre>
 		</div>
 	{:else}
-		<p class="text-xs uppercase tracking-wide text-muted-foreground">Session {frameId}</p>
+		<div class="flex items-center justify-between">
+			<p class="text-xs uppercase tracking-wide text-muted-foreground">Session {frameId}</p>
+			<div class="flex gap-1 text-xs">
+				<button
+					class="rounded border px-2 py-0.5 {limit === 2 ? 'bg-secondary font-medium' : 'text-muted-foreground'}"
+					onclick={() => (limit = 2)}
+					data-testid="chat-history-2"
+				>
+					last 2
+				</button>
+				<button
+					class="rounded border px-2 py-0.5 {limit === 50 ? 'bg-secondary font-medium' : 'text-muted-foreground'}"
+					onclick={() => (limit = 50)}
+					data-testid="chat-history-all"
+				>
+					all
+				</button>
+			</div>
+		</div>
 		<ul class="my-2 flex-1 space-y-1 overflow-y-auto" data-testid="chat-messages">
 			{#each messages as msg (msg.key)}
 				<li class="text-sm">

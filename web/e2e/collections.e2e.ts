@@ -42,6 +42,17 @@ test.describe('chat-room demo', () => {
 			const text = await f.getByTestId('chat-messages').innerText();
 			expect(text.indexOf('first message')).toBeLessThan(text.indexOf('the reply'));
 		}
+
+		// History window (the LEX key-range idiom): a third message, then
+		// "last 2" must drop the oldest.
+		await a.getByTestId('chat-input').fill('third message');
+		await a.getByTestId('chat-send').click();
+		await expect(a.getByTestId('chat-messages')).toContainText('third message');
+		await a.getByTestId('chat-history-2').click();
+		await expect(a.getByTestId('chat-messages')).not.toContainText('first message');
+		await expect(a.getByTestId('chat-messages')).toContainText('third message');
+		await a.getByTestId('chat-history-all').click();
+		await expect(a.getByTestId('chat-messages')).toContainText('first message');
 	});
 });
 

@@ -10,13 +10,19 @@ test.describe('login demo', () => {
 		test.slow();
 		const room = await gotoDemo(page, 'login');
 		const a = frame(page, 'a');
+		const b = frame(page, 'b');
 		await awaitReady(a);
+		await awaitReady(b);
 
 		await a.getByTestId('login-password').fill('correct horse battery');
 		await a.getByTestId('login-signup').click();
 		await expect(a.getByTestId('login-status')).toContainText('Signed in as', {
 			timeout: 15_000
 		});
+
+		// Isolation: session B shares the relay and the room but NOT the
+		// identity — it must remain signed out.
+		await expect(b.getByTestId('login-status')).toContainText('Signed out');
 
 		await a.getByTestId('login-logout').click();
 		await expect(a.getByTestId('login-status')).toContainText('Signed out');
