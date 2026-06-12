@@ -3,6 +3,7 @@
 	import DemoStage from '$lib/demos/DemoStage.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
+	import * as Tabs from '$lib/components/ui/tabs';
 
 	const interop = demoBySlug.get('gunjs-interop');
 </script>
@@ -103,11 +104,31 @@
 	</ul>
 </section>
 
-<!-- §3.4 block 6: quick start teaser -->
+<!-- §3.4 block 6: quick start teaser (the 5-line versions) -->
 <section class="mt-10 mb-4" data-testid="quickstart-teaser">
 	<h2 class="text-2xl font-semibold tracking-tight">Quick start</h2>
+	<Tabs.Root value="rust" class="mt-3">
+		<Tabs.List>
+			<Tabs.Trigger value="rust">Rust</Tabs.Trigger>
+			<Tabs.Trigger value="browser">Browser</Tabs.Trigger>
+		</Tabs.List>
+		<Tabs.Content value="rust">
+			<pre class="overflow-x-auto rounded-lg border bg-muted/40 p-3 text-xs"><code>{`let gun = Gun::new(GunOptions::default());
+gun.get("mark").put_kv("name", GunValue::Text("Mark".into()));
+assert_eq!(gun.get("mark").get("name").val(),
+           Some(GunValue::Text("Mark".into())));
+// relay: cargo run -p gunmetal --features relay --bin gunmetal-relay`}</code></pre>
+		</Tabs.Content>
+		<Tabs.Content value="browser">
+			<pre class="overflow-x-auto rounded-lg border bg-muted/40 p-3 text-xs"><code>{`await init();
+const gun = WasmGun.withOptions(JSON.stringify({ localStorage: false }));
+gun.connect('ws://localhost:8765/gun');
+gun.on('mark', 'name', (json) => render(JSON.parse(json)));
+gun.putText('mark', 'name', 'Mark');`}</code></pre>
+		</Tabs.Content>
+	</Tabs.Root>
 	<p class="mt-2 text-sm text-muted-foreground">
-		Use gunmetal as a Rust crate or from the browser via wasm — both paths are covered in the
+		Full setup (builds, pins, the relay) in the
 		<a class="underline" href="/gunmetal/quickstart">quickstart</a>.
 	</p>
 </section>

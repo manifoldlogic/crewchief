@@ -507,11 +507,28 @@ SeaError::KeyError(format!("Invalid private key: {}", e))
 | tungstenite default 64 MiB message buffer despite 10 MB wire cap | MEDIUM | **FIXED** | `ws_config()` sets `max_message_size`/`max_frame_size` to `wire::MAX_MESSAGE_BYTES` on both server upgrades and upstream dials |
 | Bye-write registry bounded by count but not bytes (100 × ~10 MB ≈ 1 GB per peer) | MEDIUM | **FIXED** | `MAX_BYE_BYTES_PER_PEER` (1 MB) cumulative budget; test `bye_writes_capped_by_bytes_per_peer` |
 | Upstream relay links sent no heartbeats (spec §2.6 MUST; idle `up` links depended on remote traffic) | MEDIUM | **FIXED** | `dial_upstream` select loop gained the same 20 s heartbeat arm as `serve_ws` |
-| Untested MUSTs: timed gap flush (§2.3), multi-hop ACK via-trace (§2.5), dup-connection same-direction + their-pid-higher branches (§5.4) | TEST | **FIXED** | Tests `timed_gap_window_flushes_without_explicit_flush`, `multi_hop_ack_routed_to_requester_via_dup_trace`, `duplicate_same_direction_connection_keeps_older_link`, `duplicate_connection_their_pid_higher_drops_our_outbound` |
+| Untested MUSTs: timed gap flush (§2.3), multi-hop ACK via-trace (§2.5), dup-connection same-direction + their-pid-higher branches (§5.4) | TEST | **FIXED** | Tests `timed_gap_window_flushes_without_explicit_flush`, `multi_hop_ack_routed_to_requester_via_dup_trace`, `duplicate_same_direction_connection_keeps_newer_link`, `duplicate_connection_their_pid_higher_drops_our_outbound` |
 
 ## Accepted / documented (merge-gate)
 
 - **`@`+`##` dedup deviates from the parity-spec letter** (recomputes the hash locally instead of trusting `##`): intentional anti-poisoning hardening, recorded as a spec-deviation note in `gunmetal-parity.md` §2.2.
 - **Same-direction duplicate links resolve by local arrival order**, which can differ between the two ends under racing handshakes (each end may drop a different link, costing one reconnect). Matches GUN's practical behavior; revisit if relay-to-relay meshes grow.
 - **Mesh⇄Gun reference cycle + heartbeat task have no teardown path** (`Mesh::new` registers a listener whose id is discarded; `start_heartbeat` loops forever). Irrelevant for the one-relay-per-process and one-instance-per-page (wasm) lifecycles shipped today; add `Mesh::close()` when embedders need teardown.
-- **EventBus holds its lock while listeners run** — listeners must not subscribe or write back into the bus (documented constraint). The mesh put-listener path was traced safe; `hi`/`bye` emissions follow the same rule.
+- **EventBus holds its lock while listeners run** — superseded (see the web-catalog review addendum): emission is now snapshot-and-release; listeners may freely subscribe, unsubscribe, and write back.
+
+---
+
+# Web-Catalog Review Addendum
+
+**Date:** 2026-06-12
+**Scope:** Crate changes on the `gunmetal-web-catalog` branch (wasm networking/persistence/taps, EventBus snapshot-and-release, mesh duplicate-connection change), reviewed by a 3-agent final adversarial pass before merge.
+
+| Finding | Severity | Status | Fix Applied |
+|---------|----------|--------|-------------|
+| Snapshot-and-release `try_lock` silently dropped events under CROSS-THREAD contention (relay persists via a listener -> silent data loss; empirically ~50% loss with 2 threads + slow listener) | CRITICAL | **FIXED** | Re-entrancy-only skip via owner `ThreadId`; other threads take a blocking lock. Panic-safe owner reset. Regression test `concurrent_emits_never_drop_events` |
+| wasm `enablePersistence` built IndexedDB row keys by raw ESC concatenation, bypassing the M6 `storage_key()` validation (remote soul/key containing ESC -> cross-soul write spoofing after hydration) | HIGH | **FIXED** | Persist and hydrate paths share the native `storage_key`/`parse_storage_key` validation with an exact round-trip check |
+| `fire_wire_tap`/`fire_status` held the handler RefCell borrow across the user JS callback (callback re-registering itself -> BorrowMutError abort) | MEDIUM | **FIXED** | Functions are cloned out of the borrow before invocation |
+| `enablePersistence` double-call registered duplicate listeners + IDB handles | LOW | **FIXED** | Idempotent guard (retry allowed after a failed open) |
+| `off()` no longer barriers against in-flight listener execution; snapshots hold strong refs | DOC | **DOCUMENTED** | Caveats added to `off()` and the `SharedListener` docs |
+| Same-direction duplicate resolution (newer wins) + a CONFIGURED static pid = connection-eviction primitive for anyone knowing the pid | DOC | **DOCUMENTED** | Caveat in the resolution comment; default random pid unaffected |
+| Writes/`registerBye` between `connect()` and socket open target zero peers (not queued) | DOC | **DOCUMENTED** | Caveat on `connect()`: wait for `onStatus("open")`/`peerPid` |

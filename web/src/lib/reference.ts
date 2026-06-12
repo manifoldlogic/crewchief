@@ -368,5 +368,58 @@ export const referenceItems: Record<string, RefItem[]> = {
 			returns: 'Message dedup with via-tracing: ACKs route back along the path the request came from',
 			caveats: ['Entries expire after the TTL (9 s, GUN-compatible) — ACKs arriving later fall back to broadcast.', 'Bounded: oldest entries evict O(1) past the size cap.']
 		}
+	],
+	types: [
+		{ name: 'GunValue', signature: 'pub enum GunValue { Null, Bool(bool), Number(f64), Text(String), Link(Soul) }', returns: 'The five wire-representable value kinds; Link carries a target soul' },
+		{ name: 'Node', signature: 'pub struct Node { soul, values, states }; Node::new(soul) / put(key, value, state) / get(key) / state_of(key) / iter()', returns: 'A flat record with a HAM state per key' },
+		{ name: 'Soul', signature: 'pub type Soul = String', returns: 'The globally-unique node id' }
+	],
+
+	graph: [
+		{ name: 'Graph', signature: 'pub fn put_node(&mut self, soul, data) -> Vec<(String, PutResult)> / get(&self, soul, key) / get_node(&self, soul)', returns: 'The in-memory store; put runs HAM per key and reports Accepted/Rejected' },
+		{ name: 'Graph::pin / unpin', signature: 'pub fn pin(&mut self, soul) / unpin(&mut self, soul)', returns: 'Exempt a soul from LRU eviction (subscriptions auto-pin)', caveats: ['Eviction only drops UNPINNED nodes; a long-lived subscription set bounds what can be evicted.'] }
+	],
+
+	crdt: [
+		{ name: 'ham', signature: 'pub fn ham(machine_state, incoming_state, current_state, incoming_value, current_value) -> HamResult', returns: 'The conflict verdict: take incoming, keep current, defer (future state), or tie-break lexically on value', caveats: ['Future states beyond the drift cap are deferred, defanging lying clocks.', 'Equal state + equal value = no-op (no event fires).'] }
+	],
+
+	state: [
+		{ name: 'now_ms', signature: 'pub fn now_ms() -> f64', returns: 'Wall-clock milliseconds — the state source for writes (cross-platform)' },
+		{ name: 'State', signature: 'pub struct State — per-key HAM timestamps on a node', returns: 'The `>` map in wire frames' }
+	],
+
+	sync: [
+		{ name: 'SyncPair / MemorySync', signature: 'two-instance in-memory sync harness', returns: 'Test-oriented direct sync without sockets; superseded by Mesh for real transports', caveats: ['Kept for simple two-peer testing (spec §2.8); Mesh implements AsyncSyncAdapter as the drop-in replacement.'] }
+	],
+
+	transport: [
+		{ name: 'WsNativeTransport', signature: 'tokio-tungstenite client/server WebSocket transport (native)', returns: 'Sinks/streams with a 10 MB message cap and bounded channels' },
+		{ name: 'WsWasmTransport', signature: 'web_sys::WebSocket transport (browser): connect(url) / send / close / set_on_message / set_on_open / set_on_close / set_on_error', wasmName: 'driven internally by WasmGun.connect()', caveats: ['Handlers are detached before closures drop on close/replace — the browser fires close asynchronously.'] },
+		{ name: 'reconnect', signature: 'exponential backoff with jitter', returns: 'Shared by native and wasm reconnection logic' }
+	],
+
+	events: [
+		{ name: 'EventBus', signature: 'pub fn on(tag, cb) -> ListenerId / once(tag, cb) / off(tag, id) / emit(tag, event)', returns: 'The pub-sub backbone (tags: put, get, hi, bye, soul#key)' },
+		{ name: 'emit_unlocked', signature: 'pub fn emit_unlocked(bus, tag, event)', returns: 'Snapshot-and-release emission: listeners run with NO bus lock held, so they may subscribe/unsubscribe/write freely', caveats: ['Self-recursive fires are skipped; cross-thread fires block (never dropped).', 'off() does not cancel in-flight snapshot deliveries.'] }
+	],
+
+	uuid: [
+		{ name: 'generate_uuid', signature: 'pub fn generate_uuid() -> String', wasmName: 'generateUUID()', returns: 'Time-sortable unique id (timestamp prefix + randomness) — set keys sort in insertion order' },
+		{ name: 'random_message_id', signature: 'pub fn random_message_id(len: usize) -> String', returns: 'Wire message ids (`#`)' }
+	],
+
+	concurrency: [
+		{ name: 'SharedMut / lock_mut', signature: 'type SharedMut<T> = Arc<Mutex<T>> (native) | Rc<RefCell<T>> (wasm)', returns: 'The platform-gated shared-state primitive everything builds on' },
+		{ name: 'MaybeSend', signature: 'trait MaybeSend (Send supertrait on native; blanket no-op on wasm)', returns: 'Bound for callbacks that must be Send on native but JsValue-capturing on wasm' }
+	],
+
+	runtime: [
+		{ name: 'spawn / sleep_async', signature: 'pub fn spawn(fut) / pub async fn sleep_async(d: Duration)', returns: 'tokio on native, wasm_bindgen_futures + setTimeout on wasm' }
+	],
+
+	wasm: [
+		{ name: 'init / module boot', signature: "import init, { WasmGun, WasmSEA, WasmUser, WasmCert } from './gunmetal.js'; await init()", wasmName: 'the module itself', returns: 'wasm-bindgen web-target bundle; built by web/scripts/build-wasm.sh (CLI version locked to Cargo.lock)' },
+		{ name: 'WasmGun', signature: 'the JS facade over Gun + Mesh + transport + persistence', wasmName: 'WasmGun', returns: 'Every per-item JS name is listed on its owning module page (instance, mesh, extended, sea, user, cert, storage)', caveats: ['Promise-returning read is exported as once, not then — a then method would make the object a thenable and corrupt await.'] }
 	]
 };

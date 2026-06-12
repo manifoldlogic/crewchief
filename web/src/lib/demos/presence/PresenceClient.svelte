@@ -28,6 +28,7 @@
 	let gun: WasmGunInstance | undefined;
 	let roomSoul = '';
 	let lastSeenSoul = '';
+	let cleanup: (() => void) | undefined;
 
 	const roster = $derived(
 		Object.entries(members)
@@ -38,6 +39,8 @@
 			}))
 			.sort((a, b) => a.id.localeCompare(b.id))
 	);
+
+	onMount(() => () => cleanup?.());
 
 	onMount(async () => {
 		installReadyPromise();
@@ -52,15 +55,23 @@
 			// Node subscriptions fire per key: (value, key) — here key is
 			// the session id.
 			gun.onNode(roomSoul, (json: string, id: string) => {
-				const at = JSON.parse(json);
-				if (typeof at === 'number') {
-					members = { ...members, [id]: at };
-					now = Date.now();
+				try {
+					const at = JSON.parse(json);
+					if (typeof at === 'number') {
+						members = { ...members, [id]: at };
+						now = Date.now();
+					}
+				} catch {
+					// malformed peer value — ignore
 				}
 			});
 			gun.onNode(lastSeenSoul, (json: string, id: string) => {
-				if (JSON.parse(json) === true) {
-					departed = { ...departed, [id]: true };
+				try {
+					if (JSON.parse(json) === true) {
+						departed = { ...departed, [id]: true };
+					}
+				} catch {
+					// malformed peer value — ignore
 				}
 			});
 			gun.fetchSoul(roomSoul);
@@ -74,7 +85,8 @@
 				now = Date.now();
 			};
 			beat();
-			setInterval(beat, HEARTBEAT_MS);
+			const beatTimer = setInterval(beat, HEARTBEAT_MS);
+			cleanup = () => clearInterval(beatTimer);
 
 			status = 'ready';
 			markReady();

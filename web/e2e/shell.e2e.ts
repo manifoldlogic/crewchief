@@ -78,7 +78,7 @@ test.describe('shell', () => {
 		}
 	});
 
-	test('every implemented demo has page content (why/snippets/gotchas)', async ({ request }) => {
+	test('every implemented demo has page content (why/snippets/gotchas)', async () => {
 		// The content map must cover every demo in the manifest — a demo
 		// without its why/snippets/gotchas sections fails §4 acceptance.
 		const { demos } = await import('../src/lib/catalog');
@@ -88,7 +88,6 @@ test.describe('shell', () => {
 			expect(demoContent[demo.slug].snippets.length, `snippets for ${demo.slug}`).toBeGreaterThan(0);
 			expect(demoContent[demo.slug].gotchas.length, `gotchas for ${demo.slug}`).toBeGreaterThan(0);
 		}
-		void request;
 	});
 
 	test('build provenance footer is present', async ({ page }) => {

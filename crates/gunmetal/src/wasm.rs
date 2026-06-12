@@ -64,6 +64,9 @@ pub struct WasmGun {
     status: std::rc::Rc<std::cell::RefCell<Option<js_sys::Function>>>,
     /// `(direction, peer, raw)` wire tap — see [`Self::on_wire`].
     wire_tap: std::rc::Rc<std::cell::RefCell<Option<js_sys::Function>>>,
+    /// Guard against double persistence registration (listener leak +
+    /// duplicate IDB writes).
+    persistence_on: std::rc::Rc<std::cell::Cell<bool>>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -80,6 +83,7 @@ impl WasmGun {
             net: std::rc::Rc::new(std::cell::RefCell::new(None)),
             status: std::rc::Rc::new(std::cell::RefCell::new(None)),
             wire_tap: std::rc::Rc::new(std::cell::RefCell::new(None)),
+            persistence_on: std::rc::Rc::new(std::cell::Cell::new(false)),
         }
     }
 
@@ -221,6 +225,14 @@ impl WasmGun {
         use crate::storage::StoredValue;
 
         const ROW_PREFIX: &str = "n!";
+
+        // Idempotent: a second call must not register a second put
+        // listener (duplicate IDB writes for the instance's lifetime).
+        let guard = self.persistence_on.clone();
+        if guard.replace(true) {
+            return js_sys::Promise::resolve(&JsValue::TRUE);
+        }
+
         let gun = self.inner.clone();
         let config = crate::storage::indexeddb::IndexedDbConfig {
             db_name: db_name.to_string(),
@@ -229,7 +241,10 @@ impl WasmGun {
 
         wasm_bindgen_futures::future_to_promise(async move {
             let mut idb = IndexedDbStorage::new(config);
-            idb.open().await.map_err(|e| JsValue::from_str(&e))?;
+            if let Err(e) = idb.open().await {
+                guard.set(false); // allow a retry after a failed open
+                return Err(JsValue::from_str(&e));
+            }
 
             // Hydrate: rebuild nodes with their ORIGINAL states and
             // replay them through receive() — the same code path a
@@ -245,9 +260,15 @@ impl WasmGun {
                 let Some(rest) = row_key.strip_prefix(ROW_PREFIX) else {
                     continue;
                 };
-                let Some((soul, key)) = rest.split_once('\u{1B}') else {
+                // M6: same validation as the native storage path — a key
+                // with more than one ESC is ambiguous (injection); the
+                // round-trip through parse must be exact.
+                let Some((soul, key)) = crate::storage::parse_storage_key(rest) else {
                     continue;
                 };
+                if crate::storage::storage_key(soul, key).as_deref() != Some(rest) {
+                    continue;
+                }
                 nodes
                     .entry(soul.to_string())
                     .or_insert_with(|| crate::types::Node::new(soul))
@@ -265,7 +286,14 @@ impl WasmGun {
                 let (Some(value), Some(key)) = (&event.value, &event.key) else {
                     return;
                 };
-                let row_key = format!("{}{}\u{1B}{}", ROW_PREFIX, event.soul, key);
+                // M6: souls/keys are attacker-controlled wire strings — an
+                // embedded ESC would make the row ambiguous and let a
+                // remote peer spoof writes onto a different soul after the
+                // next hydration. storage_key() rejects those.
+                let Some(suffix) = crate::storage::storage_key(&event.soul, key) else {
+                    return;
+                };
+                let row_key = format!("{}{}", ROW_PREFIX, suffix);
                 let stored = StoredValue {
                     value: value.clone(),
                     state: event.state,
@@ -392,6 +420,11 @@ impl Default for WasmGun {
 // WasmGun networking — DAM mesh over browser WebSockets
 // ═══════════════════════════════════════════════════════════════════════
 
+// NOTE: both helpers CLONE the Function out of the RefCell before
+// invoking — a callback that re-registers itself (onWire/onStatus from
+// inside the callback) would otherwise hit an outstanding borrow and
+// abort the wasm instance with a BorrowMutError.
+
 #[cfg(target_arch = "wasm32")]
 fn fire_wire_tap(
     slot: &std::rc::Rc<std::cell::RefCell<Option<js_sys::Function>>>,
@@ -399,7 +432,8 @@ fn fire_wire_tap(
     peer: &str,
     raw: &str,
 ) {
-    if let Some(cb) = slot.borrow().as_ref() {
+    let cb = slot.borrow().clone();
+    if let Some(cb) = cb {
         let _ = cb.call3(
             &JsValue::NULL,
             &JsValue::from_str(direction),
@@ -415,7 +449,8 @@ fn fire_status(
     event: &str,
     url: &str,
 ) {
-    if let Some(cb) = slot.borrow().as_ref() {
+    let cb = slot.borrow().clone();
+    if let Some(cb) = cb {
         let _ = cb.call2(
             &JsValue::NULL,
             &JsValue::from_str(event),
@@ -489,6 +524,10 @@ impl WasmGun {
     /// Dial a relay (`ws://host:8765/gun`). Idempotent per URL. The DAM
     /// handshake runs automatically on open; `peerPid(url)` turning
     /// non-null is the "handshake acked" signal.
+    ///
+    /// Writes and `registerBye` issued BEFORE the socket opens target
+    /// zero peers and are not queued — wait for `onStatus("open")` (or
+    /// poll `peerPid`) before relying on them reaching the relay.
     #[wasm_bindgen(js_name = "connect")]
     pub fn connect(&self, url: &str) -> Result<(), JsValue> {
         let (_mesh, transport) = self.ensure_net();
@@ -923,7 +962,6 @@ impl WasmUser {
         }
     }
 
-    /// Check if authenticated. Returns JSON `{ pub, epub, alias }` or null.
     /// The authenticated key pair as `{pub, priv, epub, epriv}` JSON
     /// (the `authPair` input shape), or null when not authenticated.
     /// This is how sessions restore without re-entering the password —
@@ -944,6 +982,7 @@ impl WasmUser {
         }
     }
 
+    /// Check if authenticated. Returns JSON `{ pub, epub, alias }` or null.
     #[wasm_bindgen(js_name = "isAuthenticated")]
     pub fn is_authenticated(&self) -> JsValue {
         match self.inner.is_authenticated() {

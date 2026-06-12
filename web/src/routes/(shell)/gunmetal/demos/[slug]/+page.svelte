@@ -7,10 +7,18 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Separator } from '$lib/components/ui/separator';
 
+	import { onMount } from 'svelte';
+	import { demoSources, isApiLine, type DemoSourceFile } from '$lib/demos/source';
+
 	let { data } = $props();
 
 	const isLive = $derived(implementedDemos.includes(data.demo.slug));
 	const content = $derived(demoContent[data.demo.slug]);
+
+	let sources = $state<DemoSourceFile[]>([]);
+	onMount(async () => {
+		sources = await demoSources(data.demo.slug);
+	});
 </script>
 
 <svelte:head><title>{data.demo.title} — Gunmetal demos</title></svelte:head>
@@ -79,6 +87,27 @@
 	</section>
 {/if}
 
+{#if sources.length > 0}
+	<!-- (d) full annotated client source: API lines highlighted, harness dimmed -->
+	<section class="mt-8" data-testid="demo-source">
+		<h2 class="text-lg font-semibold">Annotated client source</h2>
+		<p class="mt-1 text-xs text-muted-foreground">
+			<span class="rounded bg-primary/10 px-1 text-primary">highlighted</span> lines touch the
+			gunmetal API — that's what your app needs. Dimmed lines are this demo's harness (param
+			parsing, postMessage, readiness markers, markup) — yours won't need them.
+		</p>
+		<div class="mt-3 space-y-4">
+			{#each sources as file (file.name)}
+				<details class="rounded-lg border">
+					<summary class="cursor-pointer px-3 py-2 font-mono text-xs font-medium">{file.name}</summary>
+					<pre class="overflow-x-auto border-t bg-muted/30 p-3 text-[11px] leading-snug"><code>{#each file.code.split('\n') as line, i (i)}<span
+						class={isApiLine(line) ? 'block bg-primary/10 text-foreground' : 'block text-muted-foreground'}>{line || ' '}</span>{/each}</code></pre>
+				</details>
+			{/each}
+		</div>
+	</section>
+{/if}
+
 <Separator class="my-8" />
 
 <!-- (f) manifest-generated triangle links -->
@@ -102,12 +131,6 @@
 			Reference:
 			{#each data.demo.modules as moduleName, i (moduleName)}{#if i > 0},
 				{/if}<a class="underline" href={'/gunmetal/reference/' + moduleName}>{moduleName}</a>{/each}
-		</li>
-		<li>
-			<a class="underline" href={'/gunmetal/demos/' + data.demo.slug + '/client'} data-testid="open-client">
-				Open a bare client in a new tab
-			</a>
-			<span class="text-muted-foreground">(prove the sync is real across tabs or devices)</span>
 		</li>
 	</ul>
 </section>

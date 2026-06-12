@@ -68,6 +68,8 @@ export interface Chapter {
 	embeds: string[];
 	/** Reference modules this chapter links in its footer. */
 	refs: string[];
+	/** "What you can now do" — rendered in the required chapter footer. */
+	recap: string;
 	keywords: string[];
 }
 
@@ -242,6 +244,8 @@ export const chapters: Chapter[] = [
 		label: 'Why decentralized?',
 		embeds: [],
 		refs: [],
+		recap:
+			'You can explain why decentralized apps need merge rules instead of a referee, what a graph of souls and links is, and how gunmetal relates to GUN.js.',
 		keywords: ['intro', 'graph database', 'decentralized', 'gun.js', 'soul', 'beginner', 'start']
 	},
 	{
@@ -251,6 +255,8 @@ export const chapters: Chapter[] = [
 		label: 'The graph',
 		embeds: ['graph-explorer'],
 		refs: ['instance', 'types', 'graph'],
+		recap:
+			'You can create nodes with put, read them with get, and compose them with links — no schema, no server.',
 		keywords: ['put', 'get', 'node', 'soul', 'link', 'graph']
 	},
 	{
@@ -260,6 +266,8 @@ export const chapters: Chapter[] = [
 		label: 'Reactivity',
 		embeds: ['graph-explorer'],
 		refs: ['instance', 'events'],
+		recap:
+			'You can subscribe to keys and whole nodes, and you know to read existing state after subscribing.',
 		keywords: ['on', 'once', 'off', 'subscribe', 'chain', 'reactive', 'callback']
 	},
 	{
@@ -269,6 +277,8 @@ export const chapters: Chapter[] = [
 		label: 'Collections',
 		embeds: ['todo-list', 'chat-room'],
 		refs: ['uuid', 'lex'],
+		recap:
+			'You can build append-only sets with time-sortable keys, iterate them, and remove items with unset.',
 		keywords: ['set', 'uuid', 'map', 'lex', 'collection', 'list', 'query', 'filter', 'unset']
 	},
 	{
@@ -278,6 +288,8 @@ export const chapters: Chapter[] = [
 		label: 'Documents',
 		embeds: ['profile-tree'],
 		refs: ['extended'],
+		recap:
+			'You can assemble linked nodes into full documents with load, walk paths, and render honest empty states with not().',
 		keywords: ['path', 'open', 'load', 'document', 'nested', 'not']
 	},
 	{
@@ -287,6 +299,8 @@ export const chapters: Chapter[] = [
 		label: 'Sync',
 		embeds: ['shared-input', 'presence'],
 		refs: ['mesh', 'transport', 'relay'],
+		recap:
+			'You can run a relay, connect clients to it, and read a wire frame — and you know the relay is a meeting point, not an authority.',
 		keywords: ['peer', 'relay', 'sync', 'websocket', 'server', 'message', 'wire']
 	},
 	{
@@ -296,6 +310,8 @@ export const chapters: Chapter[] = [
 		label: 'Conflict',
 		embeds: ['conflict-lab'],
 		refs: ['crdt', 'state'],
+		recap:
+			'You can predict how HAM resolves concurrent edits and why every peer converges to the same winner.',
 		keywords: ['ham', 'crdt', 'conflict', 'merge', 'converge', 'state', 'timestamp']
 	},
 	{
@@ -305,6 +321,8 @@ export const chapters: Chapter[] = [
 		label: 'Persistence',
 		embeds: ['offline-first'],
 		refs: ['rad', 'storage'],
+		recap:
+			'You can wire IndexedDB persistence that survives reloads and reconciles with remote updates by HAM.',
 		keywords: ['persistence', 'rad', 'indexeddb', 'radata', 'storage', 'offline', 'reload']
 	},
 	{
@@ -314,6 +332,8 @@ export const chapters: Chapter[] = [
 		label: 'Identity',
 		embeds: ['login'],
 		refs: ['user', 'sea'],
+		recap:
+			'You can create keypair users, authenticate, restore sessions from a saved pair, and write signed data to a user namespace.',
 		keywords: ['sea', 'user', 'auth', 'identity', 'keypair', 'sign', 'verify', 'login']
 	},
 	{
@@ -323,6 +343,8 @@ export const chapters: Chapter[] = [
 		label: 'Privacy',
 		embeds: ['private-notes'],
 		refs: ['sea'],
+		recap:
+			'You can encrypt before you put — passphrase-derived keys for shared spaces, ECDH secrets between two people.',
 		keywords: ['encrypt', 'decrypt', 'secret', 'privacy', 'ecdh', 'work']
 	},
 	{
@@ -332,6 +354,8 @@ export const chapters: Chapter[] = [
 		label: 'Permissions',
 		embeds: ['doc-permissions'],
 		refs: ['cert'],
+		recap:
+			'You can issue and verify certificates so others write into your space — enforced at read time, by math.',
 		keywords: ['certificate', 'cert', 'permission', 'grant', 'delegate', 'access']
 	},
 	{
@@ -341,6 +365,8 @@ export const chapters: Chapter[] = [
 		label: 'The GUN mesh',
 		embeds: ['gunjs-interop'],
 		refs: ['wire', 'mesh', 'relay'],
+		recap:
+			'You can put a gunmetal peer on the same mesh as GUN.js clients — and you know where the quickstart, demos, and reference live.',
 		keywords: ['gun.js', 'interop', 'wire', 'compatibility', 'mesh', 'graduation']
 	}
 ];
@@ -369,7 +395,8 @@ export const modules: ModuleRef[] = [
 	{ name: 'lex', purpose: 'LEX queries: exact, prefix, range', surface: 'both', keywords: ['lex', 'query', 'prefix', 'range', 'gte', 'lte', 'filter'] },
 	{ name: 'dup', purpose: 'Message dedup table with via-tracing', surface: 'both', keywords: ['dup', 'dedup', 'via', 'track', 'ttl'] },
 	{ name: 'concurrency', purpose: 'Platform-gated shared state (Arc/Rc)', surface: 'both', keywords: ['concurrency', 'arc', 'rc', 'mutex', 'MaybeSend'] },
-	{ name: 'runtime', purpose: 'Cross-platform spawn and sleep', surface: 'both', keywords: ['runtime', 'spawn', 'sleep', 'tokio', 'wasm'] }
+	{ name: 'runtime', purpose: 'Cross-platform spawn and sleep', surface: 'both', keywords: ['runtime', 'spawn', 'sleep', 'tokio', 'wasm'] },
+	{ name: 'wasm', purpose: 'JavaScript bindings: WasmGun, WasmSEA, WasmUser, WasmCert', surface: 'wasm-only', keywords: ['wasm', 'javascript', 'bindings', 'init', 'WasmGun', 'browser'] }
 ];
 
 // ── Derived lookups ──────────────────────────────────────────────────

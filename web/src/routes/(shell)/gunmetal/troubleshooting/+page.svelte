@@ -26,6 +26,15 @@
 			link: '/gunmetal/demos/offline-first'
 		},
 		{
+			symptom: 'wasm fails to load',
+			checklist: [
+				'The wasm bundle must be built first: bun run wasm (from web/).',
+				'wasm-bindgen-cli must EXACTLY match the workspace Cargo.lock (0.2.108) — the build script enforces this.',
+				'Servers must send application/wasm for .wasm files (Bun.file and the dev server both do; check yours if self-hosting).'
+			],
+			link: '/gunmetal/quickstart'
+		},
+		{
 			symptom: 'Relay connection refused',
 			checklist: [
 				'Default port is 8765 and path is /gun — the full URL is ws://host:8765/gun.',

@@ -26,6 +26,7 @@
 //! | [`types`] | `GunValue`, `Node`, `Soul` -- core data model |
 //! | [`graph`] | In-memory graph store with LRU eviction |
 //! | [`crdt`] | HAM conflict resolution algorithm |
+//! | [`state`] | State vectors and HAM timestamps |
 //! | [`lex`] | LEX queries: exact, prefix, range matching |
 //! | [`dup`] | Message dedup table with via-tracing |
 //! | [`sea`] | ECDSA signing, AES-GCM encryption, PBKDF2 |
