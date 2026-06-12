@@ -264,6 +264,22 @@ gun.connect(relay);   // register BEFORE connect to see the handshake`
 			'A lone "[]" every ~20s is the heartbeat — normal, not data.'
 		]
 	},
+	benchmark: {
+		why: 'Claims about speed are worthless without measurement on YOUR machine. Identical workloads run on both engines side by side: graph CPU (puts, subscription fires), SEA crypto (where GUN.js uses native WebCrypto and may well win), and relay round-trips. An instrument, not a scoreboard.',
+		snippets: [
+			{
+				label: 'Time any workload',
+				code: `const start = performance.now();
+for (let i = 0; i < 3000; i++) gun.putText('bench', 'k' + i, 'v' + i);
+console.log(3000 / ((performance.now() - start) / 1000), 'ops/s');`
+			}
+		],
+		gotchas: [
+			'The wasm bundle is built with opt-level=z (size-optimized): gunmetal CPU numbers here are conservative versus an -O3 build.',
+			'GUN.js SEA uses native WebCrypto — expect it to win some crypto rows; that is the honest result, not a bug.',
+			'Numbers vary with machine load — run on an idle machine and compare medians of several runs.'
+		]
+	},
 	'gunjs-interop': {
 		why: 'Wire compatibility is the difference between "inspired by GUN" and "is a GUN peer". One shared input, two engines — the unmodified GUN.js library and gunmetal wasm — through one Rust relay, is the parity spec\'s acceptance test running live.',
 		snippets: [
