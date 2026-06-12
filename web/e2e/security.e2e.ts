@@ -5,6 +5,9 @@ test.describe('login demo', () => {
 	test('signup, logout, wrong password fails, login, session restores on reload', async ({
 		page
 	}) => {
+		// Four PBKDF2 derivations (deliberately slow) + a client reload —
+		// give it triple time under parallel-worker CPU contention.
+		test.slow();
 		const room = await gotoDemo(page, 'login');
 		const a = frame(page, 'a');
 		await awaitReady(a);

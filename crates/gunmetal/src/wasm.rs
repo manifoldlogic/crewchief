@@ -62,6 +62,8 @@ pub struct WasmGun {
     inner: Gun,
     net: std::rc::Rc<std::cell::RefCell<Option<WasmNet>>>,
     status: std::rc::Rc<std::cell::RefCell<Option<js_sys::Function>>>,
+    /// `(direction, peer, raw)` wire tap — see [`Self::on_wire`].
+    wire_tap: std::rc::Rc<std::cell::RefCell<Option<js_sys::Function>>>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -77,6 +79,7 @@ impl WasmGun {
             inner: gun,
             net: std::rc::Rc::new(std::cell::RefCell::new(None)),
             status: std::rc::Rc::new(std::cell::RefCell::new(None)),
+            wire_tap: std::rc::Rc::new(std::cell::RefCell::new(None)),
         }
     }
 
@@ -390,6 +393,23 @@ impl Default for WasmGun {
 // ═══════════════════════════════════════════════════════════════════════
 
 #[cfg(target_arch = "wasm32")]
+fn fire_wire_tap(
+    slot: &std::rc::Rc<std::cell::RefCell<Option<js_sys::Function>>>,
+    direction: &str,
+    peer: &str,
+    raw: &str,
+) {
+    if let Some(cb) = slot.borrow().as_ref() {
+        let _ = cb.call3(
+            &JsValue::NULL,
+            &JsValue::from_str(direction),
+            &JsValue::from_str(peer),
+            &JsValue::from_str(raw),
+        );
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
 fn fire_status(
     slot: &std::rc::Rc<std::cell::RefCell<Option<js_sys::Function>>>,
     event: &str,
@@ -420,17 +440,22 @@ impl WasmGun {
             let transport = Rc::new(WsWasmTransport::new(Default::default()));
 
             let mesh_for_msg = mesh.clone();
+            let tap_in = self.wire_tap.clone();
             transport.set_on_message(move |peer, raw| {
+                fire_wire_tap(&tap_in, "in", &peer, &raw);
                 mesh_for_msg.hear(&raw, &peer);
             });
 
             let mesh_for_open = mesh.clone();
             let transport_for_open = transport.clone();
             let status_open = self.status.clone();
+            let tap_out = self.wire_tap.clone();
             transport.set_on_open(move |url| {
                 let t = transport_for_open.clone();
                 let target = url.clone();
+                let tap = tap_out.clone();
                 let sender: crate::mesh::PeerSender = Rc::new(move |raw: &str| {
+                    fire_wire_tap(&tap, "out", &target, raw);
                     let _ = t.send(&target, raw);
                 });
                 mesh_for_open.hi(&url, Some(url.clone()), Some(sender));
@@ -513,6 +538,16 @@ impl WasmGun {
     #[wasm_bindgen(js_name = "onStatus")]
     pub fn on_status(&self, callback: js_sys::Function) {
         *self.status.borrow_mut() = Some(callback);
+    }
+
+    /// Wire tap: `(direction, peer, raw)` for every frame this client
+    /// sends ("out") or receives ("in") — heartbeats, DAM handshakes,
+    /// puts, gets, and acks, exactly as they cross the WebSocket. This
+    /// is the wire-inspector's feed; register before `connect()` to see
+    /// the handshake itself.
+    #[wasm_bindgen(js_name = "onWire")]
+    pub fn on_wire(&self, callback: js_sys::Function) {
+        *self.wire_tap.borrow_mut() = Some(callback);
     }
 
     /// Ask the mesh for a soul's current state (an outgoing GET). Pair

@@ -8,6 +8,11 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
 	testDir: 'e2e',
 	testMatch: '**/*.e2e.{ts,js}',
+	// Serial on purpose: each test page boots multiple wasm instances
+	// (and the SEA demos run deliberately-slow PBKDF2); parallel workers
+	// starve each other's readiness timeouts on shared-CPU runners. The
+	// whole suite stays under ~2 minutes, and all tests share one relay.
+	workers: 1,
 	use: {
 		baseURL: 'http://localhost:4173'
 	},

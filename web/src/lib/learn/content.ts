@@ -14,6 +14,7 @@ import Persistence from './chapters/Persistence.svelte';
 import Identity from './chapters/Identity.svelte';
 import Privacy from './chapters/Privacy.svelte';
 import Permissions from './chapters/Permissions.svelte';
+import GunMesh from './chapters/GunMesh.svelte';
 
 export const chapterContent: Record<string, Component> = {
 	'why-decentralized': WhyDecentralized,
@@ -26,5 +27,6 @@ export const chapterContent: Record<string, Component> = {
 	persistence: Persistence,
 	identity: Identity,
 	privacy: Privacy,
-	permissions: Permissions
+	permissions: Permissions,
+	'gun-mesh': GunMesh
 };
