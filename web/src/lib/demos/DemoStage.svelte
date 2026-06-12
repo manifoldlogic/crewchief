@@ -1,15 +1,26 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { sendToFrame } from '$lib/gun/frame-protocol';
 
 	let {
 		slug,
 		frames = 2,
-		engines = {}
+		engines = {},
+		connectivityControls = false
 	}: {
 		slug: string;
 		frames?: number;
 		engines?: Record<string, string>;
+		connectivityControls?: boolean;
 	} = $props();
+
+	let frameEls = $state<Record<string, HTMLIFrameElement | undefined>>({});
+
+	function broadcast(type: 'gm:disconnect' | 'gm:reconnect') {
+		for (const el of Object.values(frameEls)) {
+			if (el) sendToFrame(el, { type });
+		}
+	}
 
 	// Room + relay resolve at runtime (static-safe): ?room= and ?relay=
 	// on the demo page override; otherwise a fresh room id per visit and
@@ -34,9 +45,28 @@
 </script>
 
 {#if room}
+	{#if connectivityControls}
+		<div class="mb-3 flex gap-2">
+			<button
+				class="rounded-md border px-3 py-1.5 text-sm"
+				onclick={() => broadcast('gm:disconnect')}
+				data-testid="stage-disconnect"
+			>
+				Disconnect both from relay
+			</button>
+			<button
+				class="rounded-md border px-3 py-1.5 text-sm"
+				onclick={() => broadcast('gm:reconnect')}
+				data-testid="stage-reconnect"
+			>
+				Reconnect
+			</button>
+		</div>
+	{/if}
 	<div class="grid gap-4 {frames > 1 ? 'md:grid-cols-2' : ''}" data-testid="demo-frames">
 		{#each frameIds.slice(0, frames) as frameId (frameId)}
 			<iframe
+				bind:this={frameEls[frameId]}
 				title="session {frameId}"
 				data-testid="frame-{frameId}"
 				src={clientSrc(frameId)}

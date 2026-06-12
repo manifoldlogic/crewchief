@@ -51,6 +51,8 @@ export interface Demo {
 	/** Per-frame engine overrides (frameId → engine), e.g. gunjs-interop
 	 * boots real GUN.js in frame "a" and gunmetal wasm in frame "b". */
 	engines?: Record<string, 'gun' | 'gunmetal'>;
+	/** Stage shows disconnect/reconnect controls (conflict/offline demos). */
+	connectivityControls?: boolean;
 	/** Search aliases: API symbols, synonyms, symptoms. */
 	keywords: string[];
 }
@@ -160,6 +162,7 @@ export const demos: Demo[] = [
 		capability: 'conflict',
 		modules: ['crdt', 'state'],
 		chapter: 'conflict',
+		connectivityControls: true,
 		keywords: ['conflict', 'crdt', 'ham', 'merge', 'converge', 'offline', 'split-brain', 'last write wins']
 	},
 	{
@@ -215,6 +218,7 @@ export const demos: Demo[] = [
 		capability: 'persistence',
 		modules: ['rad', 'storage'],
 		chapter: 'persistence',
+		connectivityControls: true,
 		keywords: ['offline', 'persistence', 'indexeddb', 'rad', 'radisk', 'radata', 'reload', 'storage', 'local']
 	},
 	{

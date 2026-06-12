@@ -10,5 +10,7 @@ export const implementedDemos: string[] = [
 	'chat-room',
 	'todo-list',
 	'presence',
-	'profile-tree'
+	'profile-tree',
+	'conflict-lab',
+	'offline-first'
 ];

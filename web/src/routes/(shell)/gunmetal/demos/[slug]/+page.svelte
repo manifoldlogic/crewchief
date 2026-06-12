@@ -26,6 +26,7 @@
 			slug={data.demo.slug}
 			frames={data.demo.singleFrame ? 1 : 2}
 			engines={data.demo.engines ?? {}}
+			connectivityControls={data.demo.connectivityControls ?? false}
 		/>
 	{:else}
 		<Alert.Root>

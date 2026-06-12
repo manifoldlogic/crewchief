@@ -204,6 +204,79 @@ impl WasmGun {
         Ok(self.inner.get(set_soul).set_value(value))
     }
 
+    // ── Persistence ─────────────────────────────────────────────────
+
+    /// Wire IndexedDB-backed persistence into this instance: existing
+    /// rows hydrate through the normal merge path (HAM applies; nothing
+    /// re-broadcasts), then every accepted write persists. `db_name`
+    /// namespaces the store — callers sharing an origin (e.g. iframes)
+    /// MUST use distinct names per logical session. Resolves once
+    /// hydration completes.
+    #[wasm_bindgen(js_name = "enablePersistence")]
+    pub fn enable_persistence(&self, db_name: &str) -> js_sys::Promise {
+        use crate::storage::indexeddb::IndexedDbStorage;
+        use crate::storage::StoredValue;
+
+        const ROW_PREFIX: &str = "n!";
+        let gun = self.inner.clone();
+        let config = crate::storage::indexeddb::IndexedDbConfig {
+            db_name: db_name.to_string(),
+            ..Default::default()
+        };
+
+        wasm_bindgen_futures::future_to_promise(async move {
+            let mut idb = IndexedDbStorage::new(config);
+            idb.open().await.map_err(|e| JsValue::from_str(&e))?;
+
+            // Hydrate: rebuild nodes with their ORIGINAL states and
+            // replay them through receive() — the same code path a
+            // network put takes, so HAM and subscriptions behave
+            // identically.
+            let rows = idb
+                .get_all_with_prefix(ROW_PREFIX)
+                .await
+                .map_err(|e| JsValue::from_str(&e))?;
+            let mut nodes: std::collections::HashMap<String, crate::types::Node> =
+                std::collections::HashMap::new();
+            for (row_key, stored) in rows {
+                let Some(rest) = row_key.strip_prefix(ROW_PREFIX) else {
+                    continue;
+                };
+                let Some((soul, key)) = rest.split_once('\u{1B}') else {
+                    continue;
+                };
+                nodes
+                    .entry(soul.to_string())
+                    .or_insert_with(|| crate::types::Node::new(soul))
+                    .put(key, stored.value, stored.state);
+            }
+            if !nodes.is_empty() {
+                let refs: Vec<&crate::types::Node> = nodes.values().collect();
+                let msg = wire::put_message(&crate::uuid::random_message_id(9), &refs);
+                let _ = gun.receive(&msg);
+            }
+
+            // Persist every accepted write from here on.
+            let idb = std::rc::Rc::new(idb);
+            crate::concurrency::lock_mut(&gun.events).on("put", move |event| {
+                let (Some(value), Some(key)) = (&event.value, &event.key) else {
+                    return;
+                };
+                let row_key = format!("{}{}\u{1B}{}", ROW_PREFIX, event.soul, key);
+                let stored = StoredValue {
+                    value: value.clone(),
+                    state: event.state,
+                };
+                let idb = idb.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    let _ = idb.put(&row_key, &stored).await;
+                });
+            });
+
+            Ok(JsValue::TRUE)
+        })
+    }
+
     // ── Read operations ─────────────────────────────────────────────
 
     /// Read a value. Returns JSON string or null.

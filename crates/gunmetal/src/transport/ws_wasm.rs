@@ -186,7 +186,10 @@ mod implementation {
                 _on_error: on_error,
             };
 
-            self.connections.borrow_mut().insert(url_str, conn);
+            if let Some(replaced) = self.connections.borrow_mut().insert(url_str, conn) {
+                Self::detach(&replaced);
+                let _ = replaced.ws.close();
+            }
             Ok(())
         }
 
@@ -213,9 +216,21 @@ mod implementation {
             Ok(())
         }
 
+        /// Detach the JS event handlers before the owning closures drop:
+        /// the browser fires `close` asynchronously, and a handler whose
+        /// `Closure` has been dropped throws "closure invoked after
+        /// being dropped".
+        fn detach(conn: &PeerConnection) {
+            conn.ws.set_onopen(None);
+            conn.ws.set_onmessage(None);
+            conn.ws.set_onclose(None);
+            conn.ws.set_onerror(None);
+        }
+
         pub fn close(&self, url: &str) {
             let mut conns = self.connections.borrow_mut();
             if let Some(conn) = conns.remove(url) {
+                Self::detach(&conn);
                 let _ = conn.ws.close();
             }
         }
@@ -223,6 +238,7 @@ mod implementation {
         pub fn close_all(&self) {
             let mut conns = self.connections.borrow_mut();
             for (_, conn) in conns.drain() {
+                Self::detach(&conn);
                 let _ = conn.ws.close();
             }
         }

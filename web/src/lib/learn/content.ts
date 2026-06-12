@@ -9,6 +9,8 @@ import Reactivity from './chapters/Reactivity.svelte';
 import Collections from './chapters/Collections.svelte';
 import Documents from './chapters/Documents.svelte';
 import Sync from './chapters/Sync.svelte';
+import Conflict from './chapters/Conflict.svelte';
+import Persistence from './chapters/Persistence.svelte';
 
 export const chapterContent: Record<string, Component> = {
 	'why-decentralized': WhyDecentralized,
@@ -16,5 +18,7 @@ export const chapterContent: Record<string, Component> = {
 	reactivity: Reactivity,
 	collections: Collections,
 	documents: Documents,
-	sync: Sync
+	sync: Sync,
+	conflict: Conflict,
+	persistence: Persistence
 };

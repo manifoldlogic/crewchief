@@ -10,6 +10,8 @@ import ChatRoomClient from './chat-room/ChatRoomClient.svelte';
 import TodoListClient from './todo-list/TodoListClient.svelte';
 import PresenceClient from './presence/PresenceClient.svelte';
 import ProfileTreeClient from './profile-tree/ProfileTreeClient.svelte';
+import ConflictLabClient from './conflict-lab/ConflictLabClient.svelte';
+import OfflineFirstClient from './offline-first/OfflineFirstClient.svelte';
 
 export const clientRegistry: Record<string, Component<{ slug?: string }>> = {
 	'shared-input': SharedInputClient,
@@ -18,5 +20,7 @@ export const clientRegistry: Record<string, Component<{ slug?: string }>> = {
 	'chat-room': ChatRoomClient,
 	'todo-list': TodoListClient,
 	presence: PresenceClient,
-	'profile-tree': ProfileTreeClient
+	'profile-tree': ProfileTreeClient,
+	'conflict-lab': ConflictLabClient,
+	'offline-first': OfflineFirstClient
 };
