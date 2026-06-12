@@ -889,6 +889,26 @@ impl WasmUser {
     }
 
     /// Check if authenticated. Returns JSON `{ pub, epub, alias }` or null.
+    /// The authenticated key pair as `{pub, priv, epub, epriv}` JSON
+    /// (the `authPair` input shape), or null when not authenticated.
+    /// This is how sessions restore without re-entering the password —
+    /// the caller owns where it persists (and the risk of where).
+    #[wasm_bindgen(js_name = "pairJson")]
+    pub fn pair_json(&self) -> JsValue {
+        match self.inner.is_authenticated() {
+            Some(auth) => {
+                let json = serde_json::json!({
+                    "pub": auth.pair.pub_key,
+                    "priv": auth.pair.priv_key,
+                    "epub": auth.pair.epub,
+                    "epriv": auth.pair.epriv,
+                });
+                JsValue::from_str(&json.to_string())
+            }
+            None => JsValue::NULL,
+        }
+    }
+
     #[wasm_bindgen(js_name = "isAuthenticated")]
     pub fn is_authenticated(&self) -> JsValue {
         match self.inner.is_authenticated() {
@@ -1107,6 +1127,49 @@ impl WasmCert {
         };
 
         cert.verify().map_err(|e| JsValue::from_str(&e))
+    }
+
+    /// Full read-side check: does this certificate (signature-valid,
+    /// unexpired) grant `writer_pub` write access to `path`? This is
+    /// what consumers run before trusting a cert-carrying write.
+    #[wasm_bindgen(js_name = "grantsAccess")]
+    pub fn grants_access(
+        &self,
+        cert_json: &str,
+        writer_pub: &str,
+        path: &str,
+    ) -> Result<bool, JsValue> {
+        let parsed: serde_json::Value = serde_json::from_str(cert_json)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+        let who_str = parsed["who"].as_str().unwrap_or("");
+        let what_str = parsed["what"].as_str().unwrap_or("");
+
+        let who = if who_str == "*" {
+            CertWho::Anyone
+        } else {
+            CertWho::PubKey(who_str.to_string())
+        };
+        let what = if what_str == "*" {
+            CertWhat::All
+        } else if what_str.ends_with('*') {
+            CertWhat::Prefix(what_str.trim_end_matches('*').to_string())
+        } else {
+            CertWhat::Exact(what_str.to_string())
+        };
+
+        let cert = Certificate {
+            who,
+            what,
+            expiry: parsed["expiry"].as_f64(),
+            issuer: parsed["issuer"].as_str().unwrap_or("").to_string(),
+            signature: parsed["signature"].as_str().unwrap_or("").to_string(),
+        };
+
+        if !cert.verify().map_err(|e| JsValue::from_str(&e))? {
+            return Ok(false);
+        }
+        Ok(cert.grants_access(writer_pub, path, crate::state::now_ms()))
     }
 }
 

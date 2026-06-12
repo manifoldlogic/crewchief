@@ -90,6 +90,12 @@ export async function waitForHandshake(
 	throw new Error(`relay handshake timed out: ${url}`);
 }
 
+/** The wasm module (SEA/User/Cert constructors live here too). init()
+ * must have run — bootGunmetal does that; subsequent imports are cached. */
+export async function wasmModule() {
+	return await import('$lib/wasm/gunmetal.js');
+}
+
 export function relayRunHint(relay: string): string {
 	return `Relay unreachable at ${relay} — run it locally:\ncargo run -p gunmetal --features relay --bin gunmetal-relay -- --port 8765`;
 }

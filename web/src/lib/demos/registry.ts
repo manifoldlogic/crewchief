@@ -12,6 +12,10 @@ import PresenceClient from './presence/PresenceClient.svelte';
 import ProfileTreeClient from './profile-tree/ProfileTreeClient.svelte';
 import ConflictLabClient from './conflict-lab/ConflictLabClient.svelte';
 import OfflineFirstClient from './offline-first/OfflineFirstClient.svelte';
+import LoginClient from './login/LoginClient.svelte';
+import PrivateNotesClient from './private-notes/PrivateNotesClient.svelte';
+import SecretHandshakeClient from './secret-handshake/SecretHandshakeClient.svelte';
+import DocPermissionsClient from './doc-permissions/DocPermissionsClient.svelte';
 
 export const clientRegistry: Record<string, Component<{ slug?: string }>> = {
 	'shared-input': SharedInputClient,
@@ -22,5 +26,9 @@ export const clientRegistry: Record<string, Component<{ slug?: string }>> = {
 	presence: PresenceClient,
 	'profile-tree': ProfileTreeClient,
 	'conflict-lab': ConflictLabClient,
-	'offline-first': OfflineFirstClient
+	'offline-first': OfflineFirstClient,
+	login: LoginClient,
+	'private-notes': PrivateNotesClient,
+	'secret-handshake': SecretHandshakeClient,
+	'doc-permissions': DocPermissionsClient
 };

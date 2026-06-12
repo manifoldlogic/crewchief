@@ -11,6 +11,9 @@ import Documents from './chapters/Documents.svelte';
 import Sync from './chapters/Sync.svelte';
 import Conflict from './chapters/Conflict.svelte';
 import Persistence from './chapters/Persistence.svelte';
+import Identity from './chapters/Identity.svelte';
+import Privacy from './chapters/Privacy.svelte';
+import Permissions from './chapters/Permissions.svelte';
 
 export const chapterContent: Record<string, Component> = {
 	'why-decentralized': WhyDecentralized,
@@ -20,5 +23,8 @@ export const chapterContent: Record<string, Component> = {
 	documents: Documents,
 	sync: Sync,
 	conflict: Conflict,
-	persistence: Persistence
+	persistence: Persistence,
+	identity: Identity,
+	privacy: Privacy,
+	permissions: Permissions
 };

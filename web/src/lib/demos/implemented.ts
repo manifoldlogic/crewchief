@@ -12,5 +12,9 @@ export const implementedDemos: string[] = [
 	'presence',
 	'profile-tree',
 	'conflict-lab',
-	'offline-first'
+	'offline-first',
+	'login',
+	'private-notes',
+	'secret-handshake',
+	'doc-permissions'
 ];
