@@ -1,10 +1,14 @@
 <script lang="ts">
 	import { capabilityById } from '$lib/catalog';
+	import DemoStage from '$lib/demos/DemoStage.svelte';
+	import { implementedDemos } from '$lib/demos/implemented';
 	import * as Alert from '$lib/components/ui/alert';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Separator } from '$lib/components/ui/separator';
 
 	let { data } = $props();
+
+	const isLive = $derived(implementedDemos.includes(data.demo.slug));
 </script>
 
 <svelte:head><title>{data.demo.title} — Gunmetal demos</title></svelte:head>
@@ -17,13 +21,17 @@
 
 <!-- (a) live demo — implemented per phase; placeholder until then -->
 <section class="mt-8" data-testid="demo-stage">
-	<Alert.Root>
-		<Alert.Title>Demo coming online</Alert.Title>
-		<Alert.Description>
-			This demo is being built phase by phase — the live clients will appear here, backed by
-			the real <code>gunmetal-relay</code>.
-		</Alert.Description>
-	</Alert.Root>
+	{#if isLive}
+		<DemoStage slug={data.demo.slug} frames={data.demo.singleFrame ? 1 : 2} />
+	{:else}
+		<Alert.Root>
+			<Alert.Title>Demo coming online</Alert.Title>
+			<Alert.Description>
+				This demo is being built phase by phase — the live clients will appear here, backed by
+				the real <code>gunmetal-relay</code>.
+			</Alert.Description>
+		</Alert.Root>
+	{/if}
 </section>
 
 <Separator class="my-8" />

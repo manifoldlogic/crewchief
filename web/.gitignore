@@ -26,3 +26,6 @@ test-results
 
 # gunmetal relay dev storage
 radata*/
+
+# generated wasm bundle (bun run wasm)
+src/lib/wasm/

@@ -11,7 +11,9 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"serve": "bun server.ts",
-		"test:e2e": "bun run build && playwright test",
+		"wasm": "sh scripts/build-wasm.sh",
+		"relay:build": "cargo build --manifest-path ../Cargo.toml -p gunmetal --features relay --bin gunmetal-relay",
+		"test:e2e": "bun run wasm && bun run build && bun run relay:build && playwright test",
 		"test": "bun run test:e2e"
 	},
 	"devDependencies": {

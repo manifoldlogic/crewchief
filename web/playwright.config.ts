@@ -16,6 +16,13 @@ export default defineConfig({
 			command: 'bun server.ts --port 4173',
 			url: 'http://localhost:4173/',
 			reuseExistingServer: !process.env.CI
+		},
+		{
+			// Prebuilt by test:e2e (relay:build); fresh radata per run.
+			command:
+				'rm -rf /tmp/gunmetal-e2e-radata && ../target/debug/gunmetal-relay --port 8766 --file /tmp/gunmetal-e2e-radata',
+			url: 'http://localhost:8766/health',
+			reuseExistingServer: !process.env.CI
 		}
 	]
 });

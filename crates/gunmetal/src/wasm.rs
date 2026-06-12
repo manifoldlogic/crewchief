@@ -48,10 +48,20 @@ use crate::wire;
 // WasmGun — Core database operations
 // ═══════════════════════════════════════════════════════════════════════
 
+/// Live networking state: the DAM mesh plus the browser WebSocket
+/// transport feeding it. Created lazily on the first `connect()`.
+#[cfg(target_arch = "wasm32")]
+struct WasmNet {
+    mesh: crate::mesh::Mesh,
+    transport: std::rc::Rc<crate::transport::ws_wasm::WsWasmTransport>,
+}
+
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub struct WasmGun {
     inner: Gun,
+    net: std::rc::Rc<std::cell::RefCell<Option<WasmNet>>>,
+    status: std::rc::Rc<std::cell::RefCell<Option<js_sys::Function>>>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -59,9 +69,61 @@ pub struct WasmGun {
 impl WasmGun {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
+        Self::from_gun(Gun::new(GunOptions::default()))
+    }
+
+    fn from_gun(gun: Gun) -> Self {
         Self {
-            inner: Gun::new(GunOptions::default()),
+            inner: gun,
+            net: std::rc::Rc::new(std::cell::RefCell::new(None)),
+            status: std::rc::Rc::new(std::cell::RefCell::new(None)),
         }
+    }
+
+    /// Construct with a JSON options object — the wasm analogue of
+    /// `Gun(options)`. Recognized keys (all optional):
+    /// `{"peers": [..], "localStorage": bool, "radisk": bool,
+    ///   "axe": bool, "pid": "..", "gap": ms, "mob": n}`.
+    /// Peers are recorded in the options; call `connect(url)` to dial.
+    #[wasm_bindgen(js_name = "withOptions")]
+    pub fn with_options(json: &str) -> Result<WasmGun, JsValue> {
+        #[derive(serde::Deserialize)]
+        struct JsOptions {
+            peers: Option<Vec<String>>,
+            #[serde(alias = "localStorage")]
+            local_storage: Option<bool>,
+            radisk: Option<bool>,
+            axe: Option<bool>,
+            pid: Option<String>,
+            /// Batching gap window in milliseconds.
+            gap: Option<f64>,
+            mob: Option<usize>,
+        }
+        let parsed: JsOptions = serde_json::from_str(json)
+            .map_err(|e| JsValue::from_str(&format!("Invalid options: {}", e)))?;
+        let mut options = GunOptions::default();
+        if let Some(peers) = parsed.peers {
+            options.peers = peers;
+        }
+        if let Some(v) = parsed.local_storage {
+            options.local_storage = v;
+        }
+        if let Some(v) = parsed.radisk {
+            options.radisk = v;
+        }
+        if let Some(v) = parsed.axe {
+            options.axe = v;
+        }
+        if parsed.pid.is_some() {
+            options.pid = parsed.pid;
+        }
+        if let Some(ms) = parsed.gap {
+            options.gap = std::time::Duration::from_millis(ms.max(0.0) as u64);
+        }
+        if let Some(mob) = parsed.mob {
+            options.mob = mob;
+        }
+        Ok(Self::from_gun(Gun::new(options)))
     }
 
     // ── Write operations ────────────────────────────────────────────
@@ -224,6 +286,157 @@ impl Default for WasmGun {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// WasmGun networking — DAM mesh over browser WebSockets
+// ═══════════════════════════════════════════════════════════════════════
+
+#[cfg(target_arch = "wasm32")]
+fn fire_status(
+    slot: &std::rc::Rc<std::cell::RefCell<Option<js_sys::Function>>>,
+    event: &str,
+    url: &str,
+) {
+    if let Some(cb) = slot.borrow().as_ref() {
+        let _ = cb.call2(
+            &JsValue::NULL,
+            &JsValue::from_str(event),
+            &JsValue::from_str(url),
+        );
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl WasmGun {
+    /// Lazily build the mesh + transport pair and wire their callbacks.
+    /// The mesh handshake (`hi`) runs on the transport's open callback —
+    /// a browser WebSocket throws on send before OPEN. The peer id is
+    /// the relay URL.
+    fn ensure_net(&self) -> (crate::mesh::Mesh, std::rc::Rc<crate::transport::ws_wasm::WsWasmTransport>) {
+        use crate::transport::ws_wasm::WsWasmTransport;
+        use std::rc::Rc;
+
+        if self.net.borrow().is_none() {
+            let config = crate::mesh::MeshConfig::from_options(self.inner.options());
+            let mesh = crate::mesh::Mesh::new(self.inner.clone(), config);
+            let transport = Rc::new(WsWasmTransport::new(Default::default()));
+
+            let mesh_for_msg = mesh.clone();
+            transport.set_on_message(move |peer, raw| {
+                mesh_for_msg.hear(&raw, &peer);
+            });
+
+            let mesh_for_open = mesh.clone();
+            let transport_for_open = transport.clone();
+            let status_open = self.status.clone();
+            transport.set_on_open(move |url| {
+                let t = transport_for_open.clone();
+                let target = url.clone();
+                let sender: crate::mesh::PeerSender = Rc::new(move |raw: &str| {
+                    let _ = t.send(&target, raw);
+                });
+                mesh_for_open.hi(&url, Some(url.clone()), Some(sender));
+                fire_status(&status_open, "open", &url);
+            });
+
+            let mesh_for_close = mesh.clone();
+            let status_close = self.status.clone();
+            transport.set_on_close(move |url, _code, _reason| {
+                mesh_for_close.bye(&url);
+                fire_status(&status_close, "close", &url);
+            });
+
+            let status_err = self.status.clone();
+            transport.set_on_error(move |url, _message| {
+                fire_status(&status_err, "error", &url);
+            });
+
+            *self.net.borrow_mut() = Some(WasmNet { mesh, transport });
+        }
+
+        let net = self.net.borrow();
+        let net = net.as_ref().expect("net initialized above");
+        (net.mesh.clone(), net.transport.clone())
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+impl WasmGun {
+    /// Dial a relay (`ws://host:8765/gun`). Idempotent per URL. The DAM
+    /// handshake runs automatically on open; `peerPid(url)` turning
+    /// non-null is the "handshake acked" signal.
+    #[wasm_bindgen(js_name = "connect")]
+    pub fn connect(&self, url: &str) -> Result<(), JsValue> {
+        let (_mesh, transport) = self.ensure_net();
+        if transport.is_connected(url) {
+            return Ok(());
+        }
+        transport.connect(url).map_err(|e| JsValue::from_str(&e))
+    }
+
+    #[wasm_bindgen(js_name = "disconnect")]
+    pub fn disconnect(&self, url: &str) {
+        if let Some(net) = self.net.borrow().as_ref() {
+            net.transport.close(url);
+            net.mesh.bye(url);
+        }
+    }
+
+    #[wasm_bindgen(js_name = "isConnected")]
+    pub fn is_connected(&self, url: &str) -> bool {
+        self.net
+            .borrow()
+            .as_ref()
+            .is_some_and(|net| net.transport.is_connected(url))
+    }
+
+    /// URLs of peers with an OPEN WebSocket.
+    #[wasm_bindgen(js_name = "connectedPeers")]
+    pub fn connected_peers(&self) -> js_sys::Array {
+        let out = js_sys::Array::new();
+        if let Some(net) = self.net.borrow().as_ref() {
+            for url in net.transport.connected_urls() {
+                out.push(&JsValue::from_str(&url));
+            }
+        }
+        out
+    }
+
+    /// The remote process id learned from the DAM `?` handshake, or null
+    /// while the handshake hasn't completed.
+    #[wasm_bindgen(js_name = "peerPid")]
+    pub fn peer_pid(&self, url: &str) -> Option<String> {
+        self.net.borrow().as_ref().and_then(|net| net.mesh.peer_pid(url))
+    }
+
+    /// Register a `(event, url)` callback for connection lifecycle:
+    /// "open" | "close" | "error".
+    #[wasm_bindgen(js_name = "onStatus")]
+    pub fn on_status(&self, callback: js_sys::Function) {
+        *self.status.borrow_mut() = Some(callback);
+    }
+
+    /// Ask the mesh for a soul's current state (an outgoing GET). Pair
+    /// with `on()` to receive the answer when it arrives.
+    #[wasm_bindgen(js_name = "fetchSoul")]
+    pub fn fetch_soul(&self, soul: &str) {
+        if let Some(net) = self.net.borrow().as_ref() {
+            net.mesh.say(
+                crate::wire::get_message(&crate::uuid::random_message_id(9), soul, None),
+                None,
+            );
+        }
+    }
+
+    /// Flush any gap-batched outgoing frames immediately.
+    #[wasm_bindgen(js_name = "flushMesh")]
+    pub fn flush_mesh(&self) {
+        if let Some(net) = self.net.borrow().as_ref() {
+            net.mesh.flush();
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // WasmGun — Extended chain API (gun/lib/* equivalents)
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -232,7 +445,12 @@ impl Default for WasmGun {
 impl WasmGun {
     /// Promise-based read (`gun/lib/then.js`): resolves with the JSON value
     /// at `soul.key` (or `null` if missing), using `.once()` semantics.
-    #[wasm_bindgen(js_name = "then")]
+    ///
+    /// Exported as `once`, NOT `then`: a `then` method would make every
+    /// `WasmGun` a JS thenable, so `await somePromise` resolving to a gun
+    /// instance would invoke it with resolver functions and corrupt the
+    /// await. (GUN.js carries this foot-gun; we don't.)
+    #[wasm_bindgen(js_name = "once")]
     pub fn then_promise(&self, soul: &str, key: &str) -> js_sys::Promise {
         let chain = self.inner.get(soul).get(key);
         wasm_bindgen_futures::future_to_promise(async move {
