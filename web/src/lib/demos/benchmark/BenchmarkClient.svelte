@@ -21,15 +21,24 @@
 	interface Row {
 		label: string;
 		ms: number;
+		/** Sample standard deviation across passes (shown as ±σ). */
+		spread?: number;
 		ops?: number;
 	}
 
 	let engine = $state<'gun' | 'gunmetal' | null>(null);
+	const PASSES = 5;
+
 	let status = $state<'booting' | 'ready' | 'degraded'>('booting');
 	let running = $state(false);
 	let done = $state(false);
+	let pass = $state(0);
 	let rows = $state<Row[]>([]);
 	let hint = $state('');
+
+	// Per-label samples across passes; rows render the MEDIAN.
+	const samples = new Map<string, { ms: number[]; count: number | null }>();
+	const sampleOrder: string[] = [];
 
 	let params: ClientParams;
 	let gmGun: WasmGunInstance | undefined;
@@ -38,6 +47,16 @@
 	// gunmetal put-ack correlation via the wire tap: out-put mid → sentAt.
 	const gmPendingAcks = new Map<string, number>();
 	const gmAckRtts: number[] = [];
+	// Wire-quiet detection: fixed sleeps don't drain a flood's backlog —
+	// RTT measured over residue reads seconds, not milliseconds.
+	let gmLastWireAt = 0;
+	// Subscriptions register ONCE — re-registering per pass would make
+	// later passes pay for every earlier pass's dead listener.
+	let gmSubFires = 0;
+	let gmSubscribed = false;
+	let gunSubFires = 0;
+	let gunSubscribed = false;
+	let passSeq = 0; // distinct values per pass so every put is a real change
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	let gunJs: any;
@@ -70,6 +89,7 @@
 				gmGun = await bootGunmetal(params, { gap: 10 });
 				gmSea = new (await wasmModule()).WasmSEA();
 				gmGun.onWire((dir: string, _peer: string, raw: string) => {
+					gmLastWireAt = performance.now();
 					try {
 						const frames = raw.startsWith('[') ? JSON.parse(raw) : [JSON.parse(raw)];
 						for (const frame of frames) {
@@ -119,49 +139,100 @@
 		}
 	});
 
+	const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? 0;
+
+	function stddev(xs: number[]): number | undefined {
+		if (xs.length < 2) return undefined;
+		const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+		return Math.sqrt(xs.reduce((a, b) => a + (b - mean) ** 2, 0) / (xs.length - 1));
+	}
+
+	function record(label: string, ms: number, count: number | null) {
+		if (!samples.has(label)) {
+			samples.set(label, { ms: [], count });
+			sampleOrder.push(label);
+		}
+		samples.get(label)!.ms.push(ms);
+		// re-render rows as median ± σ of completed samples
+		rows = sampleOrder.map((rowLabel) => {
+			const sample = samples.get(rowLabel)!;
+			const mid = median(sample.ms);
+			return {
+				label: rowLabel,
+				ms: mid,
+				spread: stddev(sample.ms),
+				ops: sample.count ? sample.count / (mid / 1000) : undefined
+			};
+		});
+	}
+
 	async function measure(label: string, count: number | null, work: () => Promise<void> | void) {
 		const start = performance.now();
 		await work();
-		const ms = performance.now() - start;
-		rows = [...rows, { label, ms, ops: count ? count / (ms / 1000) : undefined }];
+		record(label, performance.now() - start, count);
 		// let the UI breathe between workloads
 		await new Promise((resolve) => setTimeout(resolve, 50));
 	}
 
-	const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? 0;
+	/** Wait until no wire frames for `windowMs` (capped) — the only
+	 * honest "drained" signal after a put flood. */
+	async function gmQuiet(windowMs = 400, capMs = 10_000) {
+		const start = performance.now();
+		while (performance.now() - start < capMs) {
+			if (performance.now() - gmLastWireAt > windowMs) return;
+			await new Promise((r) => setTimeout(r, 50));
+		}
+	}
 
 	async function runGunmetal() {
 		const gun = gmGun!;
-		// RTT first, on a clean socket — measured after the put floods it
-		// would report queue-drain time, not round-trip time.
+		const p = passSeq;
+		// RTT first, and only once the relay is RESPONSIVE again: a put
+		// flood saturates the relay's inbound for a couple of seconds (its
+		// slow-consumer policy drops the flood's acks, so the wire looks
+		// quiet) — RTT measured during recovery reports the backlog, not
+		// the round trip. Canary puts gate until an ack comes back fast.
+		await gmQuiet();
 		if (gun.isConnected(params.relay)) {
-			await measure('put→ack RTT ×20 (median)', null, async () => {
+			const gateDeadline = Date.now() + 15_000;
+			while (Date.now() < gateDeadline) {
 				gmAckRtts.length = 0;
-				for (let i = 0; i < 20; i++) {
-					gun.putText(`${base}/ack`, 'v', `rtt-${i}`);
-					gun.flushMesh();
-					await new Promise((r) => setTimeout(r, 60));
-				}
-				const deadline = Date.now() + 5000;
-				while (gmAckRtts.length < 15 && Date.now() < deadline)
-					await new Promise((r) => setTimeout(r, 50));
-			});
-			rows = [...rows.slice(0, -1), { label: 'put→ack RTT (median ms)', ms: median(gmAckRtts) }];
+				gun.putText(`${base}/ack`, 'v', `canary-${p}-${Date.now()}`);
+				gun.flushMesh();
+				const canaryWait = Date.now() + 500;
+				while (gmAckRtts.length === 0 && Date.now() < canaryWait)
+					await new Promise((r) => setTimeout(r, 20));
+				if (gmAckRtts.length > 0 && gmAckRtts[0] < 100) break;
+			}
+			gmAckRtts.length = 0;
+			for (let i = 0; i < 20; i++) {
+				gun.putText(`${base}/ack`, 'v', `rtt-${p}-${i}`);
+				gun.flushMesh();
+				await new Promise((r) => setTimeout(r, 60));
+			}
+			const deadline = Date.now() + 5000;
+			while (gmAckRtts.length < 15 && Date.now() < deadline)
+				await new Promise((r) => setTimeout(r, 50));
+			record('put→ack RTT (median ms)', median(gmAckRtts), null);
 		}
 		await measure('local puts ×3000', 3000, () => {
-			for (let i = 0; i < 3000; i++) gun.putText(`${base}/local`, `k${i}`, `v${i}`);
+			for (let i = 0; i < 3000; i++) gun.putText(`${base}/local`, `k${i}`, `v${p}-${i}`);
 		});
 		gun.flushMesh();
-		await new Promise((r) => setTimeout(r, 300)); // drain before next workload
+		await gmQuiet(); // drain before next workload
 		await measure('subscription fires ×1000', 1000, async () => {
-			let fires = 0;
-			gun.on(`${base}/subs`, 'v', () => fires++);
-			for (let i = 0; i < 1000; i++) gun.putText(`${base}/subs`, 'v', `value-${i}`);
+			if (!gmSubscribed) {
+				gmSubscribed = true;
+				gun.on(`${base}/subs`, 'v', () => gmSubFires++);
+			}
+			const before = gmSubFires;
+			for (let i = 0; i < 1000; i++) gun.putText(`${base}/subs`, 'v', `value-${p}-${i}`);
 			const deadline = Date.now() + 5000;
-			while (fires < 1000 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 10));
+			while (gmSubFires - before < 1000 && Date.now() < deadline)
+				await new Promise((r) => setTimeout(r, 10));
 		});
 		gun.flushMesh();
-		await new Promise((r) => setTimeout(r, 300));
+		await gmQuiet();
 		const pair = JSON.parse(gmSea.pair());
 		await measure('SEA pair', null, () => void gmSea.pair());
 		let signed = '';
@@ -184,35 +255,50 @@
 	}
 
 	async function runGunJs() {
-		// RTT first, on a clean socket (matching the gunmetal ordering).
+		const p = passSeq;
+		// RTT first, gated on relay responsiveness (matching gunmetal):
+		// measured during post-flood recovery it reports the backlog.
+		const canaryDeadline = Date.now() + 15_000;
+		while (Date.now() < canaryDeadline) {
+			const start = performance.now();
+			const rtt = await new Promise<number>((resolve) => {
+				gunJs.get(`${base}/ack`).get('v').put(`canary-${p}-${Date.now()}`, () =>
+					resolve(performance.now() - start)
+				);
+				setTimeout(() => resolve(Infinity), 500);
+			});
+			if (rtt < 100) break;
+		}
 		const rtts: number[] = [];
-		await measure('put→ack RTT ×20 (median)', null, async () => {
-			for (let i = 0; i < 20; i++) {
-				const start = performance.now();
-				await new Promise<void>((resolve) => {
-					gunJs.get(`${base}/ack`).get('v').put(`rtt-${i}`, () => {
-						rtts.push(performance.now() - start);
-						resolve();
-					});
-					setTimeout(resolve, 2000); // never hang a workload on a lost ack
+		for (let i = 0; i < 20; i++) {
+			const start = performance.now();
+			await new Promise<void>((resolve) => {
+				gunJs.get(`${base}/ack`).get('v').put(`rtt-${p}-${i}`, () => {
+					rtts.push(performance.now() - start);
+					resolve();
 				});
-				await new Promise((r) => setTimeout(r, 60));
-			}
-		});
-		rows = [...rows.slice(0, -1), { label: 'put→ack RTT (median ms)', ms: median(rtts) }];
+				setTimeout(resolve, 2000); // never hang a workload on a lost ack
+			});
+			await new Promise((r) => setTimeout(r, 60));
+		}
+		record('put→ack RTT (median ms)', median(rtts), null);
 
 		await measure('local puts ×3000', 3000, () => {
-			for (let i = 0; i < 3000; i++) gunJs.get(`${base}/local`).get(`k${i}`).put(`v${i}`);
+			for (let i = 0; i < 3000; i++) gunJs.get(`${base}/local`).get(`k${i}`).put(`v${p}-${i}`);
 		});
-		await new Promise((r) => setTimeout(r, 300)); // drain before next workload
+		await new Promise((r) => setTimeout(r, 1000)); // drain before next workload
 		await measure('subscription fires ×1000', 1000, async () => {
-			let fires = 0;
-			gunJs.get(`${base}/subs`).get('v').on(() => fires++);
-			for (let i = 0; i < 1000; i++) gunJs.get(`${base}/subs`).get('v').put(`value-${i}`);
+			if (!gunSubscribed) {
+				gunSubscribed = true;
+				gunJs.get(`${base}/subs`).get('v').on(() => gunSubFires++);
+			}
+			const before = gunSubFires;
+			for (let i = 0; i < 1000; i++) gunJs.get(`${base}/subs`).get('v').put(`value-${p}-${i}`);
 			const deadline = Date.now() + 5000;
-			while (fires < 1000 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 10));
+			while (gunSubFires - before < 1000 && Date.now() < deadline)
+				await new Promise((r) => setTimeout(r, 10));
 		});
-		await new Promise((r) => setTimeout(r, 300));
+		await new Promise((r) => setTimeout(r, 1000));
 		const pair = await gunSEA.pair();
 		await measure('SEA pair', null, async () => void (await gunSEA.pair()));
 		let signed: unknown;
@@ -239,9 +325,15 @@
 		running = true;
 		done = false;
 		rows = [];
+		samples.clear();
+		sampleOrder.length = 0;
 		try {
-			if (engine === 'gunmetal') await runGunmetal();
-			else await runGunJs();
+			for (pass = 1; pass <= PASSES; pass++) {
+				passSeq++;
+				if (engine === 'gunmetal') await runGunmetal();
+				else await runGunJs();
+				await new Promise((r) => setTimeout(r, 200)); // settle between passes
+			}
 		} finally {
 			running = false;
 			done = true;
@@ -271,15 +363,22 @@
 				disabled={running}
 				data-testid="bench-run"
 			>
-				{running ? 'Running…' : done ? 'Run again' : 'Run benchmarks'}
+				{running ? `Running… pass ${pass}/${PASSES}` : done ? 'Run again' : 'Run benchmarks'}
 			</button>
 		</div>
+		{#if rows.length > 0}
+			<p class="text-[10px] text-muted-foreground">
+				median of {PASSES} runs · ±σ = sample standard deviation across runs
+			</p>
+		{/if}
 		<table class="w-full text-xs" data-testid="bench-results">
 			<tbody>
 				{#each rows as row (row.label)}
 					<tr class="border-b border-border/50" data-testid="bench-row">
 						<td class="py-1 pr-2">{row.label}</td>
-						<td class="py-1 text-right font-mono">{fmt(row.ms)} ms</td>
+						<td class="py-1 text-right font-mono">
+							{fmt(row.ms)} ms{#if row.spread !== undefined}<span class="text-muted-foreground"> ±{fmt(row.spread)}</span>{/if}
+						</td>
 						<td class="py-1 pl-2 text-right font-mono text-muted-foreground">
 							{row.ops ? `${fmt(row.ops)} ops/s` : ''}
 						</td>
