@@ -5,11 +5,20 @@
 //
 // args: <relay-url> <subs> <writers> <rate/s> <warmup-s> <duration-s>
 var relayUrl = process.argv[2];
-var SUBS = Number(process.argv[3] || 10);
-var WRITERS = Number(process.argv[4] || 4);
-var RATE = Number(process.argv[5] || 500);
-var WARMUP_S = Number(process.argv[6] || 5);
-var DURATION_S = Number(process.argv[7] || 15);
+function reqNum(name, value, min) {
+	if (!Number.isFinite(value) || value < min) {
+		console.error('bench-driver: --' + name + ' must be a finite number >= ' + min + ' (got ' + value + ')');
+		process.exit(1);
+	}
+	return value;
+}
+// subs/writers/rate/duration must be >= 1 (writers.length === 0 crashes the
+// load loop; duration 0 divides by zero in the metrics). warmup may be 0.
+var SUBS = reqNum('subs', Number(process.argv[3] || 10), 1);
+var WRITERS = reqNum('writers', Number(process.argv[4] || 4), 1);
+var RATE = reqNum('rate', Number(process.argv[5] || 500), 1);
+var WARMUP_S = reqNum('warmup', Number(process.argv[6] || 5), 0);
+var DURATION_S = reqNum('duration', Number(process.argv[7] || 15), 1);
 
 var Gun = require('../../crates/gunmetal/sources/gun/gun.js');
 

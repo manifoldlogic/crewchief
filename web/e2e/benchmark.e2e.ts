@@ -24,9 +24,12 @@ test.describe('benchmark demo', () => {
 			const benchRows = engineFrame.getByTestId('bench-row');
 			await expect(benchRows.first()).toBeVisible();
 			expect(await benchRows.count()).toBeGreaterThanOrEqual(7);
-			// every row carries a parseable millisecond figure
+			// every row carries a parseable, finite millisecond figure
 			for (const text of await benchRows.allInnerTexts()) {
-				expect(text).toMatch(/[\d,.]+ ms/);
+				const m = text.match(/([\d,]+(?:\.\d+)?)\s*ms\b/);
+				expect(m, `row missing a ms value: ${text}`).not.toBeNull();
+				const value = Number(m![1].replace(/,/g, ''));
+				expect(Number.isFinite(value), `unparseable ms value: ${text}`).toBe(true);
 			}
 		}
 	});

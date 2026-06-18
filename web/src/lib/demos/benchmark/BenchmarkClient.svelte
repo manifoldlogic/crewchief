@@ -213,7 +213,9 @@
 			const deadline = Date.now() + 5000;
 			while (gmAckRtts.length < 15 && Date.now() < deadline)
 				await new Promise((r) => setTimeout(r, 50));
-			record('put→ack RTT (median ms)', median(gmAckRtts), null);
+			// only record RTT when acks were actually captured — median([]) → 0
+			// would otherwise report a bogus "0 ms" round-trip.
+			if (gmAckRtts.length) record('put→ack RTT (median ms)', median(gmAckRtts), null);
 		}
 		await measure('local puts ×3000', 3000, () => {
 			for (let i = 0; i < 3000; i++) gun.putText(`${base}/local`, `k${i}`, `v${p}-${i}`);
@@ -281,7 +283,8 @@
 			});
 			await new Promise((r) => setTimeout(r, 60));
 		}
-		record('put→ack RTT (median ms)', median(rtts), null);
+		// only record RTT when acks were actually captured (see gunmetal path)
+		if (rtts.length) record('put→ack RTT (median ms)', median(rtts), null);
 
 		await measure('local puts ×3000', 3000, () => {
 			for (let i = 0; i < 3000; i++) gunJs.get(`${base}/local`).get(`k${i}`).put(`v${p}-${i}`);

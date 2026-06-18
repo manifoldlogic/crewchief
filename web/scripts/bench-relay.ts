@@ -47,22 +47,32 @@ interface TargetResult extends DriverResult {
 
 function parseArgs(): { mode: string; opts: Options } {
 	const args = process.argv.slice(2);
-	const mode = args.find((a) => !a.startsWith('--')) ?? 'compare';
-	const flag = (name: string, fallback: number) => {
-		const i = args.indexOf(`--${name}`);
-		return i !== -1 ? Number(args[i + 1]) : fallback;
+	const defaults: Options = { subs: 10, writers: 4, rate: 500, duration: 15, warmup: 5, port: 8772 };
+	const opts: Options = { ...defaults };
+	let mode = 'compare';
+	const num = (name: string, raw: string | undefined): number => {
+		const n = Number(raw);
+		if (!Number.isFinite(n)) throw new Error(`--${name} expects a number (got ${raw ?? '<missing>'})`);
+		return n;
 	};
-	return {
-		mode,
-		opts: {
-			subs: flag('subs', 10),
-			writers: flag('writers', 4),
-			rate: flag('rate', 500),
-			duration: flag('duration', 15),
-			warmup: flag('warmup', 5),
-			port: flag('port', 8772)
+	// Mode is a positional token (compare|gun|gunmetal); everything else is a
+	// --flag that consumes the NEXT token as its value — so `--subs 20` reads
+	// 20 as the value, not as the mode.
+	for (let i = 0; i < args.length; i++) {
+		const a = args[i];
+		if (a === 'compare' || a === 'gun' || a === 'gunmetal') {
+			mode = a;
+			continue;
 		}
-	};
+		if (a.startsWith('--')) {
+			const key = a.slice(2) as keyof Options;
+			if (!(key in defaults)) throw new Error(`unknown flag: ${a}`);
+			opts[key] = num(key, args[++i]);
+		} else {
+			throw new Error(`unexpected argument: ${a} (mode must be one of compare|gun|gunmetal)`);
+		}
+	}
+	return { mode, opts };
 }
 
 async function waitForHealth(url: string, timeoutMs: number): Promise<void> {
