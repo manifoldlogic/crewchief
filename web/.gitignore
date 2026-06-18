@@ -32,3 +32,6 @@ src/lib/wasm/
 
 # vendored gun.js (copied by scripts/build-wasm.sh)
 static/vendor/
+
+# benchmark results (bun scripts/bench-relay.ts)
+bench-results/

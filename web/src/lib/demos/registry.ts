@@ -17,6 +17,7 @@ import PrivateNotesClient from './private-notes/PrivateNotesClient.svelte';
 import SecretHandshakeClient from './secret-handshake/SecretHandshakeClient.svelte';
 import DocPermissionsClient from './doc-permissions/DocPermissionsClient.svelte';
 import WireInspectorClient from './wire-inspector/WireInspectorClient.svelte';
+import BenchmarkClient from './benchmark/BenchmarkClient.svelte';
 
 export const clientRegistry: Record<string, Component<{ slug?: string }>> = {
 	'shared-input': SharedInputClient,
@@ -32,5 +33,6 @@ export const clientRegistry: Record<string, Component<{ slug?: string }>> = {
 	'private-notes': PrivateNotesClient,
 	'secret-handshake': SecretHandshakeClient,
 	'doc-permissions': DocPermissionsClient,
-	'wire-inspector': WireInspectorClient
+	'wire-inspector': WireInspectorClient,
+	benchmark: BenchmarkClient
 };

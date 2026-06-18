@@ -101,6 +101,17 @@ export const capabilities: Capability[] = [
 
 export const demos: Demo[] = [
 	{
+		slug: 'benchmark',
+		title: 'Engine benchmark',
+		pattern: 'Side-by-side A/B: identical workloads on GUN.js (left) and gunmetal wasm (right)',
+		capability: 'wire-compat',
+		modules: ['instance', 'sea', 'wire'],
+		chapter: null,
+		engines: { a: 'gun', b: 'gunmetal' },
+		connectivityControls: false,
+		keywords: ['benchmark', 'performance', 'speed', 'fast', 'compare', 'ops', 'latency']
+	},
+	{
 		slug: 'gunjs-interop',
 		title: 'GUN.js interop',
 		pattern: 'Two clients, two engines, one shared input — the left iframe runs real GUN.js, the right runs gunmetal wasm',

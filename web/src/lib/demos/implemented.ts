@@ -17,5 +17,6 @@ export const implementedDemos: string[] = [
 	'private-notes',
 	'secret-handshake',
 	'doc-permissions',
-	'wire-inspector'
+	'wire-inspector',
+	'benchmark'
 ];

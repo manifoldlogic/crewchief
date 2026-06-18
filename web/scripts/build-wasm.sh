@@ -50,7 +50,8 @@ GUN_JS="$REPO_ROOT/crates/gunmetal/sources/gun/gun.js"
 if [ -f "$GUN_JS" ]; then
   mkdir -p "$REPO_ROOT/web/static/vendor"
   cp "$GUN_JS" "$REPO_ROOT/web/static/vendor/gun.js"
-  echo "vendored gun.js for the interop demo"
+  cp "$REPO_ROOT/crates/gunmetal/sources/gun/sea.js" "$REPO_ROOT/web/static/vendor/sea.js"
+  echo "vendored gun.js + sea.js for the interop/benchmark demos"
 else
   echo "WARNING: gun submodule not checked out — gunjs-interop demo will degrade" >&2
 fi
