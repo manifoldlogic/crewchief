@@ -2,7 +2,7 @@
  * Tests for tool description variant injection via worktrees
  */
 
-import { execSync } from 'child_process'
+import { execSync, execFileSync } from 'child_process'
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { describe, it, expect, afterEach, beforeAll } from 'vitest'
@@ -47,20 +47,33 @@ This tests the regex replacement logic.`,
     try {
       const porcelain = execSync('git worktree list --porcelain', { encoding: 'utf-8' })
       let worktreePath: string | null = null
-      for (const line of porcelain.split('\n')) {
+      // The first porcelain block is always the MAIN worktree (the repo root);
+      // never remove it, even if it happens to be on a variant-test- branch.
+      let isMainWorktree = true
+      let skipCurrent = false
+      for (const raw of porcelain.split('\n')) {
+        const line = raw.replace(/\r$/, '') // tolerate CRLF (Windows) in porcelain output
         if (line.startsWith('worktree ')) {
           worktreePath = line.slice('worktree '.length)
+          skipCurrent = isMainWorktree
+          isMainWorktree = false
         } else if (line === '') {
           worktreePath = null
-        } else if (worktreePath && line.startsWith('branch refs/heads/variant-test-')) {
+        } else if (worktreePath && !skipCurrent && line.startsWith('branch refs/heads/variant-test-')) {
           try {
-            execSync(`git worktree remove --force "${worktreePath}"`, { stdio: 'ignore' })
+            // execFileSync (no shell) — git-derived paths can contain spaces and
+            // must never be re-parsed by a shell.
+            execFileSync('git', ['worktree', 'remove', '--force', worktreePath], {
+              stdio: 'ignore',
+            })
           } catch {
             // Working dir may already be gone — the prune below clears the registration.
           }
         }
       }
-      execSync('git worktree prune', { stdio: 'ignore' })
+      // --expire now forces immediate pruning of missing worktrees regardless of
+      // any gc grace-period config.
+      execSync('git worktree prune --expire now', { stdio: 'ignore' })
     } catch {
       // Ignore — git may be unavailable in some environments.
     }
@@ -68,15 +81,19 @@ This tests the regex replacement logic.`,
     // 2. Delete orphaned variant-test branches (now detached from any worktree,
     //    so `git branch -D` can actually remove them).
     try {
-      const branches = execSync('git branch', { encoding: 'utf-8' })
+      // --format=%(refname:short) yields bare branch names (no `* ` marker), and
+      // startsWith enforces a strict prefix so a branch merely *containing*
+      // "variant-test-" (e.g. feature/variant-test-notes) is never deleted.
+      const branches = execSync("git branch --format='%(refname:short)'", { encoding: 'utf-8' })
         .split('\n')
-        .filter((b) => b.includes('variant-test-'))
-        .map((b) => b.trim().replace(/^\*?\s*/, ''))
+        .map((b) => b.trim())
+        .filter((b) => b.startsWith('variant-test-'))
 
       for (const branch of branches) {
         if (branch) {
           try {
-            execSync(`git branch -D ${branch}`, { stdio: 'ignore' })
+            // execFileSync + `--` so a branch name is never parsed as a flag/shell.
+            execFileSync('git', ['branch', '-D', '--', branch], { stdio: 'ignore' })
           } catch {
             // Ignore — branch might already be deleted.
           }
