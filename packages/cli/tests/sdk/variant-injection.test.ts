@@ -2,10 +2,10 @@
  * Tests for tool description variant injection via worktrees
  */
 
-import { execSync } from 'child_process'
+import { execSync, execFileSync } from 'child_process'
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, beforeAll } from 'vitest'
 import type { Variant } from '../../src/sdk/types.js'
 import { createVariantWorktree } from '../../src/sdk/variant-injection.js'
 
@@ -35,8 +35,83 @@ This tests the regex replacement logic.`,
 
   const cleanupFunctions: Array<() => Promise<void>> = []
 
+  // Remove leftover variant-test worktrees AND their branches. Orphans accrue
+  // when a run is interrupted/killed or a per-test cleanup fails: the worktree
+  // stays registered and its branch stays checked out — and a checked-out
+  // branch can't be deleted, so the worktree must be removed FIRST. Scoped to
+  // the `variant-test-` prefix this suite uses (every test variant id starts
+  // with `test-`), so it never touches unrelated worktrees or branches.
+  function sweepVariantTestArtifacts() {
+    // 1. Remove orphaned worktrees whose checked-out branch is a variant-test
+    //    branch (porcelain emits a `branch refs/heads/<name>` line per worktree).
+    try {
+      const porcelain = execSync('git worktree list --porcelain', { encoding: 'utf-8' })
+      let worktreePath: string | null = null
+      // The first porcelain block is always the MAIN worktree (the repo root);
+      // never remove it, even if it happens to be on a variant-test- branch.
+      let isMainWorktree = true
+      let skipCurrent = false
+      for (const raw of porcelain.split('\n')) {
+        const line = raw.replace(/\r$/, '') // tolerate CRLF (Windows) in porcelain output
+        if (line.startsWith('worktree ')) {
+          worktreePath = line.slice('worktree '.length)
+          skipCurrent = isMainWorktree
+          isMainWorktree = false
+        } else if (line === '') {
+          worktreePath = null
+        } else if (worktreePath && !skipCurrent && line.startsWith('branch refs/heads/variant-test-')) {
+          try {
+            // execFileSync (no shell) — git-derived paths can contain spaces and
+            // must never be re-parsed by a shell.
+            execFileSync('git', ['worktree', 'remove', '--force', worktreePath], {
+              stdio: 'ignore',
+            })
+          } catch {
+            // Working dir may already be gone — the prune below clears the registration.
+          }
+        }
+      }
+      // --expire now forces immediate pruning of missing worktrees regardless of
+      // any gc grace-period config.
+      execSync('git worktree prune --expire now', { stdio: 'ignore' })
+    } catch {
+      // Ignore — git may be unavailable in some environments.
+    }
+
+    // 2. Delete orphaned variant-test branches (now detached from any worktree,
+    //    so `git branch -D` can actually remove them).
+    try {
+      // --format=%(refname:short) yields bare branch names (no `* ` marker), and
+      // startsWith enforces a strict prefix so a branch merely *containing*
+      // "variant-test-" (e.g. feature/variant-test-notes) is never deleted.
+      const branches = execSync("git branch --format='%(refname:short)'", { encoding: 'utf-8' })
+        .split('\n')
+        .map((b) => b.trim())
+        .filter((b) => b.startsWith('variant-test-'))
+
+      for (const branch of branches) {
+        if (branch) {
+          try {
+            // execFileSync + `--` so a branch name is never parsed as a flag/shell.
+            execFileSync('git', ['branch', '-D', '--', branch], { stdio: 'ignore' })
+          } catch {
+            // Ignore — branch might already be deleted.
+          }
+        }
+      }
+    } catch {
+      // Ignore cleanup errors — git commands might fail in some environments.
+    }
+  }
+
+  // Sweep before the suite, so leftovers from a previously *killed* run — where
+  // neither afterEach nor afterAll could run — don't accumulate over time.
+  beforeAll(() => {
+    sweepVariantTestArtifacts()
+  })
+
   afterEach(async () => {
-    // Cleanup all created worktrees
+    // Run the per-worktree cleanups returned by createVariantWorktree.
     for (const cleanup of cleanupFunctions) {
       try {
         await cleanup()
@@ -46,26 +121,9 @@ This tests the regex replacement logic.`,
     }
     cleanupFunctions.length = 0
 
-    // Cleanup any orphaned variant-test branches that might have been left behind
-    // (e.g., from failed tests, interrupted processes, or cleanup failures)
-    try {
-      const branches = execSync('git branch', { encoding: 'utf-8' })
-        .split('\n')
-        .filter((b) => b.includes('variant-test-'))
-        .map((b) => b.trim().replace(/^\*?\s*/, ''))
-
-      for (const branch of branches) {
-        if (branch) {
-          try {
-            execSync(`git branch -D ${branch}`, { stdio: 'ignore' })
-          } catch {
-            // Ignore errors - branch might already be deleted or in use
-          }
-        }
-      }
-    } catch {
-      // Ignore cleanup errors - git commands might fail in some environments
-    }
+    // Safety net: remove anything the tracked cleanups missed — orphaned
+    // worktrees plus their branches, in that order.
+    sweepVariantTestArtifacts()
   })
 
   it('should create a variant worktree', async () => {
