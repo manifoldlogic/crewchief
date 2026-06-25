@@ -33,8 +33,7 @@
 //!
 //! All edge cases validated in tests/integration/semrank-edge-cases.test.ts
 
-use crate::db::traits::StoreSearch;
-use crate::db::SqliteStore;
+use crate::db::Store;
 use crate::search::executor_types::{RankedResult, RankedResults, SearchSource};
 use regex::Regex;
 use tracing::{debug, instrument};
@@ -114,7 +113,7 @@ impl FTSExecutor {
     /// NOT the historical `2.5`/`3.0`-folded-into-score model.
     #[instrument(skip(store), fields(query_len = fts_query.len()))]
     pub async fn execute(
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         fts_query: &str,
         normalized_query: &str,
         repo_id: i64,

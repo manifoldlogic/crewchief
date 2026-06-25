@@ -7,8 +7,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::db::Store;
+// Sub-traits needed by the #[cfg(test)] module (concrete SqliteStore calls).
+#[cfg(test)]
 use crate::db::traits::StoreCore;
-use crate::db::SqliteStore;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StatusResponse {
@@ -36,7 +38,7 @@ pub struct WorktreeStatus {
 ///
 /// Uses SqliteStore for database access.
 pub async fn get_status(
-    store: Arc<SqliteStore>,
+    store: Arc<dyn Store + Send + Sync>,
     repo_filter: Option<String>,
     worktree_filter: Option<String>,
     _verbose: bool,

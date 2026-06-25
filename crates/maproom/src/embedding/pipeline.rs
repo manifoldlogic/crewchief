@@ -6,9 +6,7 @@
 //! - Provides progress reporting and cost tracking
 //! - Handles errors and rate limiting gracefully
 
-use crate::db::traits::StoreEmbeddings;
-use crate::db::traits::StoreEncoding;
-use crate::db::SqliteStore;
+use crate::db::Store;
 use crate::embedding::service::EmbeddingService;
 use anyhow::{Context, Result};
 use tracing::{debug, error, info, warn};
@@ -179,7 +177,10 @@ impl EmbeddingPipeline {
     ///
     /// # Errors
     /// Returns error if database query fails
-    pub async fn copy_existing_embeddings(&self, store: &SqliteStore) -> Result<usize> {
+    pub async fn copy_existing_embeddings(
+        &self,
+        store: &(dyn Store + Send + Sync),
+    ) -> Result<usize> {
         info!("Copying existing embeddings from code_embeddings table");
 
         let count = store
@@ -200,14 +201,14 @@ impl EmbeddingPipeline {
     }
 
     /// Run the embedding generation pipeline.
-    pub async fn run(&self, store: &SqliteStore) -> Result<PipelineStats> {
+    pub async fn run(&self, store: &(dyn Store + Send + Sync)) -> Result<PipelineStats> {
         self.run_with_progress(store, None).await
     }
 
     /// Run the embedding pipeline with optional progress callback
     pub async fn run_with_progress(
         &self,
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         progress_callback: Option<&dyn Fn(usize, usize)>,
     ) -> Result<PipelineStats> {
         let start_time = std::time::Instant::now();
@@ -338,7 +339,7 @@ impl EmbeddingPipeline {
     /// the error is propagated.
     async fn run_batch_loop(
         &self,
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         chunks: &[ChunkRow],
         stats: &mut PipelineStats,
         progress_callback: Option<&dyn Fn(usize, usize)>,
@@ -433,7 +434,10 @@ impl EmbeddingPipeline {
     }
 
     /// Fetch chunks that need embeddings.
-    async fn fetch_chunks_needing_embeddings(&self, store: &SqliteStore) -> Result<Vec<ChunkRow>> {
+    async fn fetch_chunks_needing_embeddings(
+        &self,
+        store: &(dyn Store + Send + Sync),
+    ) -> Result<Vec<ChunkRow>> {
         let chunks = store
             .fetch_chunks_needing_embeddings(self.config.incremental, self.config.sample_size)
             .await
@@ -457,7 +461,7 @@ impl EmbeddingPipeline {
     /// Process a batch of chunks.
     async fn process_batch(
         &self,
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         batch: &[ChunkRow],
         stats: &mut PipelineStats,
     ) -> Result<()> {
@@ -614,7 +618,7 @@ impl EmbeddingPipeline {
     /// ```
     pub async fn process_missing_embeddings(
         &self,
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         _repo: &str, // TODO: Add repo/worktree filtering to fetch_chunks_needing_embeddings
         _worktree: &str, // Currently unused - all chunks are processed regardless of repo/worktree
     ) -> Result<PipelineStats> {
@@ -735,7 +739,7 @@ impl EmbeddingPipeline {
     /// Fetch chunks by their IDs.
     async fn fetch_chunks_by_ids(
         &self,
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         chunk_ids: &[i64],
     ) -> Result<Vec<ChunkRow>> {
         if chunk_ids.is_empty() {

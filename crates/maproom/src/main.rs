@@ -35,11 +35,6 @@ use maproom::cli::format::{
     format_hits_json_vector, sanitize_newlines, OutputFormat, SearchMetadata,
 };
 use maproom::context::{AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions};
-use maproom::db::StoreCleanup;
-use maproom::db::StoreCore;
-use maproom::db::StoreEmbeddings;
-use maproom::db::StoreIndexState;
-use maproom::db::StoreSearch;
 use maproom::progress::{OutputMode, ProgressTracker};
 use maproom::{daemon, db, indexer};
 
@@ -153,7 +148,7 @@ fn get_short_commit_sha(path: &Path) -> anyhow::Result<String> {
 /// Debounces rapid switches, updates dynamic state, triggers re-indexing, and emits NDJSON.
 async fn handle_branch_switch(
     watch_path: &Path,
-    store: &db::SqliteStore,
+    store: &(dyn db::Store + Send + Sync),
     repo: &str,
     repo_id: i64,
     current_branch: &Arc<RwLock<String>>,
@@ -831,7 +826,7 @@ async fn auto_generate_embeddings(
     let pipeline = EmbeddingPipeline::new(service, config);
     let stats = pipeline
         .run_with_progress(
-            &store,
+            store.as_ref(),
             Some(&|processed, _total| {
                 progress.update_chunks(processed);
                 if progress.should_print() {
@@ -1305,7 +1300,7 @@ async fn main() -> anyhow::Result<()> {
 
             // Scan execution
             indexer::scan_worktree(
-                &store,
+                store.as_ref(),
                 &repo,
                 &worktree,
                 &path,
@@ -1444,7 +1439,7 @@ async fn main() -> anyhow::Result<()> {
             provider,
         } => {
             let store = db::connect().await?;
-            indexer::upsert_files(&store, &repo, &worktree, &root, &commit, &paths)
+            indexer::upsert_files(store.as_ref(), &repo, &worktree, &root, &commit, &paths)
                 .await
                 .with_context(|| "upsert failed")?;
 
@@ -1505,7 +1500,7 @@ async fn main() -> anyhow::Result<()> {
             );
 
             // Connect to database
-            let store = Arc::new(db::connect().await?);
+            let store = db::connect().await?;
 
             // Canonicalize path for the watcher
             let watch_path = path
@@ -1633,7 +1628,7 @@ async fn main() -> anyhow::Result<()> {
                     Some(_head_event) = head_rx.recv() => {
                         if let Err(e) = handle_branch_switch(
                             &watch_path,
-                            &store,
+                            store.as_ref(),
                             &repo,
                             repo_id,
                             &current_branch,
@@ -1939,7 +1934,7 @@ async fn main() -> anyhow::Result<()> {
             let store = db::connect().await?;
             tracing::debug!("status: connected, querying status...");
 
-            let status_data = status::get_status(Arc::new(store), repo, worktree, verbose)
+            let status_data = status::get_status(store, repo, worktree, verbose)
                 .await
                 .context("Error querying status")?;
             tracing::debug!("status: query complete, formatting output...");
@@ -1959,7 +1954,7 @@ async fn main() -> anyhow::Result<()> {
             let store = db::connect().await?;
             tracing::debug!("encoding-progress: connected, querying progress...");
 
-            let progress_data = encoding_progress::get_encoding_progress(Arc::new(store), repo)
+            let progress_data = encoding_progress::get_encoding_progress(store, repo)
                 .await
                 .context("Error querying encoding progress")?;
             tracing::debug!("encoding-progress: query complete, formatting output...");
@@ -2053,7 +2048,7 @@ async fn main() -> anyhow::Result<()> {
 
             // Run pipeline
             let pipeline = EmbeddingPipeline::new(service, config);
-            let stats = pipeline.run(&store).await?;
+            let stats = pipeline.run(store.as_ref()).await?;
 
             // Display results
             println!("\n{}\n", "=".repeat(60));
@@ -2066,7 +2061,9 @@ async fn main() -> anyhow::Result<()> {
         Commands::Migrate { command } => {
             use maproom::migrate::{verify_migration, MarkdownMigrator};
 
-            let store = db::connect().await?;
+            // Markdown re-migration is a SQLite-only maintenance tool (dynamic
+            // backup tables / sqlite_master introspection); require the SQLite backend.
+            let store = db::connect_sqlite().await?;
 
             match command {
                 MigrateCommand::Markdown { repo, worktree } => {
@@ -2192,7 +2189,7 @@ async fn main() -> anyhow::Result<()> {
         } => {
             use maproom::cli::clean_ignored;
             let store = db::connect().await?;
-            clean_ignored::clean_ignored(&store, &repo, &worktree, dry_run).await?;
+            clean_ignored::clean_ignored(store.as_ref(), &repo, &worktree, dry_run).await?;
         }
 
         Commands::Context {
@@ -2217,7 +2214,7 @@ async fn main() -> anyhow::Result<()> {
             let store = db::connect().await.context("Database connection failed")?;
 
             // Create assembler (uses DefaultAssemblyStrategy which has working get_chunk_metadata)
-            let assembler = DefaultAssemblyStrategy::new(Arc::new(store));
+            let assembler = DefaultAssemblyStrategy::new(store);
 
             // Build expand options from CLI args
             let options = ExpandOptions {

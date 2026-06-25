@@ -10,9 +10,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::{error, info};
 
 use crate::context::{AssemblyStrategy, DefaultAssemblyStrategy, ExpandOptions};
-use crate::db::traits::StoreCore;
-use crate::db::traits::StoreSearch;
-use crate::db::{connect, SearchHit, SqliteStore};
+use crate::db::{connect, SearchHit, Store};
 use crate::embedding::EmbeddingService;
 use crate::search::confidence::compute_result_confidence;
 use crate::search::errors::SearchErrorDetails;
@@ -192,13 +190,13 @@ fn deduplicate_search_hits(hits: Vec<SearchHit>, limit: usize) -> Vec<SearchHit>
 }
 
 struct DaemonState {
-    store: Arc<SqliteStore>,
+    store: Arc<dyn Store + Send + Sync>,
     embedding_service: EmbeddingService,
     context_assembler: DefaultAssemblyStrategy,
 }
 
 impl DaemonState {
-    fn new(store: Arc<SqliteStore>, embedding_service: EmbeddingService) -> Self {
+    fn new(store: Arc<dyn Store + Send + Sync>, embedding_service: EmbeddingService) -> Self {
         Self {
             store: store.clone(),
             embedding_service,
@@ -210,13 +208,10 @@ impl DaemonState {
 pub async fn run() -> Result<()> {
     info!("Daemon mode starting...");
 
-    // Initialize SqliteStore
-    let store = Arc::new(
-        connect()
-            .await
-            .context("Failed to initialize database store")?,
-    );
-    info!("Database backend: SQLite");
+    // Initialize the configured backend (SQLite or Postgres per the DSN).
+    let store = connect()
+        .await
+        .context("Failed to initialize database store")?;
 
     // Initialize Embedding Service
     let embedding_service = EmbeddingService::from_env()

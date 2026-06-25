@@ -9,9 +9,7 @@
 //! This is the core implementation of BLOBSHA Phase 3 (planning/plan.md lines 331-439).
 
 use crate::content_hash::compute_blob_sha;
-use crate::db::traits::StoreChunks;
-use crate::db::traits::StoreEmbeddings;
-use crate::db::{ChunkRecord, SqliteStore};
+use crate::db::{ChunkRecord, Store};
 use crate::metrics::CacheMetrics;
 use anyhow::{Context, Result};
 use tracing::{debug, info};
@@ -29,7 +27,10 @@ use tracing::{debug, info};
 /// # Returns
 ///
 /// `Ok(true)` if embedding exists (cache hit), `Ok(false)` if not (cache miss)
-pub async fn check_embedding_exists(store: &SqliteStore, blob_sha: &str) -> Result<bool> {
+pub async fn check_embedding_exists(
+    store: &(dyn Store + Send + Sync),
+    blob_sha: &str,
+) -> Result<bool> {
     store
         .has_embedding(blob_sha)
         .await
@@ -68,7 +69,7 @@ pub async fn check_embedding_exists(store: &SqliteStore, blob_sha: &str) -> Resu
 /// The chunk ID of the inserted/updated chunk
 #[allow(clippy::too_many_arguments)] // Public API; each parameter maps to a distinct chunk field
 pub async fn upsert_chunk_with_cache(
-    store: &SqliteStore,
+    store: &(dyn Store + Send + Sync),
     file_id: i64,
     content: &str,
     symbol_name: Option<&str>,
@@ -158,7 +159,7 @@ pub async fn upsert_chunk_with_cache(
 /// Vector of chunk IDs in the same order as input chunks
 #[allow(clippy::type_complexity)] // Tuple matches upsert_chunk_with_cache parameters; extracting a struct would break batch API symmetry
 pub async fn upsert_chunks_batch_with_cache(
-    store: &SqliteStore,
+    store: &(dyn Store + Send + Sync),
     chunks: &[(
         i64,                       // file_id
         String,                    // content (for blob_sha)
@@ -335,7 +336,7 @@ pub struct ParsedChunk {
 /// # }
 /// ```
 pub async fn upsert_chunk_with_worktree(
-    store: &SqliteStore,
+    store: &(dyn Store + Send + Sync),
     chunk: &ParsedChunk,
     worktree_id: i64,
     metrics: &CacheMetrics,

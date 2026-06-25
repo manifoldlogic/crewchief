@@ -3,8 +3,7 @@
 //! This module retrieves recency and churn scores from the chunks table
 //! and combines them into a unified signal score.
 
-use crate::db::traits::StoreGraph;
-use crate::db::SqliteStore;
+use crate::db::Store;
 use crate::search::executor_types::{RankedResult, RankedResults, SearchSource};
 use tracing::{debug, instrument};
 
@@ -44,7 +43,7 @@ impl SignalExecutor {
     /// RankedResults with combined signal scores (0.0-1.0 range)
     #[instrument(skip(store))]
     pub async fn execute(
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         repo_id: i64,
         worktree_id: Option<i64>,
     ) -> Result<RankedResults, SignalError> {
@@ -74,7 +73,7 @@ impl SignalExecutor {
     /// ```
     #[instrument(skip(store))]
     pub async fn execute_with_weights(
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         repo_id: i64,
         worktree_id: Option<i64>,
         weights: SignalWeights,
@@ -110,7 +109,7 @@ impl SignalExecutor {
     /// useful when combining with other search results.
     #[instrument(skip(store, chunk_ids), fields(chunk_count = chunk_ids.len()))]
     pub async fn execute_for_chunks(
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         chunk_ids: &[i64],
         repo_id: i64,
         worktree_id: Option<i64>,

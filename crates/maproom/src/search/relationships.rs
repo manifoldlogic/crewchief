@@ -5,8 +5,7 @@
 //! the top N most relevant chunks.
 
 use crate::context::graph::find_related_chunks;
-use crate::db::traits::StoreChunks;
-use crate::db::SqliteStore;
+use crate::db::Store;
 use crate::search::results::RelatedChunkResult;
 use anyhow::Result;
 
@@ -61,7 +60,7 @@ const PREVIEW_MAX_LENGTH: usize = 100;
 /// }
 /// ```
 pub async fn find_top_related_chunks(
-    store: &SqliteStore,
+    store: &(dyn Store + Send + Sync),
     source_chunk_id: i64,
     limit: usize,
 ) -> Result<Vec<RelatedChunkResult>> {
