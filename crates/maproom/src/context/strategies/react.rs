@@ -17,8 +17,7 @@ use crate::context::{
     token_counter::TokenCounter,
     types::{ContextBundle, ContextItem, ExpandOptions, LineRange},
 };
-use crate::db::traits::StoreChunks;
-use crate::db::SqliteStore;
+use crate::db::Store;
 use std::sync::Arc;
 
 /// Configuration for React assembly strategy.
@@ -75,7 +74,7 @@ impl ReactConfig {
 /// - Hook inclusion
 /// - JSX relationship handling
 pub struct ReactAssemblyStrategy {
-    store: Arc<SqliteStore>,
+    store: Arc<dyn Store + Send + Sync>,
     base_assembler: BasicContextAssembler,
     config: ReactConfig,
     component_detector: ComponentDetector,
@@ -86,12 +85,12 @@ pub struct ReactAssemblyStrategy {
 
 impl ReactAssemblyStrategy {
     /// Create a new React assembly strategy.
-    pub fn new(store: Arc<SqliteStore>) -> Self {
+    pub fn new(store: Arc<dyn Store + Send + Sync>) -> Self {
         Self::with_config(store, ReactConfig::default())
     }
 
     /// Create a new React assembly strategy with custom configuration.
-    pub fn with_config(store: Arc<SqliteStore>, config: ReactConfig) -> Self {
+    pub fn with_config(store: Arc<dyn Store + Send + Sync>, config: ReactConfig) -> Self {
         Self {
             base_assembler: BasicContextAssembler::new_without_cache(Arc::clone(&store)),
             store,
@@ -207,7 +206,7 @@ impl ReactAssemblyStrategy {
         // Find hooks used by this component
         let hooks = self
             .hook_detector
-            .find_used_hooks(&self.store, chunk_id)
+            .find_used_hooks(self.store.as_ref(), chunk_id)
             .await?;
 
         let mut added_count = 0;
@@ -272,7 +271,7 @@ impl ReactAssemblyStrategy {
         // Find parent components that render this component
         let parents = self
             .jsx_detector
-            .find_parent_components(&self.store, chunk_id, symbol_name)
+            .find_parent_components(self.store.as_ref(), chunk_id, symbol_name)
             .await?;
 
         let mut added_count = 0;
@@ -332,7 +331,7 @@ impl ReactAssemblyStrategy {
         // Find child components rendered by this component
         let children = self
             .jsx_detector
-            .find_child_components(&self.store, chunk_id)
+            .find_child_components(self.store.as_ref(), chunk_id)
             .await?;
 
         let mut added_count = 0;

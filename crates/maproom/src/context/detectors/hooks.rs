@@ -5,10 +5,7 @@
 //! - Custom hooks (use* naming convention)
 //! - Hook dependencies and relationships
 
-use crate::db::traits::StoreChunks;
-use crate::db::traits::StoreGraph;
-use crate::db::traits::StoreSearch;
-use crate::db::SqliteStore;
+use crate::db::Store;
 use anyhow::Result;
 use regex::Regex;
 
@@ -119,7 +116,7 @@ impl HookDetector {
     /// Vector of hook information ordered by relevance
     pub async fn find_used_hooks(
         &self,
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         chunk_id: i64,
     ) -> Result<Vec<HookInfo>> {
         use crate::db::sqlite::graph::ImportDirection;
@@ -186,7 +183,7 @@ impl HookDetector {
     /// Vector of hook information
     pub async fn find_all_custom_hooks(
         &self,
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         _worktree_id: Option<i64>,
     ) -> Result<Vec<HookInfo>> {
         // Use FTS search to find functions with "use" prefix
@@ -237,7 +234,7 @@ impl HookDetector {
     /// Hook information if found
     pub async fn find_hook_by_name(
         &self,
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         hook_name: &str,
         _worktree_id: Option<i64>,
     ) -> Result<Option<HookInfo>> {

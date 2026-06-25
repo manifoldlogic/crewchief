@@ -10,7 +10,8 @@ use super::file_loader::FileLoader;
 use super::graph::{load_relationships_parallel, RelatedChunk};
 use super::token_counter::TokenCounter;
 use super::types::{ContextBundle, ContextItem, ExpandOptions, LineRange};
-use crate::db::SqliteStore;
+use crate::db::sqlite::SqliteStore;
+use crate::db::Store;
 use crate::profile_scope;
 
 /// Chunk metadata retrieved from the database.
@@ -105,34 +106,37 @@ pub trait ContextAssembler: Send + Sync {
 /// ```
 pub struct BasicContextAssembler {
     #[allow(dead_code)] // Will be used when get_chunk_metadata is implemented (IDXABS-4001)
-    store: Arc<SqliteStore>,
+    store: Arc<dyn Store + Send + Sync>,
     token_counter: TokenCounter,
-    cache: Arc<ContextCache>,
+    // SQLite-only optimization (Open Decision 7): `None` on the backend-agnostic
+    // path; only constructed by the SQLite-specific `new`.
+    cache: Option<Arc<ContextCache>>,
 }
 
 impl BasicContextAssembler {
     /// Create a new basic context assembler with the specified cache configuration.
+    /// SQLite-only: the `ContextCache` binds to a concrete `SqliteStore`.
     pub fn new(store: Arc<SqliteStore>, cache_config: CacheConfig) -> Self {
         let cache = Arc::new(ContextCache::new(store.clone(), cache_config));
         Self {
             store,
             token_counter: TokenCounter::new(),
-            cache,
+            cache: Some(cache),
         }
     }
 
-    /// Create a new basic context assembler with caching disabled.
-    pub fn new_without_cache(store: Arc<SqliteStore>) -> Self {
-        let cache_config = CacheConfig {
-            enabled: false,
-            ..Default::default()
-        };
-        Self::new(store, cache_config)
+    /// Create a new basic context assembler with caching disabled (any backend).
+    pub fn new_without_cache(store: Arc<dyn Store + Send + Sync>) -> Self {
+        Self {
+            store,
+            token_counter: TokenCounter::new(),
+            cache: None,
+        }
     }
 
-    /// Get a reference to the cache for statistics and management.
-    pub fn cache(&self) -> &Arc<ContextCache> {
-        &self.cache
+    /// Get a reference to the cache for statistics and management, if enabled.
+    pub fn cache(&self) -> Option<&Arc<ContextCache>> {
+        self.cache.as_ref()
     }
 
     /// Retrieve chunk metadata from the database by ID.
@@ -200,10 +204,12 @@ impl ContextAssembler for BasicContextAssembler {
             chunk_id, budget
         );
 
-        // Try to get from cache first
-        if let Some(cached_bundle) = self.cache.get(chunk_id, &options).await? {
-            debug!("Returning cached bundle for chunk {}", chunk_id);
-            return Ok(cached_bundle);
+        // Try to get from cache first (cache is SQLite-only; absent otherwise).
+        if let Some(cache) = &self.cache {
+            if let Some(cached_bundle) = cache.get(chunk_id, &options).await? {
+                debug!("Returning cached bundle for chunk {}", chunk_id);
+                return Ok(cached_bundle);
+            }
         }
 
         // Cache miss - assemble the bundle
@@ -248,10 +254,12 @@ impl ContextAssembler for BasicContextAssembler {
             bundle.truncated
         );
 
-        // Store in cache for future use
-        if let Err(e) = self.cache.put(chunk_id, &options, &bundle).await {
-            // Log cache error but don't fail the request
-            warn!("Failed to cache bundle for chunk {}: {}", chunk_id, e);
+        // Store in cache for future use (SQLite-only; no-op when absent).
+        if let Some(cache) = &self.cache {
+            if let Err(e) = cache.put(chunk_id, &options, &bundle).await {
+                // Log cache error but don't fail the request
+                warn!("Failed to cache bundle for chunk {}: {}", chunk_id, e);
+            }
         }
 
         Ok(bundle)
@@ -298,34 +306,36 @@ impl ContextAssembler for BasicContextAssembler {
 /// }
 /// ```
 pub struct ParallelContextAssembler {
-    store: Arc<SqliteStore>,
+    store: Arc<dyn Store + Send + Sync>,
     token_counter: TokenCounter,
-    cache: Arc<ContextCache>,
+    // SQLite-only optimization (Open Decision 7); `None` on the dyn path.
+    cache: Option<Arc<ContextCache>>,
 }
 
 impl ParallelContextAssembler {
     /// Create a new parallel context assembler with the specified cache configuration.
+    /// SQLite-only: the `ContextCache` binds to a concrete `SqliteStore`.
     pub fn new(store: Arc<SqliteStore>, cache_config: CacheConfig) -> Self {
         let cache = Arc::new(ContextCache::new(store.clone(), cache_config));
         Self {
             store,
             token_counter: TokenCounter::new(),
-            cache,
+            cache: Some(cache),
         }
     }
 
-    /// Create a new parallel context assembler with caching disabled.
-    pub fn new_without_cache(store: Arc<SqliteStore>) -> Self {
-        let cache_config = CacheConfig {
-            enabled: false,
-            ..Default::default()
-        };
-        Self::new(store, cache_config)
+    /// Create a new parallel context assembler with caching disabled (any backend).
+    pub fn new_without_cache(store: Arc<dyn Store + Send + Sync>) -> Self {
+        Self {
+            store,
+            token_counter: TokenCounter::new(),
+            cache: None,
+        }
     }
 
-    /// Get a reference to the cache for statistics and management.
-    pub fn cache(&self) -> &Arc<ContextCache> {
-        &self.cache
+    /// Get a reference to the cache for statistics and management, if enabled.
+    pub fn cache(&self) -> Option<&Arc<ContextCache>> {
+        self.cache.as_ref()
     }
 
     /// Retrieve chunk metadata from the database by ID (same as BasicContextAssembler).
@@ -507,10 +517,12 @@ impl ContextAssembler for ParallelContextAssembler {
             chunk_id, budget
         );
 
-        // Try to get from cache first
-        if let Some(cached_bundle) = self.cache.get(chunk_id, &options).await? {
-            debug!("Returning cached bundle for chunk {}", chunk_id);
-            return Ok(cached_bundle);
+        // Try to get from cache first (cache is SQLite-only; absent otherwise).
+        if let Some(cache) = &self.cache {
+            if let Some(cached_bundle) = cache.get(chunk_id, &options).await? {
+                debug!("Returning cached bundle for chunk {}", chunk_id);
+                return Ok(cached_bundle);
+            }
         }
 
         debug!(
@@ -526,7 +538,8 @@ impl ContextAssembler for ParallelContextAssembler {
         let (metadata_result, relationships) =
             tokio::join!(self.get_chunk_metadata(chunk_id), async {
                 if options.callers || options.callees || options.tests {
-                    load_relationships_parallel(&self.store, chunk_id, options.max_depth).await
+                    load_relationships_parallel(self.store.as_ref(), chunk_id, options.max_depth)
+                        .await
                 } else {
                     (Vec::new(), Vec::new(), Vec::new())
                 }
@@ -621,9 +634,11 @@ impl ContextAssembler for ParallelContextAssembler {
             bundle.truncated
         );
 
-        // Store in cache for future use
-        if let Err(e) = self.cache.put(chunk_id, &options, &bundle).await {
-            warn!("Failed to cache bundle for chunk {}: {}", chunk_id, e);
+        // Store in cache for future use (SQLite-only; no-op when absent).
+        if let Some(cache) = &self.cache {
+            if let Err(e) = cache.put(chunk_id, &options, &bundle).await {
+                warn!("Failed to cache bundle for chunk {}: {}", chunk_id, e);
+            }
         }
 
         Ok(bundle)

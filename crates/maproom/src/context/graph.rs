@@ -8,9 +8,7 @@
 //! - Multiple relationship types filtering
 
 use crate::db::sqlite::graph::{GraphResult, ImportDirection};
-use crate::db::traits::StoreChunks;
-use crate::db::traits::StoreGraph;
-use crate::db::SqliteStore;
+use crate::db::Store;
 use anyhow::Result;
 
 /// Relevance decay factor per hop in graph traversal
@@ -85,7 +83,7 @@ impl EdgeType {
 
 /// Convert a GraphResult to a RelatedChunk by fetching chunk details
 async fn graph_result_to_related_chunk(
-    store: &SqliteStore,
+    store: &(dyn Store + Send + Sync),
     result: GraphResult,
 ) -> Result<Option<RelatedChunk>> {
     // Fetch chunk details from the store
@@ -109,7 +107,7 @@ async fn graph_result_to_related_chunk(
 
 /// Convert multiple GraphResults to RelatedChunks in batch
 async fn graph_results_to_related_chunks(
-    store: &SqliteStore,
+    store: &(dyn Store + Send + Sync),
     results: Vec<GraphResult>,
     edge_types: Option<&[EdgeType]>,
 ) -> Result<Vec<RelatedChunk>> {
@@ -167,7 +165,7 @@ async fn graph_results_to_related_chunks(
 /// }
 /// ```
 pub async fn find_related_chunks(
-    store: &SqliteStore,
+    store: &(dyn Store + Send + Sync),
     chunk_id: i64,
     max_depth: i32,
     edge_types: Option<Vec<EdgeType>>,
@@ -233,7 +231,7 @@ pub async fn find_related_chunks(
 /// # Returns
 /// Vector of related chunks ordered by relevance score
 pub async fn find_related_chunks_directional(
-    store: &SqliteStore,
+    store: &(dyn Store + Send + Sync),
     chunk_id: i64,
     max_depth: i32,
     edge_types: Option<Vec<EdgeType>>,
@@ -308,7 +306,7 @@ pub async fn find_related_chunks_directional(
 ///          callers.len(), callees.len(), tests.len());
 /// ```
 pub async fn load_relationships_parallel(
-    store: &SqliteStore,
+    store: &(dyn Store + Send + Sync),
     chunk_id: i64,
     max_depth: i32,
 ) -> (Vec<RelatedChunk>, Vec<RelatedChunk>, Vec<RelatedChunk>) {
@@ -360,6 +358,7 @@ pub async fn load_relationships_parallel(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::sqlite::SqliteStore;
     use crate::db::traits::StoreMigration;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
