@@ -107,6 +107,33 @@ impl StoreChunks for PostgresStore {
         Ok(res.rows_affected())
     }
 
+    async fn remove_worktree_from_chunks(
+        &self,
+        worktree_id: i64,
+        relpath: &str,
+    ) -> anyhow::Result<i64> {
+        // Drop this worktree's mapping for the file's chunks ...
+        let affected = sqlx::query(
+            "DELETE FROM chunk_worktrees WHERE worktree_id = $1 AND chunk_id IN ( \
+                 SELECT c.id FROM chunks c JOIN files f ON c.file_id = f.id \
+                 WHERE f.relpath = $2 \
+             )",
+        )
+        .bind(worktree_id)
+        .bind(relpath)
+        .execute(&self.pool)
+        .await?
+        .rows_affected() as i64;
+        // ... then GC chunks no longer referenced by any worktree.
+        sqlx::query(
+            "DELETE FROM chunks WHERE NOT EXISTS \
+             (SELECT 1 FROM chunk_worktrees cw WHERE cw.chunk_id = chunks.id)",
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(affected)
+    }
+
     async fn get_chunk_by_id(&self, chunk_id: i64) -> anyhow::Result<Option<ChunkFull>> {
         let row = sqlx::query(
             "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature, \

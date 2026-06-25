@@ -1600,7 +1600,7 @@ async fn main() -> anyhow::Result<()> {
                         let wt_id = *worktree_id.read().unwrap();
 
                         // Trigger incremental update for the worktree
-                        match incremental_update(&store, wt_id, &watch_path).await {
+                        match incremental_update(store.as_ref(), wt_id, &watch_path).await {
                             Ok(stats) => {
                                 if stats.files_processed > 0 {
                                     if json {

@@ -969,6 +969,31 @@ impl StoreChunks for SqliteStore {
         .await
     }
 
+    async fn remove_worktree_from_chunks(
+        &self,
+        worktree_id: i64,
+        relpath: &str,
+    ) -> anyhow::Result<i64> {
+        let relpath = relpath.to_string();
+        self.write_with_retry(move |conn| {
+            // Drop this worktree's mapping for the file's chunks ...
+            let affected = conn.execute(
+                "DELETE FROM chunk_worktrees WHERE worktree_id = ?1 AND chunk_id IN ( \
+                     SELECT c.id FROM chunks c JOIN files f ON c.file_id = f.id \
+                     WHERE f.relpath = ?2 \
+                 )",
+                params![worktree_id, relpath],
+            )?;
+            // ... then GC chunks no longer referenced by any worktree.
+            conn.execute(
+                "DELETE FROM chunks WHERE id NOT IN (SELECT DISTINCT chunk_id FROM chunk_worktrees)",
+                [],
+            )?;
+            Ok(affected as i64)
+        })
+        .await
+    }
+
     async fn find_chunk_by_symbol(
         &self,
         repo_id: i64,

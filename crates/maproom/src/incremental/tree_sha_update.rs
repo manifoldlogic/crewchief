@@ -41,8 +41,8 @@
 //! # }
 //! ```
 
-use crate::db::index_state::{get_last_indexed_tree, UpdateStats};
-use crate::db::SqliteStore;
+use crate::db::index_state::UpdateStats;
+use crate::db::Store;
 use crate::git::{get_git_tree_sha, git_diff_tree, FileStatus};
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -122,58 +122,12 @@ impl Default for UpdateStats {
 /// # }
 /// ```
 pub async fn remove_worktree_from_chunks(
-    store: &SqliteStore,
+    store: &(dyn Store + Send + Sync),
     worktree_id: i64,
     relpath: &str,
 ) -> Result<i64> {
-    let relpath = relpath.to_string();
-
     store
-        .run(move |conn| {
-            // 1. Find chunks in this file that have the worktree
-            let chunk_ids: Vec<i64> = {
-                let mut stmt = conn.prepare(
-                    "SELECT c.id FROM chunks c
-                 JOIN files f ON c.file_id = f.id
-                 JOIN chunk_worktrees cw ON cw.chunk_id = c.id
-                 WHERE f.relpath = ?1 AND cw.worktree_id = ?2",
-                )?;
-                let rows =
-                    stmt.query_map(rusqlite::params![relpath, worktree_id], |row| row.get(0))?;
-                rows.filter_map(|r| r.ok()).collect()
-            };
-
-            if chunk_ids.is_empty() {
-                return Ok(0);
-            }
-
-            // 2. Remove worktree entries for these chunks
-            let placeholders: String = chunk_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-            let sql = format!(
-                "DELETE FROM chunk_worktrees WHERE chunk_id IN ({}) AND worktree_id = ?",
-                placeholders
-            );
-
-            let mut params: Vec<Box<dyn rusqlite::ToSql>> = chunk_ids
-                .iter()
-                .map(|id| Box::new(*id) as Box<dyn rusqlite::ToSql>)
-                .collect();
-            params.push(Box::new(worktree_id));
-
-            // Use execute with proper parameter handling
-            let affected = conn.execute(
-                &sql,
-                rusqlite::params_from_iter(chunk_ids.iter().chain(std::iter::once(&worktree_id))),
-            )?;
-
-            // 3. Clean up orphaned chunks (chunks with no worktrees)
-            conn.execute(
-            "DELETE FROM chunks WHERE id NOT IN (SELECT DISTINCT chunk_id FROM chunk_worktrees)",
-            []
-        )?;
-
-            Ok(affected as i64)
-        })
+        .remove_worktree_from_chunks(worktree_id, relpath)
         .await
 }
 
@@ -227,7 +181,7 @@ pub async fn remove_worktree_from_chunks(
 /// # }
 /// ```
 pub async fn incremental_update(
-    store: &SqliteStore,
+    store: &(dyn Store + Send + Sync),
     worktree_id: i64,
     repo_path: &Path,
 ) -> Result<UpdateStats> {
@@ -243,7 +197,8 @@ pub async fn incremental_update(
 
     // 2. Get last indexed tree SHA from database
     // Returns "init" if no previous state exists
-    let last_indexed = get_last_indexed_tree(store, worktree_id)
+    let last_indexed = store
+        .get_last_indexed_tree(worktree_id)
         .await
         .with_context(|| {
             format!(
@@ -326,20 +281,9 @@ pub async fn incremental_update(
         }
     }
 
-    // 6. Update index state with new tree SHA
-    // This is done after successful processing
+    // 6. Update index state with new tree SHA (after successful processing).
     store
-        .run({
-            let tree_sha = current_tree_sha.clone();
-            move |conn| {
-                conn.execute(
-                    "INSERT OR REPLACE INTO index_state (worktree_id, tree_sha, last_indexed)
-                 VALUES (?1, ?2, datetime('now'))",
-                    rusqlite::params![worktree_id, tree_sha],
-                )?;
-                Ok(())
-            }
-        })
+        .update_index_state(worktree_id, &current_tree_sha, &stats)
         .await
         .with_context(|| format!("Failed to update index state for worktree {}", worktree_id))?;
 

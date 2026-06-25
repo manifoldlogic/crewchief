@@ -251,6 +251,15 @@ pub trait StoreChunks: Send + Sync {
     /// the number of edges removed. Used before recomputing a file's edges.
     async fn delete_edges_for_file(&self, file_id: i64) -> anyhow::Result<u64>;
 
+    /// Remove a worktree's association with the chunks of one file (by relpath),
+    /// then GC any chunk left referenced by no worktree. Returns the number of
+    /// `chunk_worktrees` rows removed. Used by incremental file-deletion handling.
+    async fn remove_worktree_from_chunks(
+        &self,
+        worktree_id: i64,
+        relpath: &str,
+    ) -> anyhow::Result<i64>;
+
     /// Get full chunk data by ID.
     async fn get_chunk_by_id(&self, chunk_id: i64) -> anyhow::Result<Option<ChunkFull>>;
 
