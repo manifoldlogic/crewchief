@@ -2,7 +2,7 @@
 
 ## CI Testing Philosophy: SQLite-Only
 
-Zero configuration, no external services. PostgreSQL was intentionally removed.
+Zero configuration, no external services. CI exercises only the default SQLite backend; the maproom crate's optional PostgreSQL/pgvector backend (`cargo build --features postgres`) is intentionally not run in CI.
 
 ### Three-Tier Test Classification
 

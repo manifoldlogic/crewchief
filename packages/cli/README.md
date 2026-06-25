@@ -140,7 +140,7 @@ See the [maproom-mcp package](https://www.npmjs.com/package/maproom-mcp) for ins
 
 #### Direct CLI Usage
 
-Index and search your codebase using SQLite:
+Index and search your codebase (SQLite by default; PostgreSQL/pgvector also supported via a `postgres://` URL — see Database Setup):
 
 ```bash
 # Index your codebase (creates ~/.maproom/maproom.db)
@@ -250,13 +250,20 @@ crewchief spawn claude,gemini "fix-bug" --headless
 
 ## Database Setup
 
-Semantic code search uses SQLite for zero-configuration storage. The database is automatically created at `~/.maproom/maproom.db` when you first run `maproom scan`.
+By default, semantic code search uses SQLite for zero-configuration storage. The database is automatically created at `~/.maproom/maproom.db` when you first run `maproom scan`. maproom also supports a PostgreSQL + pgvector backend (in builds compiled with `--features postgres`): set the database URL to a `postgres://`/`postgresql://` value and the Postgres backend is selected automatically.
 
 ### Custom Database Location
 
 ```bash
-# Use a custom database path
+# Use a custom SQLite database path
 export MAPROOM_DATABASE_URL="sqlite:///path/to/custom.db"
+
+# Or use a PostgreSQL + pgvector backend (requires a build with --features postgres)
+export MAPROOM_DATABASE_URL="postgresql://user:pass@localhost/maproom"
+
+# Or override per-invocation with the global --database-url flag
+# (precedence: --database-url > MAPROOM_DATABASE_URL > default ~/.maproom/maproom.db)
+maproom --database-url postgresql://localhost/maproom scan
 ```
 
 ## Embedding Provider Setup

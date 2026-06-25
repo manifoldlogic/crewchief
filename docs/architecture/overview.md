@@ -1,6 +1,6 @@
 # Maproom Architecture Overview
 
-Maproom provides semantic code search using local embedding generation and SQLite storage. This document describes the target architecture for zero-config local development.
+Maproom provides semantic code search using local embedding generation. It supports two storage backends behind a common `Store` trait: SQLite (the default, zero-config local path) and PostgreSQL + pgvector (optional, enabled with `--features postgres` and selected when the database URL is `postgres://`/`postgresql://`). This document describes the target architecture for zero-config local development.
 
 ## System Architecture
 
@@ -43,7 +43,8 @@ graph TB
 | **MCP Server** | TypeScript | Bridge between AI tools and search daemon |
 | **Daemon Client** | TypeScript | Type-safe JSON-RPC communication, lifecycle management |
 | **Rust Daemon** | Rust + Tokio | Code parsing, embedding generation, search execution |
-| **SQLite** | sqlite-vec + FTS5 | Vector storage, full-text search, chunk metadata |
+| **SQLite** (default) | sqlite-vec + FTS5 | Vector storage, full-text search, chunk metadata |
+| **PostgreSQL** (optional) | pgvector + tsvector | Same storage via the `Store` trait; enabled with `--features postgres` and a `postgres://` URL |
 | **Ollama** | Local LLM server | 1024-dimensional embedding generation |
 
 ## Data Flow
@@ -131,9 +132,12 @@ repos              # Indexed repositories
 
 ### Auto-Detection Priority
 
-1. `MAPROOM_DATABASE_URL` environment variable (explicit)
-2. Existing database at `~/.maproom/maproom.db`
-3. Create new database at `~/.maproom/maproom.db` (default)
+1. `--database-url` CLI flag (global, highest precedence)
+2. `MAPROOM_DATABASE_URL` environment variable
+3. Existing database at `~/.maproom/maproom.db`
+4. Create new database at `~/.maproom/maproom.db` (default)
+
+A `postgres://`/`postgresql://` URL selects the PostgreSQL backend (requires a `--features postgres` build); any other value selects SQLite.
 
 ### Embedding Provider Detection
 

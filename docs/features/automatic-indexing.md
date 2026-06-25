@@ -338,7 +338,7 @@ RUST_LOG=trace maproom watch
 ### Environment Variables
 
 **Optional**:
-- `MAPROOM_DATABASE_URL`: SQLite database location (default: `~/.maproom/maproom.db`)
+- `MAPROOM_DATABASE_URL`: Database URL (default: SQLite at `~/.maproom/maproom.db`). Accepts a `sqlite://` path or, in a `--features postgres` build, a `postgres://`/`postgresql://` URL to use the PostgreSQL/pgvector backend.
   ```bash
   export MAPROOM_DATABASE_URL="sqlite:///custom/path/maproom.db"
   ```

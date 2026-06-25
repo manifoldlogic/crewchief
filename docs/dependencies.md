@@ -10,13 +10,14 @@ This document tracks the rationale for key dependencies in the Maproom project.
   - Reason: Provides async I/O for database, HTTP, and file operations
 
 ### Database
-- **tokio-postgres** `0.7.x`: Async PostgreSQL driver
-  - Features: runtime, with-chrono-0_4, array-impls, with-uuid-1, with-serde_json-1
-  - Reason: Async PostgreSQL driver compatible with tokio
-- **deadpool-postgres** `0.14.x`: Connection pooling
-  - Reason: Efficient connection pooling for database operations
-- **pgvector**: Vector similarity search (via PostgreSQL extension)
-  - Reason: Enable IVFFlat and HNSW indexes for semantic search
+
+Maproom stores data behind a `Store` trait with two backends.
+
+- **rusqlite** (`bundled`, `chrono`): SQLite backend — **default, always compiled in**
+  - Reason: zero-config local storage at `~/.maproom/maproom.db`; statically linked sqlite-vec for vector search
+- **r2d2** / **r2d2_sqlite**: SQLite connection pooling
+- **sqlx** `0.8` (`runtime-tokio` + `tls-rustls` + `postgres`): PostgreSQL + pgvector backend — **optional, behind the `postgres` feature**
+  - Reason: native-async Postgres driver, selected at runtime for `postgres://`/`postgresql://` URLs. The default build pulls **no** sqlx/pgvector dependencies. The pgvector *extension* is used via text casts, not the `pgvector` crate.
 
 ### Parsing & Code Analysis
 - **tree-sitter** `0.22.x`: Incremental parsing framework

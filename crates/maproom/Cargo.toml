@@ -2,7 +2,7 @@
 name = "maproom"
 version = "0.2.0"
 edition = "2021"
-description = "Semantic code search powered by embeddings and SQLite"
+description = "Semantic code search powered by embeddings, with SQLite or PostgreSQL/pgvector storage"
 license = "MIT"
 repository = "https://github.com/manifoldlogic/crewchief"
 homepage = "https://github.com/manifoldlogic/crewchief/tree/main/crates/maproom"
