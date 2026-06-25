@@ -253,6 +253,12 @@ async fn handle_branch_switch(
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+
+    /// Override the database URL (takes precedence over MAPROOM_DATABASE_URL).
+    /// `postgres://`/`postgresql://` selects the Postgres backend (requires a
+    /// build with `--features postgres`); anything else selects SQLite.
+    #[arg(long, global = true)]
+    database_url: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -1040,13 +1046,23 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
+    // R-WIRE-5: an explicit --database-url overrides MAPROOM_DATABASE_URL for this
+    // process, so db::connect()'s resolution observes flag > env > default.
+    if let Some(url) = cli.database_url.as_deref() {
+        std::env::set_var("MAPROOM_DATABASE_URL", url);
+    }
+
     match cli.command {
         Commands::Db { command } => match command {
             DbCommand::Migrate => {
                 // connect() auto-runs migrations, so this command just ensures
-                // the database exists and is fully migrated
+                // the database exists and is fully migrated.
                 let _store = db::connect().await?;
-                println!("✅ SQLite database is up to date");
+                let backend = match db::connection::backend_for_url(&db::get_database_url()?) {
+                    db::connection::Backend::Postgres => "PostgreSQL",
+                    db::connection::Backend::Sqlite => "SQLite",
+                };
+                println!("✅ {backend} database is up to date");
             }
             DbCommand::CleanupStale { confirm, verbose } => {
                 // Start timer for elapsed time tracking
