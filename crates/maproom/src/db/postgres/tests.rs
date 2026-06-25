@@ -14,9 +14,10 @@ use sqlx::postgres::PgPoolOptions;
 use super::PostgresStore;
 use crate::db::index_state::UpdateStats;
 use crate::db::traits::{
-    StoreChunks, StoreCleanup, StoreCore, StoreEmbeddings, StoreEncoding, StoreIndexState,
-    StoreMigration, StoreSearch,
+    StoreChunks, StoreCleanup, StoreCore, StoreEmbeddings, StoreEncoding, StoreGraph,
+    StoreIndexState, StoreMigration, StoreSearch,
 };
+use crate::db::types::ImportDirection;
 use crate::db::{ChunkRecord, FileRecord};
 
 fn test_url() -> Option<String> {
@@ -815,4 +816,183 @@ async fn phase3a_live() {
     );
 
     eprintln!("phase3a_live: encoding + cleanup + batch assertions passed");
+}
+
+/// Phase-3b verification: StoreGraph recursive-CTE traversal (§6.9, R-NFR-2).
+/// Builds a tiny call/import/extends graph and asserts depth defaults, the hard
+/// cap, directionality, ordering (depth then chunk_id), and cycle-safety.
+#[tokio::test]
+#[ignore]
+async fn graph_live() {
+    let Some(url) = test_url() else {
+        eprintln!("skipping graph_live: MAPROOM_TEST_PG_URL unset");
+        return;
+    };
+    let store = fresh_store(&url).await;
+    let repo = store.get_or_create_repo("acme/graph", "/g").await.unwrap();
+    let wt = store
+        .get_or_create_worktree(repo, "main", "/wt")
+        .await
+        .unwrap();
+    let commit = store.get_or_create_commit(repo, "s", None).await.unwrap();
+    let file = store
+        .upsert_file(&FileRecord {
+            repo_id: repo,
+            worktree_id: wt,
+            commit_id: commit,
+            relpath: "g.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "h".to_string(),
+            size_bytes: 1,
+            last_modified: None,
+        })
+        .await
+        .unwrap();
+
+    // Five chunks, ids ascending in creation order (c1<c2<c3<c4<c5).
+    let c1 = store
+        .insert_chunk(&chunk(file, wt, "G1", 1, 5))
+        .await
+        .unwrap();
+    let c2 = store
+        .insert_chunk(&chunk(file, wt, "G2", 6, 10))
+        .await
+        .unwrap();
+    let c3 = store
+        .insert_chunk(&chunk(file, wt, "G3", 11, 15))
+        .await
+        .unwrap();
+    let c4 = store
+        .insert_chunk(&chunk(file, wt, "G4", 16, 20))
+        .await
+        .unwrap();
+    let c5 = store
+        .insert_chunk(&chunk(file, wt, "G5", 21, 25))
+        .await
+        .unwrap();
+
+    // calls: c1→c2→c3 (chain) and c1→c4 (direct). Plus cycle-closing c3→c1.
+    for (src, dst) in [(c1, c2), (c2, c3), (c1, c4), (c3, c1)] {
+        store.insert_chunk_edge(src, dst, "calls").await.unwrap();
+    }
+    // imports: c1 imports c2. extends: c4 extends c5 (subclass→superclass).
+    store.insert_chunk_edge(c1, c2, "imports").await.unwrap();
+    store.insert_chunk_edge(c4, c5, "extends").await.unwrap();
+    // idempotent edge insert (ON CONFLICT DO NOTHING).
+    store.insert_chunk_edge(c1, c2, "calls").await.unwrap();
+
+    // ── find_callees (forward over 'calls'), default depth 3 ──
+    // From c1: c2(1), c4(1), c3(2), then cycle re-enters c1(3); stops (depth<3).
+    let callees = store.find_callees(c1, None).await.unwrap();
+    // Ordered by (depth, chunk_id): depth-1 {c2,c4} sorted, then c3, then c1.
+    let order: Vec<(i64, usize)> = callees.iter().map(|g| (g.chunk_id, g.depth)).collect();
+    assert_eq!(
+        order,
+        vec![(c2, 1), (c4, 1), (c3, 2), (c1, 3)],
+        "callees ordered by depth then chunk_id, cycle terminates"
+    );
+    assert!(
+        callees.iter().all(|g| g.edge_type == "calls"),
+        "edge_type tagged 'calls'"
+    );
+    // path is the hop sequence, e.g. c1→c2→c3 yields [c2,c3] for the c3 row.
+    let c3row = callees.iter().find(|g| g.chunk_id == c3).unwrap();
+    assert_eq!(c3row.path, vec![c2, c3], "path records hop sequence");
+
+    // Depth cap: Some(1) keeps only direct callees.
+    let d1 = store.find_callees(c1, Some(1)).await.unwrap();
+    let mut d1ids: Vec<i64> = d1.iter().map(|g| g.chunk_id).collect();
+    d1ids.sort_unstable();
+    assert_eq!(d1ids, vec![c2, c4], "depth=1 -> only direct callees");
+
+    // Over-cap requests clamp to HARD_MAX_DEPTH=10 (R-NFR-2): no error, no blowup.
+    let capped = store.find_callees(c1, Some(9999)).await.unwrap();
+    assert!(!capped.is_empty(), "clamped depth still traverses");
+
+    // ── find_callers (backward over 'calls') ──
+    // Who reaches c3: c2(1), then c1(2) [c1→c2], and via cycle c3→c1 the callers
+    // of c1 include c3 → so c3 itself reappears deeper. Assert the near hops.
+    let callers = store.find_callers(c3, None).await.unwrap();
+    let near: Vec<(i64, usize)> = callers
+        .iter()
+        .filter(|g| g.depth <= 2)
+        .map(|g| (g.chunk_id, g.depth))
+        .collect();
+    assert_eq!(near, vec![(c2, 1), (c1, 2)], "callers nearest-first");
+
+    // ── get_direct_edges: depth-1, any type, edge_type straight from the row ──
+    let out = store
+        .get_direct_edges(c1, ImportDirection::Outgoing)
+        .await
+        .unwrap();
+    assert!(out.iter().all(|g| g.depth == 1));
+    // c1 has outgoing 'calls' to c2,c4 and 'imports' to c2.
+    let calls_out: Vec<i64> = out
+        .iter()
+        .filter(|g| g.edge_type == "calls")
+        .map(|g| g.chunk_id)
+        .collect();
+    assert!(calls_out.contains(&c2) && calls_out.contains(&c4));
+    assert!(
+        out.iter()
+            .any(|g| g.edge_type == "imports" && g.chunk_id == c2),
+        "imports edge surfaced by get_direct_edges"
+    );
+    let inc = store
+        .get_direct_edges(c2, ImportDirection::Incoming)
+        .await
+        .unwrap();
+    assert!(
+        inc.iter()
+            .any(|g| g.chunk_id == c1 && g.edge_type == "calls"),
+        "incoming edge from c1"
+    );
+
+    // ── find_imports directionality ──
+    let imp_out = store
+        .find_imports(c1, ImportDirection::Outgoing, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        imp_out.iter().map(|g| g.chunk_id).collect::<Vec<_>>(),
+        vec![c2],
+        "what c1 imports"
+    );
+    assert!(imp_out.iter().all(|g| g.edge_type == "imports"));
+    let imp_in = store
+        .find_imports(c2, ImportDirection::Incoming, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        imp_in.iter().map(|g| g.chunk_id).collect::<Vec<_>>(),
+        vec![c1],
+        "who imports c2"
+    );
+
+    // ── find_extensions directionality ──
+    let ext_out = store
+        .find_extensions(c4, ImportDirection::Outgoing, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        ext_out.iter().map(|g| g.chunk_id).collect::<Vec<_>>(),
+        vec![c5],
+        "superclasses of c4"
+    );
+    assert!(ext_out.iter().all(|g| g.edge_type == "extends"));
+    let ext_in = store
+        .find_extensions(c5, ImportDirection::Incoming, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        ext_in.iter().map(|g| g.chunk_id).collect::<Vec<_>>(),
+        vec![c4],
+        "subclasses of c5"
+    );
+
+    // No edges of a type / unknown node -> empty, never error.
+    assert!(store.find_callees(c5, None).await.unwrap().is_empty());
+    assert!(store.find_callers(999_999, None).await.unwrap().is_empty());
+
+    eprintln!("graph_live: all StoreGraph traversal assertions passed");
 }
