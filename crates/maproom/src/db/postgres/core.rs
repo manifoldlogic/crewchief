@@ -236,6 +236,27 @@ impl StoreCore for PostgresStore {
         Ok(r)
     }
 
+    async fn get_file_edge_context(
+        &self,
+        file_id: i64,
+    ) -> anyhow::Result<Option<(String, Option<String>, String)>> {
+        let row = sqlx::query(
+            "SELECT f.relpath, f.language, w.abs_path \
+             FROM files f JOIN worktrees w ON f.worktree_id = w.id \
+             WHERE f.id = $1",
+        )
+        .bind(file_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|r| {
+            (
+                r.get::<String, _>("relpath"),
+                r.get::<Option<String>, _>("language"),
+                r.get::<String, _>("abs_path"),
+            )
+        }))
+    }
+
     async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
         let n: i64 =
             sqlx::query_scalar("SELECT count(*) FROM chunk_worktrees WHERE worktree_id = $1")

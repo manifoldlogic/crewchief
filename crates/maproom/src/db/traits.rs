@@ -150,6 +150,13 @@ pub trait StoreCore: Send + Sync {
         exclude_relpath: &str,
     ) -> anyhow::Result<Option<String>>;
 
+    /// Get a file's `(relpath, language, worktree abs_path)` for edge extraction.
+    /// Returns `None` if the file (or its worktree) is missing.
+    async fn get_file_edge_context(
+        &self,
+        file_id: i64,
+    ) -> anyhow::Result<Option<(String, Option<String>, String)>>;
+
     /// Get the count of chunks associated with a worktree.
     async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64>;
 
@@ -239,6 +246,10 @@ pub trait StoreChunks: Send + Sync {
         dst_chunk_id: i64,
         edge_type: &str,
     ) -> anyhow::Result<()>;
+
+    /// Delete every edge touching any chunk of a file (as src OR dst). Returns
+    /// the number of edges removed. Used before recomputing a file's edges.
+    async fn delete_edges_for_file(&self, file_id: i64) -> anyhow::Result<u64>;
 
     /// Get full chunk data by ID.
     async fn get_chunk_by_id(&self, chunk_id: i64) -> anyhow::Result<Option<ChunkFull>>;

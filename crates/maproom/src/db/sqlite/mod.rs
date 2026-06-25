@@ -628,6 +628,31 @@ impl StoreCore for SqliteStore {
         .await
     }
 
+    async fn get_file_edge_context(
+        &self,
+        file_id: i64,
+    ) -> anyhow::Result<Option<(String, Option<String>, String)>> {
+        self.run(move |conn| {
+            let result = conn
+                .query_row(
+                    "SELECT f.relpath, f.language, w.abs_path \
+                     FROM files f JOIN worktrees w ON f.worktree_id = w.id \
+                     WHERE f.id = ?1",
+                    params![file_id],
+                    |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, Option<String>>(1)?,
+                            row.get::<_, String>(2)?,
+                        ))
+                    },
+                )
+                .optional()?;
+            Ok(result)
+        })
+        .await
+    }
+
     async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
         self.run(move |conn| {
             // SQLite: count chunks via chunk_worktrees junction table
@@ -927,6 +952,21 @@ impl StoreChunks for SqliteStore {
             )?;
             Ok(())
         }).await
+    }
+
+    async fn delete_edges_for_file(&self, file_id: i64) -> anyhow::Result<u64> {
+        self.write_with_retry(move |conn| {
+            let deleted = conn.execute(
+                "DELETE FROM chunk_edges WHERE src_chunk_id IN ( \
+                     SELECT id FROM chunks WHERE file_id = ?1 \
+                 ) OR dst_chunk_id IN ( \
+                     SELECT id FROM chunks WHERE file_id = ?1 \
+                 )",
+                params![file_id],
+            )?;
+            Ok(deleted as u64)
+        })
+        .await
     }
 
     async fn find_chunk_by_symbol(

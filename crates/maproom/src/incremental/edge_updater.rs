@@ -34,8 +34,7 @@
 use anyhow::{Context, Result};
 use tracing::debug;
 
-use crate::db::traits::StoreChunks;
-use crate::db::SqliteStore;
+use crate::db::Store;
 use std::sync::Arc;
 
 /// Edge updater for maintaining chunk relationships.
@@ -60,18 +59,18 @@ use std::sync::Arc;
 /// }
 /// ```
 pub struct EdgeUpdater {
-    store: Arc<SqliteStore>,
+    store: Arc<dyn Store + Send + Sync>,
 }
 
 impl EdgeUpdater {
     /// Create a new edge updater.
     ///
     /// # Arguments
-    /// * `store` - SqliteStore instance
+    /// * `store` - backend store handle
     ///
     /// # Returns
     /// A new edge updater ready to maintain chunk relationships
-    pub fn new(store: Arc<SqliteStore>) -> Self {
+    pub fn new(store: Arc<dyn Store + Send + Sync>) -> Self {
         Self { store }
     }
 
@@ -122,28 +121,14 @@ impl EdgeUpdater {
 
         // 2. Recompute edges
         // Get file metadata (relpath, language) and worktree root path
-        let file_metadata = self
-            .store
-            .run(move |conn| {
-                let result = conn.query_row(
-                    "SELECT f.relpath, f.language, w.abs_path
-                     FROM files f
-                     JOIN worktrees w ON f.worktree_id = w.id
-                     WHERE f.id = ?",
-                    rusqlite::params![file_id],
-                    |row| {
-                        Ok((
-                            row.get::<_, String>(0)?,
-                            row.get::<_, Option<String>>(1)?,
-                            row.get::<_, String>(2)?,
-                        ))
-                    },
-                )?;
-                Ok(result)
-            })
-            .await?;
-
-        let (relpath, language, root_path) = file_metadata;
+        let (relpath, language, root_path) = match self.store.get_file_edge_context(file_id).await?
+        {
+            Some(ctx) => ctx,
+            None => {
+                debug!(file_id = file_id, "File not found; skipping edge update");
+                return Ok(());
+            }
+        };
 
         // Check if this is a TypeScript/JavaScript file
         let language = match language {
@@ -169,28 +154,21 @@ impl EdgeUpdater {
             )
         })?;
 
-        // Load chunks for this file
+        // Load chunks for this file (map ChunkSummary -> ChunkWithId).
         let chunks_with_ids: Vec<ChunkWithId> = self
             .store
-            .run(move |conn| {
-                let mut stmt = conn.prepare(
-                    "SELECT id, symbol_name, kind, start_line, end_line FROM chunks WHERE file_id = ?",
-                )?;
-                let chunks = stmt
-                    .query_map(rusqlite::params![file_id], |row| {
-                        Ok(ChunkWithId {
-                            id: row.get(0)?,
-                            symbol_name: row.get(1)?,
-                            kind: row.get(2)?,
-                            start_line: row.get(3)?,
-                            end_line: row.get(4)?,
-                            file_id,
-                        })
-                    })?
-                    .collect::<std::result::Result<Vec<_>, _>>()?;
-                Ok(chunks)
+            .get_file_chunks(file_id)
+            .await?
+            .into_iter()
+            .map(|c| ChunkWithId {
+                id: c.id,
+                symbol_name: c.symbol_name,
+                kind: c.kind,
+                start_line: c.start_line,
+                end_line: c.end_line,
+                file_id,
             })
-            .await?;
+            .collect();
 
         // Extract edges
         let edges_to_insert = edges::extract_edges(&content, &language, &chunks_with_ids)?;
@@ -221,20 +199,7 @@ impl EdgeUpdater {
     /// # Returns
     /// Number of edges deleted
     pub async fn delete_edges_for_file(&self, file_id: i64) -> Result<u64> {
-        let count = self
-            .store
-            .run(move |conn| {
-                let deleted = conn.execute(
-                    "DELETE FROM chunk_edges WHERE src_chunk_id IN (
-                     SELECT id FROM chunks WHERE file_id = ?1
-                 ) OR dst_chunk_id IN (
-                     SELECT id FROM chunks WHERE file_id = ?1
-                 )",
-                    rusqlite::params![file_id],
-                )?;
-                Ok(deleted as u64)
-            })
-            .await?;
+        let count = self.store.delete_edges_for_file(file_id).await?;
 
         debug!(
             file_id = file_id,
@@ -305,7 +270,10 @@ impl EdgeType {
 /// - Function call graph via symbol resolution
 /// - Test target detection via naming conventions
 /// - Route handler detection via framework patterns
-async fn compute_edges(_store: &SqliteStore, _chunk_ids: &[i64]) -> Result<Vec<Edge>> {
+async fn compute_edges(
+    _store: &(dyn Store + Send + Sync),
+    _chunk_ids: &[i64],
+) -> Result<Vec<Edge>> {
     // TODO: Implement SQLite-based edge computation
     // This will be implemented in a future ticket
     Ok(Vec::new())
@@ -368,7 +336,7 @@ fn is_route_chunk(kind: &str, symbol_name: Option<&str>) -> bool {
 /// # Returns
 /// Vector of TestOf edges
 async fn find_test_targets(
-    _store: &SqliteStore,
+    _store: &(dyn Store + Send + Sync),
     _test_chunk_id: i64,
     _test_symbol_name: Option<&str>,
 ) -> Result<Vec<Edge>> {
@@ -386,29 +354,22 @@ async fn find_test_targets(
 ///
 /// # Returns
 /// Number of edges inserted
-async fn insert_edges(store: &SqliteStore, edges: &[Edge]) -> Result<u64> {
+async fn insert_edges(store: &(dyn Store + Send + Sync), edges: &[Edge]) -> Result<u64> {
     if edges.is_empty() {
         return Ok(0);
     }
-
-    let edges = edges.to_vec();
-    store.run(move |conn| {
-        let mut stmt = conn.prepare(
-            "INSERT OR IGNORE INTO chunk_edges (src_chunk_id, dst_chunk_id, type) VALUES (?1, ?2, ?3)"
-        )?;
-
-        let mut count = 0u64;
-        for edge in &edges {
-            let rows = stmt.execute(rusqlite::params![
+    let mut count = 0u64;
+    for edge in edges {
+        store
+            .insert_chunk_edge(
                 edge.src_chunk_id,
                 edge.dst_chunk_id,
-                edge.edge_type.as_str()
-            ])?;
-            count += rows as u64;
-        }
-
-        Ok(count)
-    }).await
+                edge.edge_type.as_str(),
+            )
+            .await?;
+        count += 1;
+    }
+    Ok(count)
 }
 
 #[cfg(test)]

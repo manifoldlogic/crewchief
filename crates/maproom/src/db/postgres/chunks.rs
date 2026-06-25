@@ -93,6 +93,20 @@ impl StoreChunks for PostgresStore {
         Ok(())
     }
 
+    async fn delete_edges_for_file(&self, file_id: i64) -> anyhow::Result<u64> {
+        let res = sqlx::query(
+            "DELETE FROM chunk_edges WHERE src_chunk_id IN ( \
+                 SELECT id FROM chunks WHERE file_id = $1 \
+             ) OR dst_chunk_id IN ( \
+                 SELECT id FROM chunks WHERE file_id = $1 \
+             )",
+        )
+        .bind(file_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(res.rows_affected())
+    }
+
     async fn get_chunk_by_id(&self, chunk_id: i64) -> anyhow::Result<Option<ChunkFull>> {
         let row = sqlx::query(
             "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature, \
