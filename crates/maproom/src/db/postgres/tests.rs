@@ -996,3 +996,189 @@ async fn graph_live() {
 
     eprintln!("graph_live: all StoreGraph traversal assertions passed");
 }
+
+/// Phase-3b verification: StoreGraph scoring (graph importance legacy + quality,
+/// signal scores), full-repo and for-chunks, with/without a worktree filter.
+#[tokio::test]
+#[ignore]
+async fn graph_scoring_live() {
+    let Some(url) = test_url() else {
+        eprintln!("skipping graph_scoring_live: MAPROOM_TEST_PG_URL unset");
+        return;
+    };
+    use crate::config::EdgeQualityWeights;
+    let store = fresh_store(&url).await;
+    let repo = store.get_or_create_repo("acme/score", "/s").await.unwrap();
+    let wt = store
+        .get_or_create_worktree(repo, "main", "/wt")
+        .await
+        .unwrap();
+    let commit = store.get_or_create_commit(repo, "s", None).await.unwrap();
+    let file = store
+        .upsert_file(&FileRecord {
+            repo_id: repo,
+            worktree_id: wt,
+            commit_id: commit,
+            relpath: "s.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "h".to_string(),
+            size_bytes: 1,
+            last_modified: None,
+        })
+        .await
+        .unwrap();
+
+    // Chunks with distinct recency/churn so signal ordering is unambiguous.
+    let mk = |blob: &str, s: i32, e: i32, recency: f32, churn: f32| ChunkRecord {
+        file_id: file,
+        blob_sha: blob.to_string(),
+        symbol_name: Some(blob.to_string()),
+        kind: "function".to_string(),
+        signature: None,
+        docstring: None,
+        start_line: s,
+        end_line: e,
+        preview: "p".to_string(),
+        ts_doc_text: "t".to_string(),
+        recency_score: recency,
+        churn_score: churn,
+        metadata: None,
+        worktree_id: wt,
+    };
+    let s1 = store.insert_chunk(&mk("S1", 1, 5, 0.9, 0.1)).await.unwrap();
+    let s2 = store
+        .insert_chunk(&mk("S2", 6, 10, 0.2, 0.8))
+        .await
+        .unwrap();
+    let s3 = store
+        .insert_chunk(&mk("S3", 11, 15, 0.5, 0.5))
+        .await
+        .unwrap();
+
+    // Inbound edges: s1 has 2 callers + 1 importer; s2 has 1 caller; s3 has none.
+    for (src, dst, ty) in [
+        (s2, s1, "calls"),
+        (s3, s1, "calls"),
+        (s3, s2, "calls"),
+        (s3, s1, "imports"),
+    ] {
+        store.insert_chunk_edge(src, dst, ty).await.unwrap();
+    }
+
+    // ── calculate_graph_importance (legacy log formula) ──
+    let imp = store
+        .calculate_graph_importance(repo, Some(wt), 10, false, &EdgeQualityWeights::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        imp.iter().map(|h| h.chunk_id).collect::<Vec<_>>(),
+        vec![s1, s2, s3],
+        "legacy importance: most-referenced first"
+    );
+    // s1: ln(4)*.3 + ln(3)*.2 + ln(2)*.1 ≈ 0.7049; descending; all scores finite.
+    assert!(
+        (imp[0].score - 0.7049).abs() < 1e-3,
+        "s1 score {}",
+        imp[0].score
+    );
+    assert!(imp.windows(2).all(|w| w[0].score >= w[1].score));
+
+    // Quality path (enable_quality=true): all sources are production code so each
+    // edge weighs 1.0; s1 (3 inbound) still tops, s3 (0) bottoms.
+    let q = store
+        .calculate_graph_importance(repo, Some(wt), 10, true, &EdgeQualityWeights::default())
+        .await
+        .unwrap();
+    assert_eq!(q.first().map(|h| h.chunk_id), Some(s1), "quality top = s1");
+    assert_eq!(
+        q.last().map(|h| h.chunk_id),
+        Some(s3),
+        "quality bottom = s3"
+    );
+
+    // No-worktree variant returns the same ranking here (single worktree).
+    let imp_norepo = store
+        .calculate_graph_importance(repo, None, 10, false, &EdgeQualityWeights::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        imp_norepo.iter().map(|h| h.chunk_id).collect::<Vec<_>>(),
+        vec![s1, s2, s3]
+    );
+
+    // ── calculate_graph_importance_for_chunks (subset, no LIMIT) ──
+    let imp_sub = store
+        .calculate_graph_importance_for_chunks(&[s3, s2], repo, Some(wt))
+        .await
+        .unwrap();
+    assert_eq!(
+        imp_sub.iter().map(|h| h.chunk_id).collect::<Vec<_>>(),
+        vec![s2, s3],
+        "subset importance ranks s2 above s3"
+    );
+    assert!(store
+        .calculate_graph_importance_for_chunks(&[], repo, Some(wt))
+        .await
+        .unwrap()
+        .is_empty());
+
+    // ── calculate_signal_scores ──
+    // recency-only weighting: s1(0.9) > s3(0.5) > s2(0.2).
+    let by_recency = store
+        .calculate_signal_scores(repo, Some(wt), 1.0, 0.0, 10)
+        .await
+        .unwrap();
+    assert_eq!(
+        by_recency.iter().map(|h| h.chunk_id).collect::<Vec<_>>(),
+        vec![s1, s3, s2],
+        "recency-weighted order"
+    );
+    assert!(
+        (by_recency[0].score - 0.9).abs() < 1e-5,
+        "recency score passthrough"
+    );
+    // churn-only weighting: s2(0.8) > s3(0.5) > s1(0.1).
+    let by_churn = store
+        .calculate_signal_scores(repo, Some(wt), 0.0, 1.0, 10)
+        .await
+        .unwrap();
+    assert_eq!(
+        by_churn.iter().map(|h| h.chunk_id).collect::<Vec<_>>(),
+        vec![s2, s3, s1],
+        "churn-weighted order"
+    );
+    // LIMIT honored.
+    let top1 = store
+        .calculate_signal_scores(repo, Some(wt), 1.0, 0.0, 1)
+        .await
+        .unwrap();
+    assert_eq!(top1.len(), 1);
+    assert_eq!(top1[0].chunk_id, s1);
+    // No-worktree variant.
+    let nr = store
+        .calculate_signal_scores(repo, None, 1.0, 0.0, 10)
+        .await
+        .unwrap();
+    assert_eq!(
+        nr.iter().map(|h| h.chunk_id).collect::<Vec<_>>(),
+        vec![s1, s3, s2]
+    );
+
+    // ── calculate_signal_scores_for_chunks (subset, no LIMIT) ──
+    let sig_sub = store
+        .calculate_signal_scores_for_chunks(&[s2, s1], repo, Some(wt), 1.0, 0.0)
+        .await
+        .unwrap();
+    assert_eq!(
+        sig_sub.iter().map(|h| h.chunk_id).collect::<Vec<_>>(),
+        vec![s1, s2],
+        "subset signal ranks s1 (recency 0.9) above s2"
+    );
+    assert!(store
+        .calculate_signal_scores_for_chunks(&[], repo, Some(wt), 1.0, 0.0)
+        .await
+        .unwrap()
+        .is_empty());
+
+    eprintln!("graph_scoring_live: all StoreGraph scoring assertions passed");
+}
