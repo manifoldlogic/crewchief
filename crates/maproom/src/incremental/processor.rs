@@ -34,9 +34,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
-use crate::db::traits::StoreChunks;
-use crate::db::traits::StoreCore;
-use crate::db::SqliteStore;
+use crate::db::Store;
 use crate::indexer::SymbolChunk;
 use std::sync::Arc;
 
@@ -89,7 +87,7 @@ const MAX_FILE_SIZE_BYTES: u64 = 10 * 1024 * 1024; // 10MB
 /// }
 /// ```
 pub struct IncrementalProcessor {
-    store: Arc<SqliteStore>,
+    store: Arc<dyn Store + Send + Sync>,
     edge_updater: EdgeUpdater,
     repo_root: PathBuf,
     repo_id: i64,
@@ -110,7 +108,7 @@ impl IncrementalProcessor {
     /// # Returns
     /// A new processor ready to handle file updates
     pub fn new(
-        store: Arc<SqliteStore>,
+        store: Arc<dyn Store + Send + Sync>,
         repo_root: PathBuf,
         repo_id: i64,
         worktree_id: i64,
