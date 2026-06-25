@@ -554,6 +554,80 @@ impl StoreCore for SqliteStore {
         .await
     }
 
+    async fn get_file_content_hash(&self, file_id: i64) -> anyhow::Result<Option<String>> {
+        self.run(move |conn| {
+            let result: Option<String> = conn
+                .query_row(
+                    "SELECT content_hash FROM files WHERE id = ?1",
+                    params![file_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            Ok(result)
+        })
+        .await
+    }
+
+    async fn update_file_content_hash(
+        &self,
+        file_id: i64,
+        content_hash: &str,
+    ) -> anyhow::Result<()> {
+        let content_hash = content_hash.to_string();
+        self.run(move |conn| {
+            conn.execute(
+                "UPDATE files SET content_hash = ?1 WHERE id = ?2",
+                params![content_hash, file_id],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    async fn get_file_content_hashes(
+        &self,
+        file_ids: &[i64],
+    ) -> anyhow::Result<Vec<(i64, String)>> {
+        if file_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let file_ids = file_ids.to_vec();
+        self.run(move |conn| {
+            let placeholders = file_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+            let sql = format!("SELECT id, content_hash FROM files WHERE id IN ({placeholders})");
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt.query_map(rusqlite::params_from_iter(file_ids.iter()), |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+            })?;
+            let mut out = Vec::new();
+            for r in rows {
+                out.push(r?);
+            }
+            Ok(out)
+        })
+        .await
+    }
+
+    async fn find_file_relpath_by_content_hash(
+        &self,
+        content_hash: &str,
+        exclude_relpath: &str,
+    ) -> anyhow::Result<Option<String>> {
+        let content_hash = content_hash.to_string();
+        let exclude_relpath = exclude_relpath.to_string();
+        self.run(move |conn| {
+            let result: Option<String> = conn
+                .query_row(
+                    "SELECT relpath FROM files WHERE content_hash = ?1 AND relpath != ?2 LIMIT 1",
+                    params![content_hash, exclude_relpath],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            Ok(result)
+        })
+        .await
+    }
+
     async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
         self.run(move |conn| {
             // SQLite: count chunks via chunk_worktrees junction table

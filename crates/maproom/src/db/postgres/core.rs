@@ -183,6 +183,59 @@ impl StoreCore for PostgresStore {
         Ok(id)
     }
 
+    async fn get_file_content_hash(&self, file_id: i64) -> anyhow::Result<Option<String>> {
+        let h: Option<String> = sqlx::query_scalar("SELECT content_hash FROM files WHERE id = $1")
+            .bind(file_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(h)
+    }
+
+    async fn update_file_content_hash(
+        &self,
+        file_id: i64,
+        content_hash: &str,
+    ) -> anyhow::Result<()> {
+        sqlx::query("UPDATE files SET content_hash = $1 WHERE id = $2")
+            .bind(content_hash)
+            .bind(file_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn get_file_content_hashes(
+        &self,
+        file_ids: &[i64],
+    ) -> anyhow::Result<Vec<(i64, String)>> {
+        if file_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let rows = sqlx::query("SELECT id, content_hash FROM files WHERE id = ANY($1)")
+            .bind(file_ids)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows
+            .iter()
+            .map(|r| (r.get::<i64, _>("id"), r.get::<String, _>("content_hash")))
+            .collect())
+    }
+
+    async fn find_file_relpath_by_content_hash(
+        &self,
+        content_hash: &str,
+        exclude_relpath: &str,
+    ) -> anyhow::Result<Option<String>> {
+        let r: Option<String> = sqlx::query_scalar(
+            "SELECT relpath FROM files WHERE content_hash = $1 AND relpath <> $2 LIMIT 1",
+        )
+        .bind(content_hash)
+        .bind(exclude_relpath)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(r)
+    }
+
     async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
         let n: i64 =
             sqlx::query_scalar("SELECT count(*) FROM chunk_worktrees WHERE worktree_id = $1")

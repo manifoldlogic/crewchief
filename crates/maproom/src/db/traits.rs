@@ -128,6 +128,28 @@ pub trait StoreCore: Send + Sync {
         worktree_id: i64,
     ) -> anyhow::Result<Option<i64>>;
 
+    /// Get the stored `content_hash` for a file by ID (incremental change detection).
+    async fn get_file_content_hash(&self, file_id: i64) -> anyhow::Result<Option<String>>;
+
+    /// Update the stored `content_hash` for a file by ID.
+    async fn update_file_content_hash(
+        &self,
+        file_id: i64,
+        content_hash: &str,
+    ) -> anyhow::Result<()>;
+
+    /// Batch-fetch `(file_id, content_hash)` for the given file IDs (change detection).
+    async fn get_file_content_hashes(&self, file_ids: &[i64])
+        -> anyhow::Result<Vec<(i64, String)>>;
+
+    /// Find a file's relpath that has the given `content_hash` at a DIFFERENT relpath
+    /// (move detection). Returns the first match, if any.
+    async fn find_file_relpath_by_content_hash(
+        &self,
+        content_hash: &str,
+        exclude_relpath: &str,
+    ) -> anyhow::Result<Option<String>>;
+
     /// Get the count of chunks associated with a worktree.
     async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64>;
 
