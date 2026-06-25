@@ -1,18 +1,25 @@
 //! Database access layer for Maproom.
 //!
-//! This module provides SQLite database connectivity and query utilities.
-//! PostgreSQL support has been removed - SQLite is the only backend.
+//! SQLite (`rusqlite` + `r2d2`) is the default backend. An optional PostgreSQL +
+//! pgvector backend lives in [`postgres`], gated behind the `postgres` Cargo
+//! feature; the default build is unchanged and free of `sqlx`/`pgvector`.
 
 pub mod cleanup;
 pub mod columns;
 pub mod connection;
 pub mod index_state;
+#[cfg(feature = "postgres")]
+pub mod postgres;
 pub mod sqlite;
 pub mod traits;
 pub mod types;
 
 // Re-export SqliteStore as the primary store type
 pub use sqlite::SqliteStore;
+
+// Re-export PostgresStore when the backend is compiled in
+#[cfg(feature = "postgres")]
+pub use postgres::PostgresStore;
 
 // Re-export cleanup types for convenience
 pub use cleanup::{
