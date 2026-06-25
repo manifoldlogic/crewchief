@@ -13,7 +13,9 @@ use sqlx::postgres::PgPoolOptions;
 
 use super::PostgresStore;
 use crate::db::index_state::UpdateStats;
-use crate::db::traits::{StoreChunks, StoreCore, StoreEmbeddings, StoreIndexState, StoreMigration};
+use crate::db::traits::{
+    StoreChunks, StoreCore, StoreEmbeddings, StoreIndexState, StoreMigration, StoreSearch,
+};
 use crate::db::{ChunkRecord, FileRecord};
 
 fn test_url() -> Option<String> {
@@ -309,4 +311,181 @@ async fn phase1_live() {
     assert_eq!(store.get_last_indexed_tree(w1).await.unwrap(), "treesha1");
 
     eprintln!("phase1_live: all Phase-1 assertions passed");
+}
+
+/// Phase-2a FTS verification (spec §6.6, §7 FTS scenarios).
+#[tokio::test]
+#[ignore]
+async fn fts_live() {
+    let Some(url) = test_url() else {
+        eprintln!("skipping fts_live: MAPROOM_TEST_PG_URL unset");
+        return;
+    };
+    let store = fresh_store(&url).await;
+    let repo = store
+        .get_or_create_repo("acme/app", "/src/app")
+        .await
+        .unwrap();
+    let wt = store
+        .get_or_create_worktree(repo, "main", "/wt/main")
+        .await
+        .unwrap();
+    let commit = store
+        .get_or_create_commit(repo, "sha1", None)
+        .await
+        .unwrap();
+    let file = store
+        .upsert_file(&FileRecord {
+            repo_id: repo,
+            worktree_id: wt,
+            commit_id: commit,
+            relpath: "src/auth.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "h".to_string(),
+            size_bytes: 1,
+            last_modified: None,
+        })
+        .await
+        .unwrap();
+
+    // helper to insert a chunk with explicit symbol/kind/ts_doc text
+    let mk = |sym: &str, kind: &str, ts: &str, s: i32, e: i32, blob: &str| ChunkRecord {
+        file_id: file,
+        blob_sha: blob.to_string(),
+        symbol_name: Some(sym.to_string()),
+        kind: kind.to_string(),
+        signature: None,
+        docstring: None,
+        start_line: s,
+        end_line: e,
+        preview: ts.to_string(),
+        ts_doc_text: ts.to_string(),
+        recency_score: 1.0,
+        churn_score: 0.0,
+        metadata: None,
+        worktree_id: wt,
+    };
+    store
+        .insert_chunk(&mk(
+            "validateProvider",
+            "function",
+            "validate provider authentication login",
+            1,
+            10,
+            "B1",
+        ))
+        .await
+        .unwrap();
+    store
+        .insert_chunk(&mk(
+            "parseConfig",
+            "function",
+            "parse config yaml settings",
+            11,
+            20,
+            "B2",
+        ))
+        .await
+        .unwrap();
+    store
+        .insert_chunk(&mk(
+            "AuthService",
+            "class",
+            "authentication service handler",
+            21,
+            30,
+            "B3",
+        ))
+        .await
+        .unwrap();
+
+    // "authentication" matches the two auth chunks, not parseConfig.
+    let (hits, total) = store
+        .search_chunks_fts(
+            "acme/app",
+            Some("main"),
+            "authentication",
+            10,
+            false,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(total, 2, "total_count of authentication matches");
+    assert_eq!(hits.len(), 2);
+    let syms: Vec<&str> = hits
+        .iter()
+        .filter_map(|h| h.symbol_name.as_deref())
+        .collect();
+    assert!(syms.contains(&"validateProvider") && syms.contains(&"AuthService"));
+    assert!(!syms.contains(&"parseConfig"));
+
+    // kind_filter restricts to the class (R-SEARCH-4); Some(&[]) == None.
+    let (cls, ctotal) = store
+        .search_chunks_fts(
+            "acme/app",
+            Some("main"),
+            "authentication",
+            10,
+            false,
+            Some(&["class".to_string()]),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(ctotal, 1);
+    assert_eq!(cls.len(), 1);
+    assert_eq!(cls[0].symbol_name.as_deref(), Some("AuthService"));
+    let (empty_kf, _) = store
+        .search_chunks_fts(
+            "acme/app",
+            Some("main"),
+            "authentication",
+            10,
+            false,
+            Some(&[]),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(empty_kf.len(), 2, "Some(&[]) behaves like None");
+
+    // Empty/all-special query -> Ok(empty), never error (R-SEARCH-1).
+    let (none_hits, none_total) = store
+        .search_chunks_fts("acme/app", Some("main"), "   ", 10, false, None, None)
+        .await
+        .unwrap();
+    assert!(none_hits.is_empty() && none_total == 0);
+
+    // Unknown repo/worktree -> empty.
+    let (nr, _) = store
+        .search_chunks_fts("nope", None, "authentication", 10, false, None, None)
+        .await
+        .unwrap();
+    assert!(nr.is_empty());
+
+    // search_fts_by_id stores exact_mult=3.0 when symbol normalizes to the query
+    // (separate-pass model, R-SEARCH-9 — not folded into score).
+    let by_id = store
+        .search_fts_by_id(repo, Some(wt), "authentication", "validate_provider", 10)
+        .await
+        .unwrap();
+    let vp = by_id
+        .iter()
+        .find(|h| h.symbol_name.as_deref() == Some("validateProvider"))
+        .expect("vp present");
+    assert_eq!(vp.exact_mult, Some(3.0));
+    let asvc = by_id
+        .iter()
+        .find(|h| h.symbol_name.as_deref() == Some("AuthService"))
+        .expect("authservice present");
+    assert_eq!(asvc.exact_mult, Some(1.0));
+
+    // get_chunks_metadata round-trips kind/symbol/recency.
+    let ids: Vec<i64> = hits.iter().map(|h| h.chunk_id).collect();
+    let meta = store.get_chunks_metadata(&ids).await.unwrap();
+    assert_eq!(meta.len(), ids.len());
+
+    eprintln!("fts_live: all FTS assertions passed");
 }
