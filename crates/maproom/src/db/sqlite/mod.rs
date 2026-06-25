@@ -593,15 +593,21 @@ impl StoreCore for SqliteStore {
         }
         let file_ids = file_ids.to_vec();
         self.run(move |conn| {
-            let placeholders = file_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-            let sql = format!("SELECT id, content_hash FROM files WHERE id IN ({placeholders})");
-            let mut stmt = conn.prepare(&sql)?;
-            let rows = stmt.query_map(rusqlite::params_from_iter(file_ids.iter()), |row| {
-                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
-            })?;
+            // Batch the IN-list to stay under SQLITE_MAX_VARIABLE_NUMBER (32766);
+            // mirrors the batched deletion path below (BATCH_SIZE = 500).
+            const BATCH_SIZE: usize = 500;
             let mut out = Vec::new();
-            for r in rows {
-                out.push(r?);
+            for batch in file_ids.chunks(BATCH_SIZE) {
+                let placeholders = batch.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+                let sql =
+                    format!("SELECT id, content_hash FROM files WHERE id IN ({placeholders})");
+                let mut stmt = conn.prepare(&sql)?;
+                let rows = stmt.query_map(rusqlite::params_from_iter(batch.iter()), |row| {
+                    Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+                })?;
+                for r in rows {
+                    out.push(r?);
+                }
             }
             Ok(out)
         })

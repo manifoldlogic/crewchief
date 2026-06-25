@@ -507,9 +507,11 @@ pub async fn get_hashes_batch_from_db(
 
     let mut hashes = HashMap::new();
     for (id, hex_str) in store.get_file_content_hashes(file_ids).await? {
-        if let Ok(hash) = blake3::Hash::from_hex(&hex_str) {
-            hashes.insert(id, hash);
-        }
+        // Match get_hash_from_db: a corrupt stored hash is an error, not a silent
+        // skip (which would misclassify the file as new).
+        let hash = blake3::Hash::from_hex(&hex_str)
+            .map_err(|e| anyhow::anyhow!("Invalid hash in database for file {id}: {e}"))?;
+        hashes.insert(id, hash);
     }
     Ok(hashes)
 }

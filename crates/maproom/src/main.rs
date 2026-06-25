@@ -1052,6 +1052,22 @@ async fn main() -> anyhow::Result<()> {
         std::env::set_var("MAPROOM_DATABASE_URL", url);
     }
 
+    // Classify a database-backend misconfiguration as a config error (exit 2),
+    // not a runtime error: a postgres:// URL in a build without --features postgres
+    // can never connect, so fail fast and clearly before dispatching any command.
+    if let Ok(url) = db::get_database_url() {
+        if matches!(
+            db::connection::backend_for_url(&url),
+            db::connection::Backend::Postgres
+        ) && !cfg!(feature = "postgres")
+        {
+            eprintln!(
+                "Configuration error: database URL uses the postgres scheme but maproom was built without --features postgres"
+            );
+            std::process::exit(EXIT_CONFIG_ERROR);
+        }
+    }
+
     match cli.command {
         Commands::Db { command } => match command {
             DbCommand::Migrate => {
@@ -2079,7 +2095,14 @@ async fn main() -> anyhow::Result<()> {
 
             // Markdown re-migration is a SQLite-only maintenance tool (dynamic
             // backup tables / sqlite_master introspection); require the SQLite backend.
-            let store = db::connect_sqlite().await?;
+            // A Postgres URL here is a configuration error (exit 2), not a runtime one.
+            let store = match db::connect_sqlite().await {
+                Ok(store) => store,
+                Err(e) => {
+                    eprintln!("Configuration error: {e}");
+                    std::process::exit(EXIT_CONFIG_ERROR);
+                }
+            };
 
             match command {
                 MigrateCommand::Markdown { repo, worktree } => {

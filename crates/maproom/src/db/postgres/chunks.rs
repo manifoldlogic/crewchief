@@ -253,6 +253,16 @@ impl StoreChunks for PostgresStore {
         .bind(chunk_ids)
         .execute(&self.pool)
         .await?;
+        // GC chunks of this set now referenced by no worktree (so they don't linger
+        // in backend-wide chunk/embedding paths). Embeddings are kept — the
+        // content-addressed pool is persistent (R-WT-4).
+        sqlx::query(
+            "DELETE FROM chunks WHERE id = ANY($1) AND NOT EXISTS \
+             (SELECT 1 FROM chunk_worktrees cw WHERE cw.chunk_id = chunks.id)",
+        )
+        .bind(chunk_ids)
+        .execute(&self.pool)
+        .await?;
         Ok(res.rows_affected() as usize)
     }
 

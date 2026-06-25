@@ -41,7 +41,7 @@ Built to `../../packages/cli/bin/<platform>/maproom`:
 
 ## Known Limitations
 
-These apply to the **SQLite backend** (the default). The optional **PostgreSQL** backend (build with `--features postgres`, select via a `postgres://` URL) supports concurrent multi-process writes and encryption (TLS in transit / at rest).
+These apply to the **SQLite backend** (the default). The optional **PostgreSQL** backend (build with `--features postgres`, select via a `postgres://` URL) supports concurrent multi-process writes and transport-level TLS. (Encryption at rest is a deployment concern, not something this crate provides.)
 
 - Single-user only, no multi-process concurrent writes — SQLite backend
 - No database encryption — SQLite backend

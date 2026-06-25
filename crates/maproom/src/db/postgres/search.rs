@@ -77,11 +77,19 @@ fn similarity_to_distance(sim: f64) -> f64 {
 }
 
 async fn resolve_repo_id(pool: &PgPool, repo: &str) -> anyhow::Result<Option<i64>> {
+    // Suffix-match `<owner>/<repo>` by name, but escape LIKE metacharacters in the
+    // user-supplied repo so `%`/`_`/`\` are matched literally, not as wildcards.
+    let escaped = repo
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    let suffix = format!("%/{escaped}");
     let id: Option<i64> = sqlx::query_scalar(
-        "SELECT id FROM repos WHERE name = $1 OR name LIKE '%/' || $1 \
+        "SELECT id FROM repos WHERE name = $1 OR name LIKE $2 ESCAPE '\\' \
          ORDER BY (name = $1) DESC, id LIMIT 1",
     )
     .bind(repo)
+    .bind(suffix)
     .fetch_optional(pool)
     .await?;
     Ok(id)

@@ -56,15 +56,15 @@ impl DefaultAssemblyStrategy {
             .context("Failed to query chunk metadata")?
             .ok_or_else(|| anyhow::anyhow!("Chunk {chunk_id} not found"))?;
 
+        // Missing file/worktree context must NOT silently fall back to an empty
+        // worktree root — FileLoader::new("") would then resolve files relative to
+        // the process directory and read the wrong file.
         let worktree_path = self
             .store
             .get_file_edge_context(chunk.file_id)
             .await?
             .map(|(_, _, abs_path)| abs_path)
-            .unwrap_or_else(|| {
-                warn!("Chunk {chunk_id} has no worktree_path, using empty string");
-                String::new()
-            });
+            .ok_or_else(|| anyhow::anyhow!("Chunk {chunk_id} has no file/worktree context"))?;
 
         Ok(ChunkMetadata {
             id: chunk.id,
