@@ -142,9 +142,6 @@ path = "src/main.rs"
 name = "maproom"
 path = "src/lib.rs"
 
-[package.metadata.sqlx]
-migrate = true
-
 [dependencies.puffin]
 version = "0.19"
 optional = true

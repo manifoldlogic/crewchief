@@ -102,39 +102,16 @@ impl FTSExecutor {
     /// # Returns
     /// RankedResults with FTS scores normalized to 0.0-1.0 range
     ///
-    /// # SQL Query
-    /// ```sql
-    /// WITH fts_results AS (
-    ///   SELECT
-    ///     c.id,
-    ///     ts_rank_cd(c.ts_doc, to_tsquery('simple', $1), 32) as base_score,
-    ///     CASE
-    ///       WHEN LOWER(c.symbol_name) = LOWER($2) THEN 3.0
-    ///       ELSE 1.0
-    ///     END as exact_mult,
-    ///     CASE
-    ///       WHEN c.kind IN ('func', 'async_func') THEN 2.5
-    ///       WHEN c.kind IN ('class', 'component') THEN 2.0
-    ///       WHEN c.kind = 'hook' THEN 1.8
-    ///       -- ... (see source for full mapping)
-    ///     END as kind_mult
-    ///   FROM maproom.chunks c
-    ///   JOIN maproom.files f ON f.id = c.file_id
-    ///   WHERE c.ts_doc @@ to_tsquery('simple', $1)
-    ///     AND f.repo_id = $3
-    ///     AND ($4::bigint IS NULL OR f.worktree_id = $4)
-    /// )
-    /// SELECT
-    ///   id,
-    ///   base_score,
-    ///   kind_mult,
-    ///   exact_mult,
-    ///   (base_score * kind_mult * exact_mult) as final_score,
-    ///   ROW_NUMBER() OVER (ORDER BY base_score * kind_mult * exact_mult DESC) as rank
-    /// FROM fts_results
-    /// ORDER BY final_score DESC
-    /// LIMIT $5;
-    /// ```
+    /// # Scoring
+    /// This executor does NOT run its own scoring SQL. It delegates to the
+    /// backend's `search_fts_by_id`, which returns `base_score` plus a
+    /// **separate-pass** `exact_mult` (`3.0` when the symbol normalizes to the
+    /// query, else `1.0`) carried on each hit and **not folded** into the score
+    /// (R-SEARCH-9). Final ranking multipliers (kind / exact / recency) are
+    /// applied by the shared ranking layer using the SQLite-canonical constants
+    /// (`kind 1.2 · exact 1.5 · recency 1.1` for a recent exact-matched function,
+    /// giving the `1.98` value asserted by the `db::sqlite::hybrid` gate test) —
+    /// NOT the historical `2.5`/`3.0`-folded-into-score model.
     #[instrument(skip(store), fields(query_len = fts_query.len()))]
     pub async fn execute(
         store: &SqliteStore,
