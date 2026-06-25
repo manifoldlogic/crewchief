@@ -489,3 +489,149 @@ async fn fts_live() {
 
     eprintln!("fts_live: all FTS assertions passed");
 }
+
+/// Phase-2b vector + hybrid verification (spec §6.6, R-SEARCH-5/6/7).
+#[tokio::test]
+#[ignore]
+async fn vector_hybrid_live() {
+    let Some(url) = test_url() else {
+        eprintln!("skipping vector_hybrid_live: MAPROOM_TEST_PG_URL unset");
+        return;
+    };
+    use crate::db::types::{HybridWeights, SemanticRanking};
+    let store = fresh_store(&url).await;
+    let repo = store.get_or_create_repo("acme/vec", "/v").await.unwrap();
+    let wt = store
+        .get_or_create_worktree(repo, "main", "/wt")
+        .await
+        .unwrap();
+    let commit = store.get_or_create_commit(repo, "s", None).await.unwrap();
+    let file = store
+        .upsert_file(&FileRecord {
+            repo_id: repo,
+            worktree_id: wt,
+            commit_id: commit,
+            relpath: "v.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "h".to_string(),
+            size_bytes: 1,
+            last_modified: None,
+        })
+        .await
+        .unwrap();
+
+    let mk = |sym: &str, ts: &str, s: i32, e: i32, blob: &str| ChunkRecord {
+        file_id: file,
+        blob_sha: blob.to_string(),
+        symbol_name: Some(sym.to_string()),
+        kind: "function".to_string(),
+        signature: None,
+        docstring: None,
+        start_line: s,
+        end_line: e,
+        preview: ts.to_string(),
+        ts_doc_text: ts.to_string(),
+        recency_score: 1.0,
+        churn_score: 0.0,
+        metadata: None,
+        worktree_id: wt,
+    };
+    let ca = store
+        .insert_chunk(&mk("alpha", "code search alpha", 1, 5, "EA"))
+        .await
+        .unwrap();
+    let cb = store
+        .insert_chunk(&mk("beta", "code search beta", 6, 10, "EB"))
+        .await
+        .unwrap();
+    let cc = store
+        .insert_chunk(&mk("gamma", "code search gamma", 11, 15, "EC"))
+        .await
+        .unwrap();
+
+    // Query Q=[1,0,..]; A identical (dist 0), B dist 0.5, C dist sqrt(2). Distinct order.
+    let mut q = vec![0f32; 768];
+    q[0] = 1.0;
+    let a = q.clone();
+    let mut b = vec![0f32; 768];
+    b[0] = 0.5;
+    let mut c = vec![0f32; 768];
+    c[1] = 1.0;
+    store.upsert_embedding("EA", &a, "m").await.unwrap();
+    store.upsert_embedding("EB", &b, "m").await.unwrap();
+    store.upsert_embedding("EC", &c, "m").await.unwrap();
+
+    // Vector KNN ordered by ascending distance: A, B, C (R-SEARCH-5).
+    let v = store
+        .search_chunks_vector("acme/vec", Some("main"), &q, 10, false, None, None)
+        .await
+        .unwrap();
+    let order: Vec<i64> = v.iter().map(|h| h.chunk_id).collect();
+    assert_eq!(
+        order,
+        vec![ca, cb, cc],
+        "vector order by ascending L2 distance"
+    );
+    assert!(
+        v[0].score > v[1].score && v[1].score > v[2].score,
+        "similarity descending"
+    );
+    assert!(
+        (v[0].score - 1.0).abs() < 1e-6,
+        "identical vector -> similarity 1.0"
+    );
+
+    // Degraded mode: a store with vec flag forced false returns empty (R-SEARCH-5).
+    let degraded = PostgresStore::with_vec_available(store.pool.clone(), false);
+    assert!(degraded
+        .search_chunks_vector("acme/vec", Some("main"), &q, 10, false, None, None)
+        .await
+        .unwrap()
+        .is_empty());
+
+    // Hybrid: all three match FTS ("code") AND vector -> source "both" (R-SEARCH-6).
+    let h = store
+        .search_hybrid(
+            "acme/vec",
+            Some("main"),
+            "code",
+            &q,
+            10,
+            HybridWeights::default(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(h.len(), 3);
+    assert!(
+        h.iter().all(|r| r.source == "both"),
+        "fts+vector overlap -> both"
+    );
+    for w in h.windows(2) {
+        assert!(w[0].score >= w[1].score, "hybrid sorted by RRF score desc");
+    }
+
+    // search_chunks_hybrid returns SearchHits; search_hybrid_ranked applies semantic ranking.
+    let ch = store
+        .search_chunks_hybrid("acme/vec", Some("main"), "code", &q, 10, false, None, None)
+        .await
+        .unwrap();
+    assert_eq!(ch.len(), 3);
+    let ranked = store
+        .search_hybrid_ranked(
+            "acme/vec",
+            Some("main"),
+            "code",
+            &q,
+            10,
+            HybridWeights::default(),
+            SemanticRanking::default(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(ranked.len(), 3);
+    for w in ranked.windows(2) {
+        assert!(w[0].score >= w[1].score, "ranked sorted desc");
+    }
+
+    eprintln!("vector_hybrid_live: all vector+hybrid assertions passed");
+}
