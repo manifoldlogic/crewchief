@@ -33,7 +33,11 @@ CREATE TABLE commits (
 CREATE TABLE files (
     id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     repo_id       BIGINT NOT NULL REFERENCES repos (id) ON DELETE CASCADE,
-    worktree_id   BIGINT REFERENCES worktrees (id) ON DELETE CASCADE,
+    -- SET NULL (not CASCADE): deleting a worktree must NOT cascade-delete files
+    -- (and their content-shared chunks) that other worktrees still reference via
+    -- the chunk_worktrees junction. Orphan chunks are GC'd explicitly in
+    -- delete_worktree_data; embeddings are kept (persistent pool, R-WT-4).
+    worktree_id   BIGINT REFERENCES worktrees (id) ON DELETE SET NULL,
     commit_id     BIGINT NOT NULL REFERENCES commits (id) ON DELETE CASCADE,
     relpath       TEXT NOT NULL,
     language      TEXT,

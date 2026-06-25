@@ -9,7 +9,7 @@
 //! sqlx json+chrono features — see Cargo.toml).
 
 use async_trait::async_trait;
-use sqlx::Row;
+use sqlx::{QueryBuilder, Row};
 
 use super::PostgresStore;
 use crate::db::traits::StoreEmbeddings;
@@ -87,9 +87,49 @@ impl StoreEmbeddings for PostgresStore {
 
     async fn upsert_embeddings_batch_new(
         &self,
-        _embeddings: &[EmbeddingRecord],
+        embeddings: &[EmbeddingRecord],
     ) -> anyhow::Result<()> {
-        // PARITY-TODO(Phase 3 / R-EMB-8): validate all dims, then one transaction.
+        if embeddings.is_empty() {
+            return Ok(());
+        }
+        // Validate ALL dims first; fail the whole batch on any bad dim, naming the
+        // offending index (R-EMB-8).
+        for (i, e) in embeddings.iter().enumerate() {
+            if !SUPPORTED_DIMENSIONS.contains(&e.embedding.len()) {
+                anyhow::bail!(
+                    "embedding {i}: unsupported dimension {}; supported dimensions: 768, 1024, 1536",
+                    e.embedding.len()
+                );
+            }
+        }
+        // One multi-row INSERT … ON CONFLICT — a single statement is atomic, so no
+        // held Transaction (which would trip the async_trait Send/Executor check).
+        let mut qb = QueryBuilder::<sqlx::Postgres>::new(
+            "INSERT INTO code_embeddings (blob_sha, embedding, embedding_dim, model_version) VALUES ",
+        );
+        let mut first = true;
+        for e in embeddings {
+            if !first {
+                qb.push(", ");
+            }
+            first = false;
+            qb.push("(")
+                .push_bind(e.blob_sha.clone())
+                .push(", ")
+                .push_bind(format_vector(&e.embedding))
+                .push("::vector, ")
+                .push_bind(e.embedding.len() as i32)
+                .push(", ")
+                .push_bind(e.model_version.clone())
+                .push(")");
+        }
+        qb.push(
+            " ON CONFLICT (blob_sha) DO UPDATE SET \
+             embedding = EXCLUDED.embedding, \
+             embedding_dim = EXCLUDED.embedding_dim, \
+             model_version = EXCLUDED.model_version",
+        );
+        qb.build().execute(&self.pool).await?;
         Ok(())
     }
 

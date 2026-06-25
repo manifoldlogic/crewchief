@@ -14,7 +14,8 @@ use sqlx::postgres::PgPoolOptions;
 use super::PostgresStore;
 use crate::db::index_state::UpdateStats;
 use crate::db::traits::{
-    StoreChunks, StoreCore, StoreEmbeddings, StoreIndexState, StoreMigration, StoreSearch,
+    StoreChunks, StoreCleanup, StoreCore, StoreEmbeddings, StoreEncoding, StoreIndexState,
+    StoreMigration, StoreSearch,
 };
 use crate::db::{ChunkRecord, FileRecord};
 
@@ -634,4 +635,184 @@ async fn vector_hybrid_live() {
     }
 
     eprintln!("vector_hybrid_live: all vector+hybrid assertions passed");
+}
+
+fn looks_like_ts(s: &str) -> bool {
+    let b = s.as_bytes();
+    s.len() == 19
+        && b[4] == b'-'
+        && b[7] == b'-'
+        && b[10] == b' '
+        && b[13] == b':'
+        && b[16] == b':'
+        && s.char_indices()
+            .all(|(i, c)| matches!(i, 4 | 7 | 10 | 13 | 16) || c.is_ascii_digit())
+}
+
+/// Phase-3a verification: StoreEncoding lifecycle, StoreCleanup orphan-GC that
+/// keeps embeddings + multi-worktree chunks, and batch embedding upsert.
+#[tokio::test]
+#[ignore]
+async fn phase3a_live() {
+    let Some(url) = test_url() else {
+        eprintln!("skipping phase3a_live: MAPROOM_TEST_PG_URL unset");
+        return;
+    };
+    use crate::db::types::EmbeddingRecord;
+    let store = fresh_store(&url).await;
+
+    // ── StoreEncoding lifecycle (§6.4, §5.3 timestamp format) ──
+    let run = store
+        .create_encoding_run(100, Some("ollama"), Some(768))
+        .await
+        .unwrap();
+    let active = store
+        .get_active_encoding_run()
+        .await
+        .unwrap()
+        .expect("active run");
+    assert_eq!(active.id, run);
+    assert_eq!(active.status, "running");
+    assert_eq!(active.total_chunks, 100);
+    assert_eq!(active.provider.as_deref(), Some("ollama"));
+    assert_eq!(active.dimension, Some(768));
+    assert!(
+        looks_like_ts(&active.started_at),
+        "started_at format: {}",
+        active.started_at
+    );
+    assert!(active.finished_at.is_none());
+    store
+        .update_encoding_run_progress(run, 42, Some(3.5))
+        .await
+        .unwrap();
+    let active = store.get_active_encoding_run().await.unwrap().unwrap();
+    assert_eq!(active.chunks_completed, 42);
+    assert!(active
+        .last_batch_at
+        .as_deref()
+        .map(looks_like_ts)
+        .unwrap_or(false));
+    store.complete_encoding_run(run, "completed").await.unwrap();
+    assert!(
+        store.get_active_encoding_run().await.unwrap().is_none(),
+        "completed -> no active"
+    );
+    // mark_stale: a fresh running run gets failed.
+    let r2 = store.create_encoding_run(5, None, None).await.unwrap();
+    assert!(store.get_active_encoding_run().await.unwrap().is_some());
+    store.mark_stale_runs_as_failed().await.unwrap();
+    assert!(
+        store.get_active_encoding_run().await.unwrap().is_none(),
+        "stale running -> failed"
+    );
+    let _ = r2;
+
+    // ── StoreCleanup: orphan GC keeps embeddings + multi-wt chunks (R-WT-4) ──
+    let repo = store.get_or_create_repo("acme/clean", "/c").await.unwrap();
+    let wa = store
+        .get_or_create_worktree(repo, "A", "/wt/A")
+        .await
+        .unwrap();
+    let wb = store
+        .get_or_create_worktree(repo, "B", "/wt/B")
+        .await
+        .unwrap();
+    let commit = store.get_or_create_commit(repo, "s", None).await.unwrap();
+    let file = store
+        .upsert_file(&FileRecord {
+            repo_id: repo,
+            worktree_id: wa,
+            commit_id: commit,
+            relpath: "c.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "h".to_string(),
+            size_bytes: 1,
+            last_modified: None,
+        })
+        .await
+        .unwrap();
+    let shared = store
+        .insert_chunk(&chunk(file, wa, "SHARED", 1, 5))
+        .await
+        .unwrap();
+    store.add_chunk_to_worktree(shared, wb).await.unwrap();
+    let only_a = store
+        .insert_chunk(&chunk(file, wa, "ONLYA", 6, 10))
+        .await
+        .unwrap();
+    let emb: Vec<f32> = vec![0.01; 768];
+    store.upsert_embedding("SHARED", &emb, "m").await.unwrap();
+    assert_eq!(store.get_global_embedding_count().await.unwrap(), 1);
+
+    let res = store.delete_worktree_data(wa).await.unwrap();
+    assert_eq!(res.embeddings_deleted, 0, "embeddings are kept (R-WT-4)");
+    assert!(res.chunks_deleted >= 1, "orphan chunk (ONLYA) removed");
+    // SHARED survives in B; ONLYA is gone; embedding pool intact.
+    assert_eq!(
+        store.get_chunk_worktrees(shared).await.unwrap(),
+        vec![wb],
+        "shared chunk kept in B"
+    );
+    assert!(
+        store.get_chunk_by_id(only_a).await.unwrap().is_none(),
+        "orphan chunk GC'd"
+    );
+    assert_eq!(
+        store.get_global_embedding_count().await.unwrap(),
+        1,
+        "embedding pool persists"
+    );
+
+    // ── StoreCleanup: stale detection by disk existence ──
+    let wmissing = store
+        .get_or_create_worktree(repo, "missing", "/nonexistent/zzz-xyz")
+        .await
+        .unwrap();
+    let wexists = store
+        .get_or_create_worktree(repo, "exists", "/tmp")
+        .await
+        .unwrap();
+    let stale = store.detect_stale_worktrees().await.unwrap();
+    let stale_ids: Vec<i64> = stale.iter().map(|s| s.id).collect();
+    assert!(stale_ids.contains(&wmissing), "missing path -> stale");
+    assert!(!stale_ids.contains(&wexists), "/tmp exists -> not stale");
+    assert!(stale.iter().all(|s| !s.exists));
+
+    // ── batch embedding upsert (R-EMB-8) ──
+    let batch = vec![
+        EmbeddingRecord {
+            blob_sha: "BB1".into(),
+            embedding: vec![0.02; 768],
+            model_version: "m".into(),
+        },
+        EmbeddingRecord {
+            blob_sha: "BB2".into(),
+            embedding: vec![0.03; 1024],
+            model_version: "m".into(),
+        },
+    ];
+    store.upsert_embeddings_batch_new(&batch).await.unwrap();
+    assert!(store.has_embedding("BB1").await.unwrap() && store.has_embedding("BB2").await.unwrap());
+    // bad dim fails the whole batch, naming the index.
+    let bad = vec![EmbeddingRecord {
+        blob_sha: "BAD".into(),
+        embedding: vec![0.0; 512],
+        model_version: "m".into(),
+    }];
+    let err = store
+        .upsert_embeddings_batch_new(&bad)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("512") && err.contains("768"),
+        "batch dim error: {err}"
+    );
+    assert!(
+        !store.has_embedding("BAD").await.unwrap(),
+        "bad batch not partially applied"
+    );
+
+    eprintln!("phase3a_live: encoding + cleanup + batch assertions passed");
 }
