@@ -497,7 +497,7 @@ impl StoreSearch for PostgresStore {
 
         // Detail map (SearchHit isn't Clone) — consume the source hits.
         let mut detail: HashMap<i64, HitDetail> = HashMap::new();
-        for h in fts_hits.into_iter().chain(vec_hits.into_iter()) {
+        for h in fts_hits.into_iter().chain(vec_hits) {
             detail.entry(h.chunk_id).or_insert(HitDetail {
                 start_line: h.start_line,
                 end_line: h.end_line,

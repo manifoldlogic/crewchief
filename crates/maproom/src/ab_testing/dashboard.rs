@@ -216,7 +216,7 @@ impl Dashboard {
         }
 
         // Sort by timestamp
-        time_series.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+        time_series.sort_by_key(|entry| entry.timestamp);
 
         Ok(time_series)
     }

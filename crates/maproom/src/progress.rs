@@ -242,9 +242,9 @@ impl ProgressTracker {
     fn percentage_files(&self) -> usize {
         if let Ok(total_files) = self.total_files.lock() {
             if let Some(total) = *total_files {
-                if total > 0 {
-                    let processed = self.processed_files.load(Ordering::Relaxed);
-                    return (processed * 100) / total;
+                let processed = self.processed_files.load(Ordering::Relaxed);
+                if let Some(pct) = (processed * 100).checked_div(total) {
+                    return pct;
                 }
             }
         }
@@ -255,9 +255,9 @@ impl ProgressTracker {
     fn percentage_chunks(&self) -> usize {
         if let Ok(total_chunks) = self.total_chunks.lock() {
             if let Some(total) = *total_chunks {
-                if total > 0 {
-                    let processed = self.processed_chunks.load(Ordering::Relaxed);
-                    return (processed * 100) / total;
+                let processed = self.processed_chunks.load(Ordering::Relaxed);
+                if let Some(pct) = (processed * 100).checked_div(total) {
+                    return pct;
                 }
             }
         }
