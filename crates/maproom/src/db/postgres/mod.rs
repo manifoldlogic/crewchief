@@ -41,10 +41,46 @@ pub struct PostgresStore {
 
 impl PostgresStore {
     /// Connect to a `postgres://`/`postgresql://` DSN, auto-run migrations
-    /// (R-MIG-2), and probe pgvector availability.
+    /// (R-MIG-2), and probe pgvector availability. The pool is tuned from
+    /// `DatabaseConfig` (R-WIRE-6); the DSN itself stays in the URL.
     pub async fn connect(url: &str) -> anyhow::Result<Self> {
-        let pool = PgPoolOptions::new().connect(url).await?;
+        let cfg = crate::config::DatabaseConfig::default();
+        let pool = Self::tuned_pool(url, &cfg).await?;
         Self::from_pool(pool).await
+    }
+
+    /// Build a `PgPool` tuned from `DatabaseConfig` (R-WIRE-6): pool size +
+    /// connection/lifetime timeouts at the pool level, and per-session GUCs
+    /// (`statement_timeout`/`lock_timeout`/`idle_in_transaction_session_timeout`/
+    /// `work_mem`) applied on every new connection via `after_connect`.
+    async fn tuned_pool(url: &str, cfg: &crate::config::DatabaseConfig) -> anyhow::Result<PgPool> {
+        use std::time::Duration;
+        // SET ... values come from trusted config defaults (Postgres `SET` does
+        // not accept bind params, so they are formatted in).
+        let session_sql = format!(
+            "SET statement_timeout = {}; SET lock_timeout = {}; \
+             SET idle_in_transaction_session_timeout = {}; SET work_mem = '{}'",
+            cfg.statement_timeout_ms,
+            cfg.lock_timeout_ms,
+            cfg.idle_in_transaction_timeout_ms,
+            cfg.work_mem,
+        );
+        let pool = PgPoolOptions::new()
+            .max_connections(cfg.pool_size as u32)
+            .acquire_timeout(Duration::from_millis(cfg.connection_timeout_ms))
+            .max_lifetime(Duration::from_secs(cfg.max_connection_lifetime_secs))
+            .idle_timeout(Duration::from_secs(cfg.idle_connection_timeout_secs))
+            .after_connect(move |conn, _meta| {
+                let session_sql = session_sql.clone();
+                Box::pin(async move {
+                    use sqlx::Executor;
+                    conn.execute(session_sql.as_str()).await?;
+                    Ok(())
+                })
+            })
+            .connect(url)
+            .await?;
+        Ok(pool)
     }
 
     /// Build a store from an existing pool (used by `connect` and tests).
