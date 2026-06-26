@@ -53,6 +53,11 @@ pub fn upsert_embedding(
             SUPPORTED_DIMENSIONS
         );
     }
+    // Reject non-finite values (parity with the Postgres backend, where pgvector
+    // rejects NaN/inf; a NaN also poisons distance ordering in vector search).
+    if let Some(pos) = embedding.iter().position(|x| !x.is_finite()) {
+        bail!("embedding contains a non-finite value (NaN/inf) at index {pos}");
+    }
 
     let blob = vec_to_blob(embedding);
 
@@ -96,6 +101,12 @@ pub fn upsert_embeddings_batch(
                 idx,
                 dimension,
                 SUPPORTED_DIMENSIONS
+            );
+        }
+        // Reject non-finite values (parity with the Postgres backend).
+        if let Some(pos) = record.embedding.iter().position(|x| !x.is_finite()) {
+            bail!(
+                "Embedding at index {idx} contains a non-finite value (NaN/inf) at position {pos}"
             );
         }
     }

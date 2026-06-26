@@ -453,12 +453,196 @@ async fn check_stale_detection(store: &(dyn Store + Send + Sync)) {
     assert!(stale.iter().all(|x| !x.exists));
 }
 
+/// Regression coverage for divergences fixed after the §7 review: methods whose
+/// SQL previously differed between backends (ordering, scoping, count metric) now
+/// produce identical, engineered-to-be-unambiguous results on both. Fixtures are
+/// built so the OLD (divergent) behavior would have failed these assertions.
+async fn check_method_parity_regression(store: &(dyn Store + Send + Sync)) {
+    let b = unique_base();
+
+    // find_chunk_by_symbol: two chunks share a symbol -> highest id (ORDER BY id
+    // DESC), scoped by file ownership. (PG previously returned the LOWEST id.)
+    let s = seed(store, "reg").await;
+    let dup = format!("DUP{b}");
+    let _first = store
+        .insert_chunk(&chunk(s.file, s.wt, &format!("{b}fa"), &dup, "a", 1, 5))
+        .await
+        .unwrap();
+    let second = store
+        .insert_chunk(&chunk(s.file, s.wt, &format!("{b}fb"), &dup, "b", 6, 10))
+        .await
+        .unwrap();
+    assert_eq!(
+        store
+            .find_chunk_by_symbol(s.repo, Some(s.wt), &dup, None)
+            .await
+            .unwrap(),
+        Some(second),
+        "find_chunk_by_symbol -> highest id (DESC), file-ownership scoped",
+    );
+
+    // get_chunk_context: `surrounding` neighbours on EACH side by start line (NOT
+    // nearest-by-line-distance). Lines [1,10,11,12], target=10, surrounding=1 ->
+    // per-side window {1, 11}; nearest-by-distance would give {11, 12}.
+    let cs = seed(store, "ctx").await;
+    let cb = format!("CTX{b}");
+    store
+        .insert_chunk(&chunk(cs.file, cs.wt, &format!("{cb}1"), "c1", "c1", 1, 4))
+        .await
+        .unwrap();
+    let target = store
+        .insert_chunk(&chunk(
+            cs.file,
+            cs.wt,
+            &format!("{cb}2"),
+            "c2",
+            "c2",
+            10,
+            10,
+        ))
+        .await
+        .unwrap();
+    store
+        .insert_chunk(&chunk(
+            cs.file,
+            cs.wt,
+            &format!("{cb}3"),
+            "c3",
+            "c3",
+            11,
+            11,
+        ))
+        .await
+        .unwrap();
+    store
+        .insert_chunk(&chunk(
+            cs.file,
+            cs.wt,
+            &format!("{cb}4"),
+            "c4",
+            "c4",
+            12,
+            12,
+        ))
+        .await
+        .unwrap();
+    let ctx = store
+        .get_chunk_context(target, 1)
+        .await
+        .unwrap()
+        .expect("ctx");
+    let mut lines: Vec<i32> = ctx
+        .surrounding_chunks
+        .iter()
+        .map(|c| c.start_line)
+        .collect();
+    lines.sort_unstable();
+    assert_eq!(
+        lines,
+        vec![1, 11],
+        "get_chunk_context: per-side neighbours by start line"
+    );
+
+    // get_chunks_by_blob_sha: ORDER BY start_line (NOT id). Insert higher line
+    // first (lower id), then lower line (higher id) -> ascending by start_line.
+    let sh = format!("SBS{b}");
+    store
+        .insert_chunk(&chunk(cs.file, cs.wt, &sh, "hi", "hi", 200, 205))
+        .await
+        .unwrap();
+    store
+        .insert_chunk(&chunk(cs.file, cs.wt, &sh, "lo", "lo", 20, 25))
+        .await
+        .unwrap();
+    let order: Vec<i32> = store
+        .get_chunks_by_blob_sha(&sh)
+        .await
+        .unwrap()
+        .iter()
+        .map(|c| c.start_line)
+        .collect();
+    assert_eq!(
+        order,
+        vec![20, 200],
+        "get_chunks_by_blob_sha ordered by start_line"
+    );
+
+    // get_repo_chunk_count: DISTINCT blob_sha via the chunk_worktrees junction,
+    // resolvable by exact name AND escaped '%/name' suffix. (PG previously counted
+    // DISTINCT c.id via files.) 2 distinct blobs (one reused) -> 2.
+    let rc = seed(store, "rcc").await;
+    let (rb1, rb2) = (format!("RC1{b}"), format!("RC2{b}"));
+    store
+        .insert_chunk(&chunk(rc.file, rc.wt, &rb1, "r1", "r1", 1, 5))
+        .await
+        .unwrap();
+    store
+        .insert_chunk(&chunk(rc.file, rc.wt, &rb2, "r2", "r2", 6, 10))
+        .await
+        .unwrap();
+    store
+        .insert_chunk(&chunk(rc.file, rc.wt, &rb1, "r3", "r3", 11, 15))
+        .await
+        .unwrap();
+    assert_eq!(
+        store.get_repo_chunk_count(&rc.repo_name).await.unwrap(),
+        2,
+        "get_repo_chunk_count (exact name) = DISTINCT blob_sha",
+    );
+    let suffix = rc.repo_name.split('/').next_back().unwrap().to_string();
+    assert_eq!(
+        store.get_repo_chunk_count(&suffix).await.unwrap(),
+        2,
+        "get_repo_chunk_count (suffix match)",
+    );
+
+    // get_worktree_embedding_count: DISTINCT chunk_id (NOT blob_sha) -> two chunks
+    // sharing one embedded blob count as 2. (PG previously counted DISTINCT blob_sha.)
+    let we = seed(store, "wec").await;
+    let eb = format!("WEC{b}");
+    store
+        .insert_chunk(&chunk(we.file, we.wt, &eb, "e1", "e1", 1, 5))
+        .await
+        .unwrap();
+    store
+        .insert_chunk(&chunk(we.file, we.wt, &eb, "e2", "e2", 6, 10))
+        .await
+        .unwrap();
+    store
+        .upsert_embedding(&eb, &vec![0.01f32; 768], "m")
+        .await
+        .unwrap();
+    assert_eq!(
+        store.get_worktree_embedding_count(we.wt).await.unwrap(),
+        2,
+        "get_worktree_embedding_count = DISTINCT chunk_id",
+    );
+
+    // A non-finite (NaN) embedding of a valid dimension is rejected on BOTH
+    // backends (pgvector rejects it; a NaN also poisons distance ordering).
+    let mut nan = vec![0.0f32; 768];
+    nan[3] = f32::NAN;
+    assert!(
+        store
+            .upsert_embedding(&format!("NAN{b}"), &nan, "m")
+            .await
+            .is_err(),
+        "non-finite embedding rejected on write",
+    );
+}
+
 // ── Driver tests (one per scenario; each gets fresh backends) ────────────────
 
 #[tokio::test]
 #[ignore]
 async fn parity_core_idempotency() {
     for_each(|_n, s| async move { check_core_idempotency(s.as_ref()).await }).await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn parity_method_regression() {
+    for_each(|_n, s| async move { check_method_parity_regression(s.as_ref()).await }).await;
 }
 
 #[tokio::test]

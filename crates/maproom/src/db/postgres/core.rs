@@ -12,6 +12,18 @@ use super::PostgresStore;
 use crate::db::traits::StoreCore;
 use crate::db::{FileRecord, RepoInfo, WorktreeInfo};
 
+/// Build the `'%/name'` suffix LIKE pattern for fuzzy repo-name resolution,
+/// escaping LIKE metacharacters (`\`, `%`, `_`) so a user-supplied repo name is
+/// matched literally rather than as wildcards. Used with `LIKE $2 ESCAPE '\'`.
+/// Mirrors `resolve_repo_id` in `search.rs` (spec §6.4, get_repo_*_count).
+fn repo_suffix_like(repo: &str) -> String {
+    let escaped = repo
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    format!("%/{escaped}")
+}
+
 #[async_trait]
 impl StoreCore for PostgresStore {
     fn has_vector_extension(&self) -> bool {
@@ -173,8 +185,12 @@ impl StoreCore for PostgresStore {
         relpath: &str,
         worktree_id: i64,
     ) -> anyhow::Result<Option<i64>> {
+        // ORDER BY id ASC for a deterministic pick when a (worktree, relpath) maps
+        // to multiple file rows (UNIQUE is on (commit_id, relpath, content_hash),
+        // so re-indexing at a new commit can produce several) — matches SQLite,
+        // which returns the lowest rowid via its un-ordered query_row.
         let id: Option<i64> = sqlx::query_scalar(
-            "SELECT id FROM files WHERE relpath = $1 AND worktree_id = $2 ORDER BY id DESC LIMIT 1",
+            "SELECT id FROM files WHERE relpath = $1 AND worktree_id = $2 ORDER BY id ASC LIMIT 1",
         )
         .bind(relpath)
         .bind(worktree_id)
@@ -227,7 +243,10 @@ impl StoreCore for PostgresStore {
         exclude_relpath: &str,
     ) -> anyhow::Result<Option<String>> {
         let r: Option<String> = sqlx::query_scalar(
-            "SELECT relpath FROM files WHERE content_hash = $1 AND relpath <> $2 LIMIT 1",
+            // ORDER BY relpath for a deterministic pick across backends when several
+            // files share the content hash (matches SQLite).
+            "SELECT relpath FROM files WHERE content_hash = $1 AND relpath <> $2 \
+             ORDER BY relpath LIMIT 1",
         )
         .bind(content_hash)
         .bind(exclude_relpath)
@@ -275,11 +294,14 @@ impl StoreCore for PostgresStore {
     }
 
     async fn get_worktree_embedding_count(&self, worktree_id: i64) -> anyhow::Result<i64> {
+        // COUNT(DISTINCT chunk_id) of embedded chunks in this worktree — matches
+        // SQLite (NOT DISTINCT blob_sha, which would under-count content-shared
+        // chunks within the worktree).
         let n: i64 = sqlx::query_scalar(
-            "SELECT count(DISTINCT c.blob_sha) FROM chunks c \
-             JOIN chunk_worktrees cw ON cw.chunk_id = c.id \
-             JOIN code_embeddings e ON e.blob_sha = c.blob_sha \
-             WHERE cw.worktree_id = $1",
+            "SELECT count(DISTINCT cw.chunk_id) FROM chunk_worktrees cw \
+             JOIN chunks c ON c.id = cw.chunk_id \
+             WHERE cw.worktree_id = $1 \
+               AND c.blob_sha IN (SELECT blob_sha FROM code_embeddings)",
         )
         .bind(worktree_id)
         .fetch_one(&self.pool)
@@ -332,28 +354,40 @@ impl StoreCore for PostgresStore {
     }
 
     async fn get_repo_chunk_count(&self, repo_name: &str) -> anyhow::Result<i64> {
-        // Resolve repo by exact name or '%/name' suffix (mirrors resolve_repo_id).
+        // DISTINCT blob_sha scoped via the chunk_worktrees junction (parity with
+        // SQLite + the content-addressed model). Resolve repo by exact name or
+        // escaped '%/name' suffix (mirrors resolve_repo_id), so `%`/`_` in the
+        // name are matched literally, not as LIKE wildcards.
         let n: i64 = sqlx::query_scalar(
-            "SELECT count(DISTINCT c.id) FROM chunks c \
-             JOIN files f ON f.id = c.file_id \
-             JOIN repos r ON r.id = f.repo_id \
-             WHERE r.name = $1 OR r.name LIKE '%/' || $1",
+            "SELECT count(DISTINCT c.blob_sha) FROM chunks c \
+             JOIN chunk_worktrees cw ON cw.chunk_id = c.id \
+             JOIN worktrees w ON w.id = cw.worktree_id \
+             JOIN repos r ON r.id = w.repo_id \
+             WHERE r.name = $1 OR r.name ILIKE $2 ESCAPE '\\'",
         )
         .bind(repo_name)
+        .bind(repo_suffix_like(repo_name))
         .fetch_one(&self.pool)
         .await?;
         Ok(n)
     }
 
     async fn get_repo_embedding_count(&self, repo_name: &str) -> anyhow::Result<i64> {
+        // COUNT(DISTINCT embedding) whose blob_sha is referenced by a chunk in the
+        // repo, scoped via the chunk_worktrees junction (parity with SQLite).
+        // Escaped fuzzy repo-name match as in get_repo_chunk_count.
         let n: i64 = sqlx::query_scalar(
-            "SELECT count(DISTINCT e.blob_sha) FROM code_embeddings e \
-             JOIN chunks c ON c.blob_sha = e.blob_sha \
-             JOIN files f ON f.id = c.file_id \
-             JOIN repos r ON r.id = f.repo_id \
-             WHERE r.name = $1 OR r.name LIKE '%/' || $1",
+            "SELECT count(DISTINCT e.id) FROM code_embeddings e \
+             WHERE e.blob_sha IN ( \
+                 SELECT DISTINCT c.blob_sha FROM chunks c \
+                 JOIN chunk_worktrees cw ON cw.chunk_id = c.id \
+                 JOIN worktrees w ON w.id = cw.worktree_id \
+                 JOIN repos r ON r.id = w.repo_id \
+                 WHERE r.name = $1 OR r.name ILIKE $2 ESCAPE '\\' \
+             )",
         )
         .bind(repo_name)
+        .bind(repo_suffix_like(repo_name))
         .fetch_one(&self.pool)
         .await?;
         Ok(n)

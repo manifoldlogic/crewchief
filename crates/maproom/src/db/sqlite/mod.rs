@@ -29,6 +29,18 @@ use crate::db::{ChunkForEmbedding, ChunkRecord, EmbeddingRecord, FileRecord, Sea
 use fts::sanitize_fts_term;
 use migrations::MigrationRunner;
 
+/// Build the escaped `'%/name'` suffix LIKE pattern for fuzzy repo-name
+/// resolution (spec §6.4), matching the Postgres backend's `repo_suffix_like`.
+/// `\`, `%`, and `_` are escaped so a user-supplied name matches literally; use
+/// with `LIKE ?n ESCAPE '\'`.
+fn repo_suffix_like(repo: &str) -> String {
+    let escaped = repo
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    format!("%/{escaped}")
+}
+
 // Declare the C extension init function from sqlite-vec
 // This is provided by the static link
 extern "C" {
@@ -544,7 +556,11 @@ impl StoreCore for SqliteStore {
         self.run(move |conn| {
             let result: Option<i64> = conn
                 .query_row(
-                    "SELECT id FROM files WHERE relpath = ?1 AND worktree_id = ?2",
+                    // ORDER BY id ASC for a deterministic pick when a (worktree,
+                    // relpath) maps to several file rows (UNIQUE is on (commit_id,
+                    // relpath, content_hash)) — matches the Postgres backend.
+                    "SELECT id FROM files WHERE relpath = ?1 AND worktree_id = ?2 \
+                     ORDER BY id ASC LIMIT 1",
                     params![relpath, worktree_id],
                     |row| row.get(0),
                 )
@@ -624,7 +640,10 @@ impl StoreCore for SqliteStore {
         self.run(move |conn| {
             let result: Option<String> = conn
                 .query_row(
-                    "SELECT relpath FROM files WHERE content_hash = ?1 AND relpath != ?2 LIMIT 1",
+                    // ORDER BY relpath for a deterministic pick across backends when
+                    // several files share the content hash (matches Postgres).
+                    "SELECT relpath FROM files WHERE content_hash = ?1 AND relpath != ?2 \
+                     ORDER BY relpath LIMIT 1",
                     params![content_hash, exclude_relpath],
                     |row| row.get(0),
                 )
@@ -762,6 +781,10 @@ impl StoreCore for SqliteStore {
     /// Returns 0 if the repo does not exist.
     async fn get_repo_chunk_count(&self, repo_name: &str) -> anyhow::Result<i64> {
         let repo_name = repo_name.to_string();
+        // Resolve by exact name OR escaped '%/name' suffix (spec §6.4 fuzzy match,
+        // mirrors the Postgres backend); '%'/'_'/'\' are escaped so they match
+        // literally rather than as LIKE wildcards.
+        let suffix = repo_suffix_like(&repo_name);
         self.run(move |conn| {
             let count: i64 = conn.query_row(
                 "SELECT COUNT(DISTINCT c.blob_sha)
@@ -769,8 +792,8 @@ impl StoreCore for SqliteStore {
                  JOIN chunk_worktrees cw ON cw.chunk_id = c.id
                  JOIN worktrees w ON w.id = cw.worktree_id
                  JOIN repos r ON r.id = w.repo_id
-                 WHERE r.name = ?1",
-                params![repo_name],
+                 WHERE r.name = ?1 OR r.name LIKE ?2 ESCAPE '\\'",
+                params![repo_name, suffix],
                 |row| row.get(0),
             )?;
             Ok(count)
@@ -784,6 +807,7 @@ impl StoreCore for SqliteStore {
     /// Returns 0 if the repo does not exist.
     async fn get_repo_embedding_count(&self, repo_name: &str) -> anyhow::Result<i64> {
         let repo_name = repo_name.to_string();
+        let suffix = repo_suffix_like(&repo_name);
         self.run(move |conn| {
             let count: i64 = conn.query_row(
                 "SELECT COUNT(DISTINCT ce.id)
@@ -794,9 +818,9 @@ impl StoreCore for SqliteStore {
                      JOIN chunk_worktrees cw ON cw.chunk_id = c.id
                      JOIN worktrees w ON w.id = cw.worktree_id
                      JOIN repos r ON r.id = w.repo_id
-                     WHERE r.name = ?1
+                     WHERE r.name = ?1 OR r.name LIKE ?2 ESCAPE '\\'
                  )",
-                params![repo_name],
+                params![repo_name, suffix],
                 |row| row.get(0),
             )?;
             Ok(count)
@@ -1010,53 +1034,24 @@ impl StoreChunks for SqliteStore {
         let symbol_name = symbol_name.to_string();
         let relpath = relpath.map(|s| s.to_string());
         self.run(move |conn| {
-            // Use reference to avoid move of relpath
-            let relpath_ref = relpath.as_deref();
-
-            // Similar to Postgres logic
-            let sql = if relpath_ref.is_some() {
-                if worktree_id.is_some() {
+            // Single query with optional filters, binding ALL params (NULL when
+            // absent) — mirrors the Postgres backend. The previous per-branch SQL
+            // referenced `?4` for symbol_name while binding only 2-3 params in the
+            // no-relpath branches, so SQLite rejected the param count: the indexer
+            // calls the (Some(worktree), None) branch, so graph symbol resolution
+            // was broken. Scope the worktree by file ownership; ORDER BY id DESC.
+            let id: Option<i64> = conn
+                .query_row(
                     "SELECT c.id FROM chunks c
                      JOIN files f ON f.id = c.file_id
-                     WHERE f.repo_id = ?1 AND f.worktree_id = ?2
-                       AND f.relpath = ?3 AND c.symbol_name = ?4
-                     ORDER BY c.id DESC LIMIT 1"
-                } else {
-                    "SELECT c.id FROM chunks c
-                     JOIN files f ON f.id = c.file_id
-                     WHERE f.repo_id = ?1
-                       AND f.relpath = ?3 AND c.symbol_name = ?4
-                     ORDER BY c.id DESC LIMIT 1"
-                }
-            } else if worktree_id.is_some() {
-                "SELECT c.id FROM chunks c
-                 JOIN files f ON f.id = c.file_id
-                 WHERE f.repo_id = ?1 AND f.worktree_id = ?2 AND c.symbol_name = ?4
-                 ORDER BY c.id DESC LIMIT 1"
-            } else {
-                "SELECT c.id FROM chunks c
-                 JOIN files f ON f.id = c.file_id
-                 WHERE f.repo_id = ?1 AND c.symbol_name = ?4
-                 ORDER BY c.id DESC LIMIT 1"
-            };
-
-            let id: Option<i64> = if let Some(path) = relpath_ref {
-                if let Some(wid) = worktree_id {
-                    conn.query_row(sql, params![repo_id, wid, path, symbol_name], |row| {
-                        row.get(0)
-                    })
-                    .optional()?
-                } else {
-                    conn.query_row(sql, params![repo_id, path, symbol_name], |row| row.get(0))
-                        .optional()?
-                }
-            } else if let Some(wid) = worktree_id {
-                conn.query_row(sql, params![repo_id, wid, symbol_name], |row| row.get(0))
-                    .optional()?
-            } else {
-                conn.query_row(sql, params![repo_id, symbol_name], |row| row.get(0))
-                    .optional()?
-            };
+                     WHERE f.repo_id = ?1 AND c.symbol_name = ?2
+                       AND (?3 IS NULL OR f.worktree_id = ?3)
+                       AND (?4 IS NULL OR f.relpath = ?4)
+                     ORDER BY c.id DESC LIMIT 1",
+                    params![repo_id, symbol_name, worktree_id, relpath],
+                    |row| row.get(0),
+                )
+                .optional()?;
 
             Ok(id)
         })
@@ -1163,24 +1158,19 @@ impl StoreChunks for SqliteStore {
                 None => return Ok(None),
             };
 
-            // Get surrounding chunks from the same file, ordered by line proximity
+            // Surrounding chunks: `surrounding` neighbours on EACH side of the
+            // target, from the same file, ordered by start line (spec §6.4) — a
+            // positional window matching the Postgres backend (NOT nearest-by-line,
+            // which could return all neighbours from one side).
             let mut stmt = conn.prepare(
                 "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath
                  FROM chunks c
                  JOIN files f ON f.id = c.file_id
-                 WHERE c.file_id = ?1 AND c.id != ?2
-                 ORDER BY ABS(c.start_line - ?3)
-                 LIMIT ?4",
+                 WHERE c.file_id = ?1
+                 ORDER BY c.start_line, c.id",
             )?;
-
-            let rows = stmt.query_map(
-                params![
-                    chunk.file_id,
-                    chunk_id,
-                    chunk.start_line,
-                    (surrounding as i64 * 2)
-                ],
-                |row| {
+            let all: Vec<crate::db::ChunkSummary> = stmt
+                .query_map(params![chunk.file_id], |row| {
                     Ok(crate::db::ChunkSummary {
                         id: row.get(0)?,
                         symbol_name: row.get(1)?,
@@ -1189,13 +1179,22 @@ impl StoreChunks for SqliteStore {
                         end_line: row.get(4)?,
                         file_path: row.get(5)?,
                     })
-                },
-            )?;
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
 
-            let mut surrounding_chunks = Vec::new();
-            for chunk_result in rows {
-                surrounding_chunks.push(chunk_result?);
-            }
+            let pos = all.iter().position(|c| c.id == chunk_id);
+            let surrounding_chunks: Vec<crate::db::ChunkSummary> = match pos {
+                Some(p) => {
+                    let start = p.saturating_sub(surrounding);
+                    let end = (p + surrounding + 1).min(all.len());
+                    all.into_iter()
+                        .enumerate()
+                        .filter(|(i, c)| *i >= start && *i < end && c.id != chunk_id)
+                        .map(|(_, c)| c)
+                        .collect()
+                }
+                None => Vec::new(),
+            };
 
             Ok(Some(crate::db::ChunkContext {
                 file_path: chunk.file_path.clone(),

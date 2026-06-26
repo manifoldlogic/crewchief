@@ -85,7 +85,7 @@ impl PostgresStore {
 
     /// Build a store from an existing pool (used by `connect` and tests).
     pub async fn from_pool(pool: PgPool) -> anyhow::Result<Self> {
-        migrations::run(&pool).await?;
+        migrations::run(pool.clone()).await?;
         let vec_available = probe_vector_extension(&pool).await?;
         Ok(Self {
             pool,

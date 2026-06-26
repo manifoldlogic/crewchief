@@ -64,21 +64,25 @@ async fn phase1_live() {
     };
     let store = fresh_store(&url).await;
 
-    // ── Migrations auto-ran; integer-version adapter returns {1,2} (§5.2/§7) ──
+    // ── Migrations auto-ran; integer-version adapter returns {1,2,3} (§5.2/§7) ──
     let applied = store.get_applied_migrations().await.unwrap();
-    assert_eq!(applied, HashSet::from([1, 2]), "applied migration versions");
+    assert_eq!(
+        applied,
+        HashSet::from([1, 2, 3]),
+        "applied migration versions"
+    );
 
     // Idempotent: a second connect adds no tracking rows (§7 Migrations / R-MIG-2).
     let store2 = PostgresStore::connect(&url).await.unwrap();
     assert_eq!(
         store2.get_applied_migrations().await.unwrap(),
-        HashSet::from([1, 2])
+        HashSet::from([1, 2, 3])
     );
     let mig_rows: i64 = sqlx::query_scalar("SELECT count(*) FROM schema_migrations")
         .fetch_one(&store.pool)
         .await
         .unwrap();
-    assert_eq!(mig_rows, 2, "schema_migrations stable across reconnect");
+    assert_eq!(mig_rows, 3, "schema_migrations stable across reconnect");
 
     // ── Schema shape (§7 Migrations) ──
     for t in [
@@ -587,6 +591,16 @@ async fn vector_hybrid_live() {
     let degraded = PostgresStore::with_vec_available(store.pool.clone(), false);
     assert!(degraded
         .search_chunks_vector("acme/vec", Some("main"), &q, 10, false, None, None)
+        .await
+        .unwrap()
+        .is_empty());
+    // Degraded mode must still return Ok(empty) for a MALFORMED embedding (wrong
+    // dim) — validation runs AFTER the has_vector_extension() guard, so a missing
+    // extension degrades gracefully rather than erroring (R-SEARCH-5 parity).
+    let mut bad_dim = q.clone();
+    bad_dim.push(0.0); // 769 dims (unsupported)
+    assert!(degraded
+        .search_chunks_vector("acme/vec", Some("main"), &bad_dim, 10, false, None, None)
         .await
         .unwrap()
         .is_empty());

@@ -8,6 +8,50 @@ use super::PostgresStore;
 use crate::db::traits::StoreChunks;
 use crate::db::{ChunkContext, ChunkFull, ChunkRecord, ChunkSummary};
 
+/// Single data-modifying CTE: upsert the chunk (populating `ts_doc` from
+/// `ts_doc_text`) AND map it to the worktree, atomically. Shared by `insert_chunk`
+/// (executed on the pool) and `insert_chunks_batch` (executed inside one
+/// transaction). Bind order: see `bind_chunk`.
+const INSERT_CHUNK_CTE: &str = "WITH up AS ( \
+         INSERT INTO chunks \
+             (file_id, blob_sha, symbol_name, kind, signature, docstring, \
+              start_line, end_line, preview, ts_doc, recency_score, churn_score, metadata) \
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, to_tsvector('simple', $10), $11,$12,$13::jsonb) \
+         ON CONFLICT (file_id, start_line, end_line) DO UPDATE SET \
+             blob_sha = EXCLUDED.blob_sha, symbol_name = EXCLUDED.symbol_name, \
+             kind = EXCLUDED.kind, signature = EXCLUDED.signature, \
+             docstring = EXCLUDED.docstring, preview = EXCLUDED.preview, \
+             ts_doc = EXCLUDED.ts_doc, recency_score = EXCLUDED.recency_score, \
+             churn_score = EXCLUDED.churn_score, metadata = EXCLUDED.metadata \
+         RETURNING id \
+     ), wt AS ( \
+         INSERT INTO chunk_worktrees (chunk_id, worktree_id) \
+         SELECT id, $14 FROM up ON CONFLICT DO NOTHING RETURNING chunk_id \
+     ) \
+     SELECT id FROM up";
+
+/// Bind a [`ChunkRecord`]'s fields to [`INSERT_CHUNK_CTE`] in order.
+fn bind_chunk<'q>(
+    q: sqlx::query::QueryScalar<'q, sqlx::Postgres, i64, sqlx::postgres::PgArguments>,
+    chunk: &'q ChunkRecord,
+    metadata: Option<String>,
+) -> sqlx::query::QueryScalar<'q, sqlx::Postgres, i64, sqlx::postgres::PgArguments> {
+    q.bind(chunk.file_id)
+        .bind(&chunk.blob_sha)
+        .bind(chunk.symbol_name.as_deref())
+        .bind(&chunk.kind)
+        .bind(chunk.signature.as_deref())
+        .bind(chunk.docstring.as_deref())
+        .bind(chunk.start_line)
+        .bind(chunk.end_line)
+        .bind(&chunk.preview)
+        .bind(&chunk.ts_doc_text)
+        .bind(chunk.recency_score)
+        .bind(chunk.churn_score)
+        .bind(metadata)
+        .bind(chunk.worktree_id)
+}
+
 impl PostgresStore {
     /// Map a `chunks JOIN files` row to a [`ChunkSummary`].
     fn row_to_summary(r: &sqlx::postgres::PgRow) -> ChunkSummary {
@@ -25,53 +69,29 @@ impl PostgresStore {
 #[async_trait]
 impl StoreChunks for PostgresStore {
     async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64> {
-        // Single data-modifying CTE: upsert the chunk (populating ts_doc from
-        // ts_doc_text) AND map it to the worktree, atomically, with no held
-        // Transaction (which would trip async_trait's Send/Executor HRTB check).
         let metadata = chunk.metadata.as_ref().map(|v| v.to_string());
-        let id: i64 = sqlx::query_scalar(
-            "WITH up AS ( \
-                 INSERT INTO chunks \
-                     (file_id, blob_sha, symbol_name, kind, signature, docstring, \
-                      start_line, end_line, preview, ts_doc, recency_score, churn_score, metadata) \
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, to_tsvector('simple', $10), $11,$12,$13::jsonb) \
-                 ON CONFLICT (file_id, start_line, end_line) DO UPDATE SET \
-                     blob_sha = EXCLUDED.blob_sha, symbol_name = EXCLUDED.symbol_name, \
-                     kind = EXCLUDED.kind, signature = EXCLUDED.signature, \
-                     docstring = EXCLUDED.docstring, preview = EXCLUDED.preview, \
-                     ts_doc = EXCLUDED.ts_doc, recency_score = EXCLUDED.recency_score, \
-                     churn_score = EXCLUDED.churn_score, metadata = EXCLUDED.metadata \
-                 RETURNING id \
-             ), wt AS ( \
-                 INSERT INTO chunk_worktrees (chunk_id, worktree_id) \
-                 SELECT id, $14 FROM up ON CONFLICT DO NOTHING RETURNING chunk_id \
-             ) \
-             SELECT id FROM up",
-        )
-        .bind(chunk.file_id)
-        .bind(&chunk.blob_sha)
-        .bind(chunk.symbol_name.as_deref())
-        .bind(&chunk.kind)
-        .bind(chunk.signature.as_deref())
-        .bind(chunk.docstring.as_deref())
-        .bind(chunk.start_line)
-        .bind(chunk.end_line)
-        .bind(&chunk.preview)
-        .bind(&chunk.ts_doc_text)
-        .bind(chunk.recency_score)
-        .bind(chunk.churn_score)
-        .bind(metadata)
-        .bind(chunk.worktree_id)
-        .fetch_one(&self.pool)
-        .await?;
+        let id: i64 = bind_chunk(sqlx::query_scalar(INSERT_CHUNK_CTE), chunk, metadata)
+            .fetch_one(&self.pool)
+            .await?;
         Ok(id)
     }
 
     async fn insert_chunks_batch(&self, chunks: &[ChunkRecord]) -> anyhow::Result<Vec<i64>> {
+        if chunks.is_empty() {
+            return Ok(Vec::new());
+        }
+        // Run the whole batch in ONE transaction so a mid-batch failure rolls back
+        // every chunk (no partially-indexed file), matching the SQLite backend.
+        let mut tx = self.pool.begin().await?;
         let mut ids = Vec::with_capacity(chunks.len());
         for chunk in chunks {
-            ids.push(self.insert_chunk(chunk).await?);
+            let metadata = chunk.metadata.as_ref().map(|v| v.to_string());
+            let id: i64 = bind_chunk(sqlx::query_scalar(INSERT_CHUNK_CTE), chunk, metadata)
+                .fetch_one(&mut *tx)
+                .await?;
+            ids.push(id);
         }
+        tx.commit().await?;
         Ok(ids)
     }
 
@@ -183,7 +203,7 @@ impl StoreChunks for PostgresStore {
         let rows = sqlx::query(
             "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath AS file_path \
              FROM chunks c JOIN files f ON f.id = c.file_id \
-             WHERE c.file_id = $1 ORDER BY c.start_line",
+             WHERE c.file_id = $1 ORDER BY c.start_line, c.id",
         )
         .bind(chunk.file_id)
         .fetch_all(&self.pool)
@@ -215,14 +235,16 @@ impl StoreChunks for PostgresStore {
         symbol_name: &str,
         relpath: Option<&str>,
     ) -> anyhow::Result<Option<i64>> {
+        // Scope the worktree by file ownership (f.worktree_id) and ORDER BY c.id
+        // DESC — matching SQLite, so the same symbol resolves to the same chunk on
+        // both backends.
         let id: Option<i64> = sqlx::query_scalar(
             "SELECT c.id FROM chunks c \
              JOIN files f ON f.id = c.file_id \
-             LEFT JOIN chunk_worktrees cw ON cw.chunk_id = c.id \
              WHERE f.repo_id = $1 AND c.symbol_name = $2 \
-               AND ($3::bigint IS NULL OR cw.worktree_id = $3) \
+               AND ($3::bigint IS NULL OR f.worktree_id = $3) \
                AND ($4::text IS NULL OR f.relpath = $4) \
-             ORDER BY c.id LIMIT 1",
+             ORDER BY c.id DESC LIMIT 1",
         )
         .bind(repo_id)
         .bind(symbol_name)
@@ -246,24 +268,33 @@ impl StoreChunks for PostgresStore {
         worktree_id: i64,
         chunk_ids: &[i64],
     ) -> anyhow::Result<usize> {
-        let res = sqlx::query(
-            "DELETE FROM chunk_worktrees WHERE worktree_id = $1 AND chunk_id = ANY($2)",
-        )
-        .bind(worktree_id)
-        .bind(chunk_ids)
-        .execute(&self.pool)
-        .await?;
-        // GC chunks of this set now referenced by no worktree (so they don't linger
-        // in backend-wide chunk/embedding paths). Embeddings are kept — the
-        // content-addressed pool is persistent (R-WT-4).
-        sqlx::query(
+        // Deliberate divergence from the legacy SqliteStore (same pattern as
+        // delete_worktree_data, §3.2 / R-WT-1/R-WT-4): this Postgres path removes
+        // only THIS worktree's membership and GCs chunks left orphaned, keeping the
+        // content-addressed `code_embeddings` pool (chunk_edges cascade via FK).
+        // The legacy SqliteStore deletes the chunk from every worktree and its
+        // embedding (to keep its `vec_code` ANN index consistent).
+        // One transaction so the junction-delete and the orphan-GC are atomic: a
+        // concurrent re-index (add_chunk_to_worktree) or another delete can't
+        // interleave between them and make the returned count unreliable.
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("DELETE FROM chunk_worktrees WHERE worktree_id = $1 AND chunk_id = ANY($2)")
+            .bind(worktree_id)
+            .bind(chunk_ids)
+            .execute(&mut *tx)
+            .await?;
+        // Return the count of chunks ACTUALLY deleted (those now orphaned), not the
+        // junction-row count — so the caller's "Deleted N chunks" is truthful.
+        let gc = sqlx::query(
             "DELETE FROM chunks WHERE id = ANY($1) AND NOT EXISTS \
              (SELECT 1 FROM chunk_worktrees cw WHERE cw.chunk_id = chunks.id)",
         )
         .bind(chunk_ids)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
-        Ok(res.rows_affected() as usize)
+        let deleted = gc.rows_affected() as usize;
+        tx.commit().await?;
+        Ok(deleted)
     }
 
     async fn get_chunks_for_worktree(
@@ -289,7 +320,7 @@ impl StoreChunks for PostgresStore {
         let rows = sqlx::query(
             "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath AS file_path \
              FROM chunks c JOIN files f ON f.id = c.file_id \
-             WHERE c.blob_sha = $1 ORDER BY c.id",
+             WHERE c.blob_sha = $1 ORDER BY c.start_line",
         )
         .bind(blob_sha)
         .fetch_all(&self.pool)

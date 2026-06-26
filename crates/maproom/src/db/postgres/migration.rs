@@ -11,7 +11,7 @@ use crate::db::traits::StoreMigration;
 #[async_trait]
 impl StoreMigration for PostgresStore {
     async fn migrate(&self) -> anyhow::Result<()> {
-        super::migrations::run(&self.pool).await
+        super::migrations::run(self.pool.clone()).await
     }
 
     async fn get_applied_migrations(&self) -> anyhow::Result<HashSet<i32>> {

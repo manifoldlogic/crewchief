@@ -507,11 +507,21 @@ pub async fn get_hashes_batch_from_db(
 
     let mut hashes = HashMap::new();
     for (id, hex_str) in store.get_file_content_hashes(file_ids).await? {
-        // Match get_hash_from_db: a corrupt stored hash is an error, not a silent
-        // skip (which would misclassify the file as new).
-        let hash = blake3::Hash::from_hex(&hex_str)
-            .map_err(|e| anyhow::anyhow!("Invalid hash in database for file {id}: {e}"))?;
-        hashes.insert(id, hash);
+        // A single corrupt stored hash must NOT abort change-detection for the
+        // whole batch: skip it (with a warning) so it's treated as missing and
+        // reprocessed, while every other file in the batch is still detected.
+        match blake3::Hash::from_hex(&hex_str) {
+            Ok(hash) => {
+                hashes.insert(id, hash);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    file_id = id,
+                    error = %e,
+                    "Skipping file with corrupt stored content hash; it will be reprocessed",
+                );
+            }
+        }
     }
     Ok(hashes)
 }

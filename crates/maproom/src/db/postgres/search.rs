@@ -84,8 +84,10 @@ async fn resolve_repo_id(pool: &PgPool, repo: &str) -> anyhow::Result<Option<i64
         .replace('%', "\\%")
         .replace('_', "\\_");
     let suffix = format!("%/{escaped}");
+    // ILIKE (not LIKE) for the fuzzy suffix so matching is case-insensitive,
+    // matching SQLite's LIKE (which is ASCII case-insensitive by default).
     let id: Option<i64> = sqlx::query_scalar(
-        "SELECT id FROM repos WHERE name = $1 OR name LIKE $2 ESCAPE '\\' \
+        "SELECT id FROM repos WHERE name = $1 OR name ILIKE $2 ESCAPE '\\' \
          ORDER BY (name = $1) DESC, id LIMIT 1",
     )
     .bind(repo)
@@ -153,6 +155,28 @@ struct HitDetail {
 }
 
 impl PostgresStore {
+    /// Run a built KNN query without the session `statement_timeout`.
+    ///
+    /// The exact nearest-neighbour scan over `code_embeddings` has no ANN index
+    /// yet (Phase-2; see `migrations_pg/0002`), so on a non-trivial corpus it can
+    /// exceed the `statement_timeout` `tuned_pool` sets on every connection and be
+    /// killed mid-scan. Running it in a read-only transaction with
+    /// `SET LOCAL statement_timeout = 0` lets the scan complete; `SET LOCAL` is
+    /// scoped to the transaction and reverts on commit, so the pooled connection
+    /// keeps its normal timeout for every other query.
+    async fn fetch_knn_rows(
+        &self,
+        mut qb: QueryBuilder<'_, sqlx::Postgres>,
+    ) -> anyhow::Result<Vec<sqlx::postgres::PgRow>> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("SET LOCAL statement_timeout = 0")
+            .execute(&mut *tx)
+            .await?;
+        let rows = qb.build().fetch_all(&mut *tx).await?;
+        tx.commit().await?;
+        Ok(rows)
+    }
+
     /// FTS results as RRF inputs (chunk_id + 0-indexed position), no filters —
     /// the hybrid path matches SQLite's `search_fts`/`search_vector` helpers.
     async fn fts_result_list(
@@ -328,10 +352,15 @@ impl StoreSearch for PostgresStore {
         kind_filter: Option<&[String]>,
         lang_filter: Option<&[String]>,
     ) -> anyhow::Result<Vec<SearchHit>> {
-        // Degrade to empty (FTS-only at the caller) when pgvector is absent (R-SEARCH-5).
+        // Degrade to empty (FTS-only at the caller) when pgvector is absent — BEFORE
+        // validation, so a missing extension degrades gracefully even for a
+        // malformed embedding (parity with SQLite; R-SEARCH-5/R-TRAIT-3).
         if !self.has_vector_extension() {
             return Ok(Vec::new());
         }
+        // pgvector IS present: reject unsupported dims and non-finite values (the
+        // SQLite vector path errors on a bad dim once the extension is active).
+        super::embeddings::validate_embedding(embedding)?;
         let Some(repo_id) = resolve_repo_id(&self.pool, repo).await? else {
             return Ok(Vec::new());
         };
@@ -373,7 +402,7 @@ impl StoreSearch for PostgresStore {
                 .push(")");
         }
         qb.push(" ORDER BY distance ASC, c.id LIMIT ").push_bind(k);
-        let rows = qb.build().fetch_all(&self.pool).await?;
+        let rows = self.fetch_knn_rows(qb).await?;
         Ok(rows
             .iter()
             .map(|r| {
@@ -403,9 +432,12 @@ impl StoreSearch for PostgresStore {
         query_embedding: &[f32],
         k: i64,
     ) -> anyhow::Result<Vec<SearchHit>> {
+        // Degrade BEFORE validation so a missing extension yields Ok(empty) even
+        // for a malformed embedding (parity with SQLite; R-SEARCH-5).
         if !self.has_vector_extension() {
             return Ok(Vec::new());
         }
+        super::embeddings::validate_embedding(query_embedding)?;
         let lit = vector_literal(query_embedding);
         let mut qb = QueryBuilder::<sqlx::Postgres>::new(
             "SELECT c.id, c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath, c.preview, \
@@ -427,7 +459,7 @@ impl StoreSearch for PostgresStore {
             qb.push(" AND cw.worktree_id = ").push_bind(wid);
         }
         qb.push(" ORDER BY distance ASC, c.id LIMIT ").push_bind(k);
-        let rows = qb.build().fetch_all(&self.pool).await?;
+        let rows = self.fetch_knn_rows(qb).await?;
         Ok(rows
             .iter()
             .map(|r| {

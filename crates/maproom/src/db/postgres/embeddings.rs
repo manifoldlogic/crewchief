@@ -28,6 +28,19 @@ fn validate_dim(dim: usize) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Validate an embedding's dimension AND that every component is finite. pgvector
+/// rejects `NaN`/`±inf` on its `::vector` cast, and a `NaN` would poison `<->`
+/// distance ordering, so non-finite values are caught here on both the write and
+/// the search paths rather than surfacing as an opaque DB error. `pub(super)` so
+/// `search.rs` reuses it.
+pub(super) fn validate_embedding(embedding: &[f32]) -> anyhow::Result<()> {
+    validate_dim(embedding.len())?;
+    if let Some(pos) = embedding.iter().position(|x| !x.is_finite()) {
+        anyhow::bail!("embedding contains a non-finite value (NaN/inf) at index {pos}");
+    }
+    Ok(())
+}
+
 /// Render a float slice as pgvector's text form, e.g. `[1,2.5,3]`.
 fn format_vector(v: &[f32]) -> String {
     let mut s = String::with_capacity(v.len() * 8 + 2);
@@ -66,7 +79,7 @@ impl StoreEmbeddings for PostgresStore {
         embedding: &[f32],
         model_version: &str,
     ) -> anyhow::Result<i64> {
-        validate_dim(embedding.len())?;
+        validate_embedding(embedding)?;
         let id: i64 = sqlx::query_scalar(
             "INSERT INTO code_embeddings (blob_sha, embedding, embedding_dim, model_version) \
              VALUES ($1, $2::vector, $3, $4) \
@@ -92,15 +105,11 @@ impl StoreEmbeddings for PostgresStore {
         if embeddings.is_empty() {
             return Ok(());
         }
-        // Validate ALL dims first; fail the whole batch on any bad dim, naming the
-        // offending index (R-EMB-8).
+        // Validate ALL embeddings first (dimension + finiteness); fail the whole
+        // batch on any bad one, naming the offending index (R-EMB-8).
         for (i, e) in embeddings.iter().enumerate() {
-            if !SUPPORTED_DIMENSIONS.contains(&e.embedding.len()) {
-                anyhow::bail!(
-                    "embedding {i}: unsupported dimension {}; supported dimensions: 768, 1024, 1536",
-                    e.embedding.len()
-                );
-            }
+            validate_embedding(&e.embedding)
+                .map_err(|err| anyhow::anyhow!("embedding {i}: {err}"))?;
         }
         // One multi-row INSERT … ON CONFLICT — a single statement is atomic, so no
         // held Transaction (which would trip the async_trait Send/Executor check).
