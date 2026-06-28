@@ -179,3 +179,38 @@ mod tests {
         assert!(path.ends_with(".maproom/maproom.db") || path.ends_with(".maproom\\maproom.db"));
     }
 }
+
+/// Which storage backend a resolved database URL selects (R-WIRE-1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Backend {
+    Sqlite,
+    Postgres,
+}
+
+/// Classify a resolved database URL by scheme. `postgres://` / `postgresql://`
+/// select Postgres; everything else (including bare paths and `sqlite://`)
+/// selects SQLite. `connect()` dispatches on this; `get_database_url()` is left
+/// to resolve/normalize the DSN unchanged.
+pub fn backend_for_url(url: &str) -> Backend {
+    if url.starts_with("postgres://") || url.starts_with("postgresql://") {
+        Backend::Postgres
+    } else {
+        Backend::Sqlite
+    }
+}
+
+#[cfg(test)]
+mod backend_for_url_tests {
+    use super::{backend_for_url, Backend};
+
+    #[test]
+    fn classifies_schemes() {
+        assert_eq!(backend_for_url("postgres://h/db"), Backend::Postgres);
+        assert_eq!(backend_for_url("postgresql://h/db"), Backend::Postgres);
+        assert_eq!(backend_for_url("sqlite:///tmp/x.db"), Backend::Sqlite);
+        assert_eq!(
+            backend_for_url("/home/u/.maproom/maproom.db"),
+            Backend::Sqlite
+        );
+    }
+}

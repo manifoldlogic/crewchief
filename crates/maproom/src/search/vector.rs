@@ -41,8 +41,7 @@
 //! - Smaller index footprint due to deduplication
 //! - Query performance equal or better than direct embedding access
 
-use crate::db::traits::StoreSearch;
-use crate::db::SqliteStore;
+use crate::db::Store;
 use crate::embedding::cache::Vector;
 use crate::search::executor_types::{RankedResult, RankedResults, SearchSource};
 use crate::search::types::SearchMode;
@@ -90,7 +89,7 @@ impl VectorExecutor {
     /// ```
     #[instrument(skip(store, query_embedding), fields(embedding_dim = query_embedding.len()))]
     pub async fn execute(
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         query_embedding: &Vector,
         mode: SearchMode,
         repo_id: i64,

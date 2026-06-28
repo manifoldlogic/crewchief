@@ -6,12 +6,11 @@
 //! 3. Filesystem hash (accurate)
 
 use anyhow::{Context, Result};
-use rusqlite::OptionalExtension;
 use std::path::Path;
 
 use super::cache::HashCache;
 use super::hash::{ContentHash, FileHasher};
-use crate::db::SqliteStore;
+use crate::db::Store;
 use std::sync::Arc;
 
 /// The type of change detected for a file.
@@ -62,7 +61,7 @@ pub enum ChangeType {
 /// ```
 pub struct ChangeDetector {
     cache: HashCache,
-    store: Arc<SqliteStore>,
+    store: Arc<dyn Store + Send + Sync>,
 }
 
 impl ChangeDetector {
@@ -73,7 +72,7 @@ impl ChangeDetector {
     ///
     /// # Returns
     /// A new change detector with an empty cache
-    pub fn new(store: Arc<SqliteStore>) -> Self {
+    pub fn new(store: Arc<dyn Store + Send + Sync>) -> Self {
         Self {
             cache: HashCache::new(),
             store,
@@ -87,7 +86,7 @@ impl ChangeDetector {
     /// # Arguments
     /// * `store` - SqliteStore instance
     /// * `capacity` - Initial cache capacity
-    pub fn with_capacity(store: Arc<SqliteStore>, capacity: usize) -> Self {
+    pub fn with_capacity(store: Arc<dyn Store + Send + Sync>, capacity: usize) -> Self {
         Self {
             cache: HashCache::with_capacity(capacity),
             store,
@@ -170,7 +169,7 @@ impl ChangeDetector {
         }
 
         // Step 2: Check database if cache miss
-        let db_hash = get_hash_from_db(&self.store, file_id).await?;
+        let db_hash = get_hash_from_db(self.store.as_ref(), file_id).await?;
 
         let change_type = match db_hash {
             Some(old_hash) => {
@@ -262,7 +261,7 @@ impl ChangeDetector {
         }
 
         // File doesn't exist - check if it was in database
-        if let Some(old_hash) = get_hash_from_db(&self.store, file_id).await? {
+        if let Some(old_hash) = get_hash_from_db(self.store.as_ref(), file_id).await? {
             return Ok(Some(ChangeType::Deleted(old_hash)));
         }
 
@@ -310,20 +309,12 @@ impl ChangeDetector {
         let hex_str = hash.to_hex().to_string();
         let new_path_str = new_path.to_string_lossy().to_string();
 
-        self.store
-            .run(move |conn| {
-                // Find a file with the same content_hash but at a different path
-                let result: Option<String> = conn
-                    .query_row(
-                        "SELECT relpath FROM files WHERE content_hash = ?1 AND relpath != ?2 LIMIT 1",
-                        rusqlite::params![hex_str, new_path_str],
-                        |row| row.get(0),
-                    )
-                    .optional()?;
-
-                Ok(result.map(std::path::PathBuf::from))
-            })
-            .await
+        // Find a file with the same content_hash but at a different path.
+        let result = self
+            .store
+            .find_file_relpath_by_content_hash(&hex_str, &new_path_str)
+            .await?;
+        Ok(result.map(std::path::PathBuf::from))
     }
 
     /// Detect changes for multiple files in a batch.
@@ -419,7 +410,7 @@ impl ChangeDetector {
 
         // Step 3: Batch query database for all cache misses
         if !cache_misses.is_empty() {
-            let db_hashes = get_hashes_batch_from_db(&self.store, &cache_misses).await?;
+            let db_hashes = get_hashes_batch_from_db(self.store.as_ref(), &cache_misses).await?;
 
             for file_id in cache_misses {
                 let current_hash = file_hashes[&file_id];
@@ -462,28 +453,18 @@ impl ChangeDetector {
 /// * `Ok(Some(hash))` - Hash found in database
 /// * `Ok(None)` - File exists but has no hash (NULL in database)
 /// * `Err(_)` - Database query error or file not found
-pub async fn get_hash_from_db(store: &SqliteStore, file_id: i64) -> Result<Option<ContentHash>> {
-    store
-        .run(move |conn| {
-            let result: Option<String> = conn
-                .query_row(
-                    "SELECT content_hash FROM files WHERE id = ?1",
-                    rusqlite::params![file_id],
-                    |row| row.get(0),
-                )
-                .optional()?;
-
-            match result {
-                Some(hex_str) => {
-                    // Parse the hex string back to a blake3 hash
-                    let hash = blake3::Hash::from_hex(&hex_str)
-                        .map_err(|e| anyhow::anyhow!("Invalid hash in database: {}", e))?;
-                    Ok(Some(hash))
-                }
-                None => Ok(None),
-            }
-        })
-        .await
+pub async fn get_hash_from_db(
+    store: &(dyn Store + Send + Sync),
+    file_id: i64,
+) -> Result<Option<ContentHash>> {
+    match store.get_file_content_hash(file_id).await? {
+        Some(hex_str) => {
+            let hash = blake3::Hash::from_hex(&hex_str)
+                .map_err(|e| anyhow::anyhow!("Invalid hash in database: {}", e))?;
+            Ok(Some(hash))
+        }
+        None => Ok(None),
+    }
 }
 
 /// Store a file's blake3 hash in the database.
@@ -496,17 +477,13 @@ pub async fn get_hash_from_db(store: &SqliteStore, file_id: i64) -> Result<Optio
 /// # Returns
 /// * `Ok(())` - Hash stored successfully
 /// * `Err(_)` - Database update error
-pub async fn store_hash_in_db(store: &SqliteStore, file_id: i64, hash: ContentHash) -> Result<()> {
+pub async fn store_hash_in_db(
+    store: &(dyn Store + Send + Sync),
+    file_id: i64,
+    hash: ContentHash,
+) -> Result<()> {
     let hex_str = hash.to_hex().to_string();
-    store
-        .run(move |conn| {
-            conn.execute(
-                "UPDATE files SET content_hash = ?1 WHERE id = ?2",
-                rusqlite::params![hex_str, file_id],
-            )?;
-            Ok(())
-        })
-        .await
+    store.update_file_content_hash(file_id, &hex_str).await
 }
 
 /// Retrieve blake3 hashes for multiple files from the database in a single query.
@@ -519,7 +496,7 @@ pub async fn store_hash_in_db(store: &SqliteStore, file_id: i64, hash: ContentHa
 /// * `Ok(HashMap)` - Map of file_id to hash for files that have hashes
 /// * `Err(_)` - Database query error
 pub async fn get_hashes_batch_from_db(
-    store: &SqliteStore,
+    store: &(dyn Store + Send + Sync),
     file_ids: &[i64],
 ) -> Result<std::collections::HashMap<i64, ContentHash>> {
     use std::collections::HashMap;
@@ -528,44 +505,25 @@ pub async fn get_hashes_batch_from_db(
         return Ok(HashMap::new());
     }
 
-    let file_ids = file_ids.to_vec();
-    store
-        .run(move |conn| {
-            let mut hashes = HashMap::new();
-
-            // Build placeholder string for IN clause
-            let placeholders: String = file_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-            let sql = format!(
-                "SELECT id, content_hash FROM files WHERE id IN ({})",
-                placeholders
-            );
-
-            let mut stmt = conn.prepare(&sql)?;
-
-            // Convert file_ids to rusqlite params
-            let params: Vec<&dyn rusqlite::ToSql> = file_ids
-                .iter()
-                .map(|id| id as &dyn rusqlite::ToSql)
-                .collect();
-
-            let rows = stmt.query_map(params.as_slice(), |row| {
-                let id: i64 = row.get(0)?;
-                let hex_str: Option<String> = row.get(1)?;
-                Ok((id, hex_str))
-            })?;
-
-            for row_result in rows {
-                let (id, hex_str_opt) = row_result?;
-                if let Some(hex_str) = hex_str_opt {
-                    if let Ok(hash) = blake3::Hash::from_hex(&hex_str) {
-                        hashes.insert(id, hash);
-                    }
-                }
+    let mut hashes = HashMap::new();
+    for (id, hex_str) in store.get_file_content_hashes(file_ids).await? {
+        // A single corrupt stored hash must NOT abort change-detection for the
+        // whole batch: skip it (with a warning) so it's treated as missing and
+        // reprocessed, while every other file in the batch is still detected.
+        match blake3::Hash::from_hex(&hex_str) {
+            Ok(hash) => {
+                hashes.insert(id, hash);
             }
-
-            Ok(hashes)
-        })
-        .await
+            Err(e) => {
+                tracing::warn!(
+                    file_id = id,
+                    error = %e,
+                    "Skipping file with corrupt stored content hash; it will be reprocessed",
+                );
+            }
+        }
+    }
+    Ok(hashes)
 }
 
 #[cfg(test)]

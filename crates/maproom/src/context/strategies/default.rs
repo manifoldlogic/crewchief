@@ -19,7 +19,7 @@ use crate::context::{
     token_counter::TokenCounter,
     types::{ContextBundle, ContextItem, ExpandOptions, LineRange},
 };
-use crate::db::SqliteStore;
+use crate::db::Store;
 use std::sync::Arc;
 
 /// Default assembly strategy that works across all languages.
@@ -32,13 +32,13 @@ use std::sync::Arc;
 ///
 /// This serves as the baseline that language-specific strategies can extend.
 pub struct DefaultAssemblyStrategy {
-    store: Arc<SqliteStore>,
+    store: Arc<dyn Store + Send + Sync>,
     token_counter: TokenCounter,
 }
 
 impl DefaultAssemblyStrategy {
     /// Create a new default assembly strategy.
-    pub fn new(store: Arc<SqliteStore>) -> Self {
+    pub fn new(store: Arc<dyn Store + Send + Sync>) -> Self {
         Self {
             store,
             token_counter: TokenCounter::new(),
@@ -47,52 +47,36 @@ impl DefaultAssemblyStrategy {
 
     /// Retrieve chunk metadata from the database by ID.
     pub async fn get_chunk_metadata(&self, chunk_id: i64) -> Result<ChunkMetadata> {
-        let store = Arc::clone(&self.store);
-        let metadata = store
-            .run(move |conn| {
-                let row = conn.query_row(
-                    "SELECT
-                    c.id,
-                    f.relpath,
-                    w.abs_path as worktree_path,
-                    c.symbol_name,
-                    c.kind,
-                    c.start_line,
-                    c.end_line,
-                    c.signature,
-                    c.docstring
-                FROM chunks c
-                JOIN files f ON f.id = c.file_id
-                LEFT JOIN worktrees w ON w.id = f.worktree_id
-                WHERE c.id = ?1",
-                    rusqlite::params![chunk_id],
-                    |row| {
-                        let worktree_path: Option<String> = row.get(2)?;
-                        Ok(ChunkMetadata {
-                            id: row.get(0)?,
-                            file_relpath: row.get(1)?,
-                            worktree_path: worktree_path.unwrap_or_else(|| {
-                                warn!(
-                                    "Chunk {} has no worktree_path, using empty string",
-                                    chunk_id
-                                );
-                                String::new()
-                            }),
-                            symbol_name: row.get(3)?,
-                            kind: row.get(4)?,
-                            start_line: row.get(5)?,
-                            end_line: row.get(6)?,
-                            signature: row.get(7)?,
-                            docstring: row.get(8)?,
-                        })
-                    },
-                )?;
-                Ok(row)
-            })
+        // Backend-agnostic: chunk fields via get_chunk_by_id, worktree abs_path via
+        // get_file_edge_context (both Store trait methods).
+        let chunk = self
+            .store
+            .get_chunk_by_id(chunk_id)
             .await
-            .context("Failed to query chunk metadata")?;
+            .context("Failed to query chunk metadata")?
+            .ok_or_else(|| anyhow::anyhow!("Chunk {chunk_id} not found"))?;
 
-        Ok(metadata)
+        // Missing file/worktree context must NOT silently fall back to an empty
+        // worktree root — FileLoader::new("") would then resolve files relative to
+        // the process directory and read the wrong file.
+        let worktree_path = self
+            .store
+            .get_file_edge_context(chunk.file_id)
+            .await?
+            .map(|(_, _, abs_path)| abs_path)
+            .ok_or_else(|| anyhow::anyhow!("Chunk {chunk_id} has no file/worktree context"))?;
+
+        Ok(ChunkMetadata {
+            id: chunk.id,
+            file_relpath: chunk.file_path,
+            worktree_path,
+            symbol_name: chunk.symbol_name,
+            kind: chunk.kind,
+            start_line: chunk.start_line,
+            end_line: chunk.end_line,
+            signature: chunk.signature,
+            docstring: chunk.docstring,
+        })
     }
 
     /// Create a ContextItem from chunk metadata.
@@ -176,7 +160,7 @@ impl DefaultAssemblyStrategy {
     ) -> Result<()> {
         let test_budget = (budget as f64 * 0.3) as usize; // 30% of total budget
 
-        let tests = find_test_files(&self.store, chunk_id).await?;
+        let tests = find_test_files(self.store.as_ref(), chunk_id).await?;
 
         for test in tests.into_iter().take(1) {
             // Only include the nearest test
@@ -222,7 +206,7 @@ impl DefaultAssemblyStrategy {
     ) -> Result<()> {
         let caller_budget = (budget as f64 * 0.15) as usize; // 15% of total budget
 
-        let callers = find_callers(&self.store, chunk_id, 1).await?; // Depth 1 only
+        let callers = find_callers(self.store.as_ref(), chunk_id, 1).await?; // Depth 1 only
 
         for caller in callers.into_iter().take(1) {
             // Only include top caller
@@ -267,7 +251,7 @@ impl DefaultAssemblyStrategy {
     ) -> Result<()> {
         let callee_budget = (budget as f64 * 0.15) as usize; // 15% of total budget
 
-        let callees = find_callees(&self.store, chunk_id, 1).await?; // Depth 1 only
+        let callees = find_callees(self.store.as_ref(), chunk_id, 1).await?; // Depth 1 only
 
         for callee in callees.into_iter().take(1) {
             // Only include top callee

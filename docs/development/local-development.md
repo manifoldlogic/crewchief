@@ -6,7 +6,8 @@ This guide explains how to run CrewChief using local development code instead of
 
 - Node.js 18+ and pnpm installed
 - Rust toolchain installed (for building Rust binaries)
-- PostgreSQL running locally (for maproom commands)
+- (No database server required — maproom uses SQLite by default, auto-created at `~/.maproom/maproom.db`.)
+- (Optional) PostgreSQL running locally, only if you build maproom with `--features postgres` and point it at a `postgres://` URL
 
 ## Quick Start
 
@@ -247,11 +248,15 @@ If you get "maproom not found" errors:
 
 ### Database Connection Issues
 
-For maproom commands, ensure PostgreSQL is running and set MAPROOM_DATABASE_URL:
+Maproom commands default to a local SQLite database (`~/.maproom/maproom.db`), so no database server is required. To override the location, or to use the optional PostgreSQL backend (requires a `--features postgres` build), set `MAPROOM_DATABASE_URL` or pass the global `--database-url` flag:
 
 ```bash
-export MAPROOM_DATABASE_URL="postgresql://user:password@localhost:5432/crewchief"
-# Or use a .env file in the project root
+# Custom SQLite path
+export MAPROOM_DATABASE_URL="sqlite:///custom/path/maproom.db"
+# Optional PostgreSQL backend
+export MAPROOM_DATABASE_URL="postgresql://user:password@localhost:5432/maproom"
+# Or override per-invocation (takes precedence over the env var)
+maproom --database-url postgresql://localhost/maproom status
 ```
 
 ## Common Development Commands

@@ -8,9 +8,10 @@ use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use crate::db::traits::StoreCore;
-use crate::db::traits::StoreEncoding;
-use crate::db::SqliteStore;
+use crate::db::Store;
+// Sub-traits needed by the #[cfg(test)] modules (concrete SqliteStore calls).
+#[cfg(test)]
+use crate::db::traits::{StoreCore, StoreEncoding};
 
 /// Response struct for encoding progress queries.
 #[derive(Debug, Serialize, Deserialize)]
@@ -89,7 +90,7 @@ fn is_stale(timestamp: &str) -> bool {
 /// If `repo_filter` is provided, counts are scoped to that repo.
 /// Otherwise, global counts are returned.
 pub async fn get_encoding_progress(
-    store: Arc<SqliteStore>,
+    store: Arc<dyn Store + Send + Sync>,
     repo_filter: Option<String>,
 ) -> Result<EncodingProgressResponse> {
     let (total_chunks, total_embeddings) = match &repo_filter {
@@ -1801,7 +1802,7 @@ mod integration_tests {
             max_cost_usd: None,
         };
         let pipeline = EmbeddingPipeline::new(service, config);
-        let stats = pipeline.run(&store_arc).await.unwrap();
+        let stats = pipeline.run(store_arc.as_ref()).await.unwrap();
 
         assert_eq!(stats.total_chunks, 10);
         assert_eq!(stats.provider, "openai");
@@ -1952,7 +1953,7 @@ mod integration_tests {
         });
 
         // Run pipeline on the current task (concurrently with the query task)
-        let pipeline_result = pipeline.run(&store).await;
+        let pipeline_result = pipeline.run(store.as_ref()).await;
 
         // Wait for query task to finish
         let query_result = query_handle.await;
@@ -2003,7 +2004,7 @@ mod integration_tests {
             max_cost_usd: None,
         };
         let pipeline1 = EmbeddingPipeline::new(service1, config1);
-        let stats1 = pipeline1.run(&store_arc).await.unwrap();
+        let stats1 = pipeline1.run(store_arc.as_ref()).await.unwrap();
         assert_eq!(stats1.total_chunks, 5);
         assert_eq!(stats1.provider, "ollama");
         assert_eq!(stats1.dimension, 1024);
@@ -2119,7 +2120,7 @@ mod integration_tests {
             max_cost_usd: None,
         };
         let pipeline2 = EmbeddingPipeline::new(service2, config2);
-        let stats2 = pipeline2.run(&store_arc).await.unwrap();
+        let stats2 = pipeline2.run(store_arc.as_ref()).await.unwrap();
 
         // Only the 3 new chunks should be processed (incremental mode)
         assert_eq!(stats2.total_chunks, 3);
@@ -2227,7 +2228,7 @@ mod integration_tests {
         };
 
         let stats = pipeline
-            .run_with_progress(&store, Some(&callback))
+            .run_with_progress(store.as_ref(), Some(&callback))
             .await
             .unwrap();
         assert_eq!(stats.total_chunks, 10);
@@ -2500,7 +2501,7 @@ mod integration_tests {
             max_cost_usd: None,
         };
         let pipeline = EmbeddingPipeline::new(service, config);
-        let stats = pipeline.run(&store_arc).await.unwrap();
+        let stats = pipeline.run(store_arc.as_ref()).await.unwrap();
         assert_eq!(
             stats.total_chunks, 6,
             "Should only process chunks without embeddings"

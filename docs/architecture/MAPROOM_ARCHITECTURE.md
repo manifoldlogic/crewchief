@@ -20,7 +20,7 @@ Maproom consists of six major subsystems:
 
 1. **Indexing Pipeline** - Code parsing and chunk extraction
 2. **Embedding Layer** - Multi-provider semantic embedding generation
-3. **Storage Layer** - PostgreSQL database with pgvector
+3. **Storage Layer** - Pluggable `Store` backend: SQLite + sqlite-vec (default) or PostgreSQL + pgvector (optional, `--features postgres`)
 4. **Search Pipeline** - Hybrid retrieval with parallel execution
 5. **Context Assembly** - Intelligent code context bundling
 6. **MCP Integration** - Model Context Protocol server wrapper
@@ -53,11 +53,12 @@ Maproom consists of six major subsystems:
 └────────────────────────────┼────────────────────────────────────────┘
                              │
                              ▼
-                   ┌─────────────────┐
-                   │   PostgreSQL    │
-                   │   + pgvector    │
-                   │   (Storage)     │
-                   └─────────────────┘
+                   ┌──────────────────────────────────────────────┐
+                   │  Store backend (selected by database URL)    │
+                   │  • SQLite + sqlite-vec        (default)       │
+                   │  • PostgreSQL + pgvector      (optional,      │
+                   │                                --features postgres) │
+                   └──────────────────────────────────────────────┘
 ```
 
 ---
@@ -198,7 +199,7 @@ Maproom supports **three embedding providers** with automatic detection and fail
 
 ### Database Architecture
 
-Maproom uses **PostgreSQL 16** with the **pgvector** extension for vector similarity search.
+Maproom stores data behind a `Store` trait with two backends: **SQLite** + **sqlite-vec** (the default) and **PostgreSQL 16** + **pgvector** (optional, enabled with `cargo build --features postgres` and selected when the database URL is `postgres://`/`postgresql://`). The PostgreSQL schema/SQL described below applies to the Postgres backend.
 
 #### Dual PostgreSQL Setup
 
@@ -1215,7 +1216,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize"}' | node dist/index.js
 ### Technology Stack
 
 - **Language**: Rust (core), TypeScript (MCP wrapper)
-- **Database**: PostgreSQL 16 + pgvector extension
+- **Database**: SQLite + sqlite-vec (default); PostgreSQL 16 + pgvector (optional, `postgres` feature)
 - **Parsing**: tree-sitter (TypeScript, Rust, Python, Markdown, JSON)
 - **Embeddings**: Ollama (mxbai-embed-large), Google Vertex AI (textembedding-gecko), OpenAI (text-embedding-3-small)
 - **Vector Index**: ivfflat algorithm (pgvector)

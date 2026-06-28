@@ -5,9 +5,7 @@
 //! - Child components rendered by a target component
 //! - Props passed between components
 
-use crate::db::traits::StoreChunks;
-use crate::db::traits::StoreGraph;
-use crate::db::SqliteStore;
+use crate::db::Store;
 use anyhow::Result;
 use regex::Regex;
 
@@ -75,7 +73,7 @@ impl JsxRelationshipDetector {
     /// Vector of parent component chunks
     pub async fn find_parent_components(
         &self,
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         target_chunk_id: i64,
         target_symbol_name: &str,
     ) -> Result<Vec<ComponentUsage>> {
@@ -147,7 +145,7 @@ impl JsxRelationshipDetector {
     /// Vector of child component chunks
     pub async fn find_child_components(
         &self,
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         target_chunk_id: i64,
     ) -> Result<Vec<ComponentUsage>> {
         use crate::db::sqlite::graph::ImportDirection;
@@ -229,7 +227,7 @@ impl JsxRelationshipDetector {
     /// Tuple of (parents, children)
     pub async fn find_all_relationships(
         &self,
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         chunk_id: i64,
         symbol_name: &str,
     ) -> Result<(Vec<ComponentUsage>, Vec<ComponentUsage>)> {

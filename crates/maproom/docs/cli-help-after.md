@@ -15,9 +15,17 @@ ENVIRONMENT VARIABLES:
           4. Packaged binary (bundled with CLI)
 
     MAPROOM_DATABASE_URL
-        Path to the SQLite database file. Default: $HOME/.maproom/maproom.db
+        Database URL; determines the storage backend at runtime:
+          - sqlite:// or a plain path  -> SQLite backend (default)
+          - postgres:// / postgresql:// -> PostgreSQL backend
+            (requires a build with --features postgres)
+        Default: $HOME/.maproom/maproom.db (SQLite)
 
-        Example: export MAPROOM_DATABASE_URL="sqlite://$HOME/.maproom/my-project.db"
+        Example (SQLite):   export MAPROOM_DATABASE_URL="sqlite://$HOME/.maproom/my-project.db"
+        Example (Postgres): export MAPROOM_DATABASE_URL="postgres://user:pass@localhost/maproom"
+
+        Overridable per-invocation by the global --database-url flag, which
+        takes precedence over MAPROOM_DATABASE_URL.
 
         For per-repository databases, configure in .claude/settings.json:
           { "env": { "MAPROOM_DATABASE_URL": "sqlite:///home/user/.maproom/myrepo.db" } }

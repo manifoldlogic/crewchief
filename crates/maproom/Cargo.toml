@@ -1,8 +1,8 @@
 [package]
 name = "maproom"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "Semantic code search powered by embeddings and SQLite"
+description = "Semantic code search powered by embeddings, with SQLite or PostgreSQL/pgvector storage"
 license = "MIT"
 repository = "https://github.com/manifoldlogic/crewchief"
 homepage = "https://github.com/manifoldlogic/crewchief/tree/main/crates/maproom"
@@ -49,10 +49,33 @@ humantime = "2.3"
 config = "0.14"
 dirs = "5"  # Cross-platform home directory resolution for SQLite default path
 
-# SQLite database (the only backend)
+# SQLite database (the default backend)
 rusqlite = { version = "0.29.0", features = ["bundled", "chrono"] }
 r2d2 = "0.8"
 r2d2_sqlite = "0.22"
+
+# PostgreSQL backend — optional, behind the `postgres` feature. The default
+# (no-feature) build MUST stay free of sqlx (R-DEP-4).
+#
+# DEVIATION (documented): the feature set is intentionally MINIMAL —
+# runtime-tokio + tls-rustls + postgres ONLY. sqlx 0.8's umbrella feature flags
+# `migrate`, `chrono`, and `json` each transitively enable `sqlx-sqlite`, which
+# pulls `libsqlite3-sys 0.28` and collides (Cargo `links = "sqlite3"` uniqueness)
+# with the existing `rusqlite 0.29` (`libsqlite3-sys 0.26`). Bumping rusqlite is
+# a non-goal (§3.2), so instead:
+#   * migrations are applied by a hand-rolled runner (src/db/postgres/migrations.rs)
+#     over migrations_pg/*.sql — NOT sqlx::migrate! (which needs `migrate`);
+#   * timestamps/JSONB/vectors are bound via SQL text casts ($N::timestamptz,
+#     $N::jsonb, $N::vector) instead of sqlx's chrono/json type integrations;
+#   * the `pgvector` crate is not needed (the pgvector EXTENSION is still used via
+#     the `vector` column type + operators, addressed through text casts).
+# This preserves the spec intent while keeping rusqlite and sqlx coexisting.
+# NOTE (R-NFR-5): verify the chosen sqlx 0.8.x builds under MSRV 1.85.
+sqlx = { version = "0.8", optional = true, default-features = false, features = [
+  "runtime-tokio",
+  "tls-rustls",
+  "postgres",
+] }
 
 # Parsing (Tree-sitter)
 tree-sitter = "0.22"
@@ -119,9 +142,6 @@ path = "src/main.rs"
 name = "maproom"
 path = "src/lib.rs"
 
-[package.metadata.sqlx]
-migrate = true
-
 [dependencies.puffin]
 version = "0.19"
 optional = true
@@ -143,6 +163,7 @@ nix = { version = "0.29", features = ["signal"] }
 
 [features]
 profiling = ["puffin"]
+postgres = ["dep:sqlx"]
 
 
 [[bench]]

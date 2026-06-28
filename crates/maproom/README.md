@@ -4,16 +4,16 @@
   <img src="../../docs/images/maproom_hero.svg" alt="maproom architecture diagram">
 </p>
 
-Semantic code search powered by embeddings and SQLite.
+Semantic code search powered by embeddings, with SQLite (default) or PostgreSQL + pgvector storage.
 
-Maproom indexes your codebase using tree-sitter, stores chunks in a local SQLite database, and enables both full-text and vector similarity search. It runs as a standalone CLI tool, through the [`crewchief` CLI](https://www.npmjs.com/package/@crewchief/cli) (which bundles the binary), or as an MCP server via [`@crewchief/maproom-mcp`](https://www.npmjs.com/package/@crewchief/maproom-mcp) for integration with AI coding assistants.
+Maproom indexes your codebase using tree-sitter, stores chunks in a local SQLite database (the default) or in PostgreSQL + pgvector (optional, behind `--features postgres`), and enables both full-text and vector similarity search. It runs as a standalone CLI tool, through the [`crewchief` CLI](https://www.npmjs.com/package/@crewchief/cli) (which bundles the binary), or as an MCP server via [`@crewchief/maproom-mcp`](https://www.npmjs.com/package/@crewchief/maproom-mcp) for integration with AI coding assistants.
 
 ## Features
 
 - **Semantic Code Search** - Find code by concept, not just keywords
 - **Full-Text Search** - Works immediately with no setup beyond indexing
 - **Multi-Provider Embeddings** - Ollama (free/local), OpenAI, or Google Vertex AI
-- **SQLite Storage** - Portable, zero-config database with FTS5 and sqlite-vec
+- **Pluggable Storage** - SQLite (default; portable, zero-config, FTS5 + sqlite-vec) or PostgreSQL + pgvector (optional, behind `cargo build --features postgres`)
 - **Incremental Indexing** - Only re-indexes changed files
 - **MCP Server** - Integrates with Claude Code, Cursor, and other MCP-compatible tools
 - **10+ Languages** - TypeScript, JavaScript, Rust, Python, Go, Ruby, C, C#, Java, C++, Markdown, and config formats
@@ -132,7 +132,7 @@ maproom db migrate
 
 ### Database
 
-- `MAPROOM_DATABASE_URL` - SQLite path (default: `~/.maproom/maproom.db`)
+- `MAPROOM_DATABASE_URL` - Database URL (default: `~/.maproom/maproom.db`). A SQLite path/URL selects the default SQLite backend; a `postgres://`/`postgresql://` URL selects the PostgreSQL backend (requires a `--features postgres` build). Overridable per-invocation by the global `--database-url` flag (precedence: `--database-url` > `MAPROOM_DATABASE_URL` > default).
 
 ### Provider-Specific
 

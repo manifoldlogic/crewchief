@@ -1,18 +1,25 @@
 //! Database access layer for Maproom.
 //!
-//! This module provides SQLite database connectivity and query utilities.
-//! PostgreSQL support has been removed - SQLite is the only backend.
+//! SQLite (`rusqlite` + `r2d2`) is the default backend. An optional PostgreSQL +
+//! pgvector backend lives in [`postgres`], gated behind the `postgres` Cargo
+//! feature; the default build is unchanged and free of `sqlx`/`pgvector`.
 
 pub mod cleanup;
 pub mod columns;
 pub mod connection;
 pub mod index_state;
+#[cfg(feature = "postgres")]
+pub mod postgres;
 pub mod sqlite;
 pub mod traits;
 pub mod types;
 
 // Re-export SqliteStore as the primary store type
 pub use sqlite::SqliteStore;
+
+// Re-export PostgresStore when the backend is compiled in
+#[cfg(feature = "postgres")]
+pub use postgres::PostgresStore;
 
 // Re-export cleanup types for convenience
 pub use cleanup::{
@@ -42,9 +49,12 @@ pub use types::{
 
 use serde::Serialize;
 
-/// Connect to the SQLite database.
+/// Connect to the configured database, returning a backend-agnostic handle
+/// (R-WIRE-2). The backend is chosen by the resolved URL scheme (R-WIRE-1):
+/// `postgres://`/`postgresql://` → `PostgresStore` (requires `--features
+/// postgres`), everything else → `SqliteStore`.
 ///
-/// Uses `MAPROOM_DATABASE_URL` env var if set, otherwise defaults to
+/// Uses `MAPROOM_DATABASE_URL` if set, otherwise defaults to
 /// `~/.maproom/maproom.db`.
 ///
 /// # Examples
@@ -55,13 +65,39 @@ use serde::Serialize;
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
 ///     let store = db::connect().await?;
-///     // Use store for indexing, search, etc.
+///     // Use store (dyn Store) for indexing, search, etc.
 ///     Ok(())
 /// }
 /// ```
-pub async fn connect() -> anyhow::Result<SqliteStore> {
+pub async fn connect() -> anyhow::Result<std::sync::Arc<dyn Store + Send + Sync>> {
     let url = connection::get_database_url()?;
-    SqliteStore::connect(&url).await
+    match connection::backend_for_url(&url) {
+        connection::Backend::Sqlite => {
+            Ok(std::sync::Arc::new(SqliteStore::connect(&url).await?))
+        }
+        #[cfg(feature = "postgres")]
+        connection::Backend::Postgres => {
+            Ok(std::sync::Arc::new(postgres::PostgresStore::connect(&url).await?))
+        }
+        #[cfg(not(feature = "postgres"))]
+        connection::Backend::Postgres => anyhow::bail!(
+            "database URL uses the postgres scheme but maproom was built without --features postgres"
+        ),
+    }
+}
+
+/// Connect specifically to the SQLite backend, for SQLite-only maintenance tools
+/// (e.g. the `migrate markdown` re-chunking command, which uses dynamic backup
+/// tables / `sqlite_master` introspection that have no cross-backend contract).
+/// Errors if the resolved URL selects Postgres.
+pub async fn connect_sqlite() -> anyhow::Result<SqliteStore> {
+    let url = connection::get_database_url()?;
+    match connection::backend_for_url(&url) {
+        connection::Backend::Sqlite => SqliteStore::connect(&url).await,
+        connection::Backend::Postgres => anyhow::bail!(
+            "this command requires the SQLite backend, but the configured database URL is Postgres"
+        ),
+    }
 }
 
 /// Record for inserting/updating a file

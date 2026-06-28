@@ -18,9 +18,7 @@ use crate::context::{
     token_counter::TokenCounter,
     types::{ContextBundle, ContextItem, ExpandOptions, LineRange},
 };
-use crate::db::traits::StoreChunks;
-use crate::db::traits::StoreGraph;
-use crate::db::SqliteStore;
+use crate::db::Store;
 use std::sync::Arc;
 
 /// Configuration for Python assembly strategy.
@@ -55,7 +53,7 @@ impl Default for PythonConfig {
 /// - Class hierarchies
 /// - Python test patterns
 pub struct PythonAssemblyStrategy {
-    store: Arc<SqliteStore>,
+    store: Arc<dyn Store + Send + Sync>,
     default: DefaultAssemblyStrategy,
     config: PythonConfig,
     token_counter: TokenCounter,
@@ -63,12 +61,12 @@ pub struct PythonAssemblyStrategy {
 
 impl PythonAssemblyStrategy {
     /// Create a new Python assembly strategy.
-    pub fn new(store: Arc<SqliteStore>) -> Self {
+    pub fn new(store: Arc<dyn Store + Send + Sync>) -> Self {
         Self::with_config(store, PythonConfig::default())
     }
 
     /// Create a new Python assembly strategy with custom configuration.
-    pub fn with_config(store: Arc<SqliteStore>, config: PythonConfig) -> Self {
+    pub fn with_config(store: Arc<dyn Store + Send + Sync>, config: PythonConfig) -> Self {
         Self {
             default: DefaultAssemblyStrategy::new(Arc::clone(&store)),
             store,

@@ -41,9 +41,20 @@ Built to `../../packages/cli/bin/<platform>/maproom`:
 
 ## Known Limitations
 
-- Single-user only (no multi-process concurrent writes)
-- No database encryption
-- sqlite-vec extension must be compiled in (statically linked)
+These apply to the **SQLite backend** (the default). The optional **PostgreSQL** backend (build with `--features postgres`, select via a `postgres://` URL) supports concurrent multi-process writes and transport-level TLS. (Encryption at rest is a deployment concern, not something this crate provides.)
+
+- Single-user only, no multi-process concurrent writes — SQLite backend
+- No database encryption — SQLite backend
+- sqlite-vec extension must be compiled in (statically linked) — SQLite backend
+
+## Versioning
+
+The crate version lives in **one place**: `version` in `crates/maproom/Cargo.toml`.
+
+- `maproom --version` derives it automatically via clap `#[command(version)]` → `CARGO_PKG_VERSION` — never hardcode a version string in source or docs.
+- `daemon/protocol.rs::PROTOCOL_VERSION` is a **separate** wire-protocol version; bump it only on a protocol change, independently of the crate version.
+- The npm packages (`@crewchief/cli`, etc.) version independently via `release-config.json`; they bundle the compiled binary but don't pin the crate's semver.
+- Bump policy: this is a `0.x` crate, so a breaking public-API change uses a **minor** bump (`0.1.0 → 0.2.0`); additive/fixes use a patch bump.
 
 ## Docs
 

@@ -4,9 +4,10 @@
 //! matching patterns in `.maproomignore`. This provides a way to remove noise from search
 //! results after adding patterns to `.maproomignore`, without requiring a full rescan.
 
-use crate::db::traits::StoreChunks;
+use crate::db::Store;
+// Sub-traits needed by the #[cfg(test)] module (concrete SqliteStore calls).
+#[cfg(test)]
 use crate::db::traits::StoreCore;
-use crate::db::SqliteStore;
 use crate::incremental::ignore::{load_ignore_patterns, IgnorePatternMatcher};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
@@ -26,7 +27,7 @@ use tracing::{info, warn};
 /// * `Ok(())` on success
 /// * `Err` if repository/worktree not found or database operation fails
 pub async fn clean_ignored(
-    store: &SqliteStore,
+    store: &(dyn Store + Send + Sync),
     repo_name: &str,
     worktree_name: &str,
     dry_run: bool,
@@ -130,6 +131,7 @@ pub async fn clean_ignored(
 mod tests {
     use super::*;
     use crate::db;
+    use crate::db::SqliteStore;
     use std::io::Write;
     use tempfile::TempDir;
 

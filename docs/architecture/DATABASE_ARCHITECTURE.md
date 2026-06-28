@@ -189,17 +189,21 @@ MAPROOM_DATABASE_URL=postgresql://maproom:maproom@maproom-postgres:5432/maproom
 
 Both Rust binary and Node.js CLI use intelligent fallback to automatically detect the database:
 
-### Connection Priority (4-tier fallback)
+### Connection Priority (5-tier fallback)
 
-1. **MAPROOM_DATABASE_URL** environment variable (explicit configuration)
+1. **`--database-url`** global CLI flag (highest precedence; overrides `MAPROOM_DATABASE_URL` for the process)
+   ```bash
+   maproom --database-url "postgresql://maproom:maproom@localhost:5432/maproom" status
+   ```
+2. **MAPROOM_DATABASE_URL** environment variable (explicit configuration)
    ```bash
    export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@maproom-postgres:5432/maproom"
    ```
-   - Highest priority
    - Recommended for production
    - Respects user's explicit choice
+   - A `postgres://`/`postgresql://` URL selects the PostgreSQL backend (requires a `--features postgres` build); any other value selects SQLite
 
-2. **MAPROOM_DB_HOST** environment variable (component override)
+3. **MAPROOM_DB_HOST** environment variable (component override)
    ```bash
    export MAPROOM_DB_HOST="custom-postgres"
    export MAPROOM_DB_PORT="5432"  # optional, defaults to 5432
@@ -208,13 +212,13 @@ Both Rust binary and Node.js CLI use intelligent fallback to automatically detec
    - Builds connection string from components
    - Allows flexible configuration
 
-3. **maproom-postgres** hostname resolution (auto-detection)
+4. **maproom-postgres** hostname resolution (auto-detection)
    - Attempts to resolve `maproom-postgres` hostname
    - Works automatically in Docker environments
    - No configuration needed if container is running
    - Used by default in devcontainer
 
-4. **localhost:5433** (development fallback)
+5. **localhost:5433** (development fallback)
    ```bash
    # Connects to postgresql://maproom:maproom@127.0.0.1:5433/maproom
    ```

@@ -7,9 +7,10 @@ use anyhow::{Context, Result};
 use ignore::WalkBuilder;
 use tracing::{debug, info, warn};
 
-use crate::db::traits::StoreChunks;
+use crate::db::{ChunkRecord, FileRecord, Store};
+// Sub-traits needed by the #[cfg(test)] module (concrete SqliteStore calls).
+#[cfg(test)]
 use crate::db::traits::StoreCore;
-use crate::db::{ChunkRecord, FileRecord, SqliteStore};
 use crate::incremental::edge_updater::Edge;
 use crate::incremental::ignore::load_ignore_patterns;
 
@@ -126,7 +127,7 @@ pub struct BranchSwitchEvent {
 
 /// Process Python imports from chunk metadata and create import edges in chunk_edges table
 async fn process_python_imports(
-    store: &SqliteStore,
+    store: &(dyn Store + Send + Sync),
     repo_id: i64,
     worktree_id: i64,
     _file_id: i64,
@@ -180,7 +181,7 @@ async fn process_python_imports(
 }
 
 /// Batch insert edges into the database
-async fn insert_edges(store: &SqliteStore, edges: &[Edge]) -> Result<()> {
+async fn insert_edges(store: &(dyn Store + Send + Sync), edges: &[Edge]) -> Result<()> {
     for edge in edges {
         store
             .insert_chunk_edge(
@@ -264,7 +265,7 @@ fn file_modified_time(path: &Path) -> Option<chrono::DateTime<chrono::Utc>> {
 
 #[allow(clippy::too_many_arguments)] // Public API; parameters represent distinct scan configuration
 pub async fn scan_worktree(
-    store: &SqliteStore,
+    store: &(dyn Store + Send + Sync),
     repo: &str,
     worktree: &str,
     root: &Path,
@@ -578,7 +579,7 @@ pub async fn scan_worktree(
 }
 
 pub async fn upsert_files(
-    store: &SqliteStore,
+    store: &(dyn Store + Send + Sync),
     repo: &str,
     worktree: &str,
     root: &Path,

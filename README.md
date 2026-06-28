@@ -35,7 +35,7 @@ See the [CLI README](packages/cli/README.md) for full installation, configuratio
   <img src="docs/images/maproom_hero.svg" alt="Maproom indexer architecture — tree-sitter parses source files into AST chunks, embeddings encode semantic meaning via Ollama or OpenAI, SQLite stores chunks with full-text and vector indexes, and hybrid search combines lexical and semantic ranking with recency and churn signals.">
 </p>
 
-[`maproom`](https://crates.io/crates/maproom) is the Rust binary that powers crewchief's code search. It parses your codebase with tree-sitter (15 languages), stores chunks in a local SQLite database, and runs hybrid search combining full-text matching with vector similarity. Results are ranked using lexical relevance, semantic similarity, git recency, and churn signals.
+[`maproom`](https://crates.io/crates/maproom) is the Rust binary that powers crewchief's code search. It parses your codebase with tree-sitter (15 languages), stores chunks in a local SQLite database by default (or PostgreSQL + pgvector when built with `--features postgres` and given a `postgres://`/`postgresql://` database URL), and runs hybrid search combining full-text matching with vector similarity. Results are ranked using lexical relevance, semantic similarity, git recency, and churn signals.
 
 ```bash
 cargo install maproom
@@ -112,7 +112,7 @@ This is not a heavyweight process tool. It runs inside Claude Code as slash comm
 | Package / Crate | Description | Docs |
 | --- | --- | --- |
 | [`packages/cli`](packages/cli/) | TypeScript CLI — worktrees, agents, search | [README](packages/cli/README.md) |
-| [`crates/maproom`](crates/maproom/) | Rust indexer — tree-sitter parsing, embeddings, SQLite | [README](crates/maproom/README.md) |
+| [`crates/maproom`](crates/maproom/) | Rust indexer — tree-sitter parsing, embeddings, SQLite (default) or optional PostgreSQL/pgvector | [README](crates/maproom/README.md) |
 | [`packages/daemon-client`](packages/daemon-client/) | Daemon RPC client library | [README](packages/daemon-client/README.md) |
 
 ### Deprecated

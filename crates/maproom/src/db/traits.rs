@@ -128,6 +128,35 @@ pub trait StoreCore: Send + Sync {
         worktree_id: i64,
     ) -> anyhow::Result<Option<i64>>;
 
+    /// Get the stored `content_hash` for a file by ID (incremental change detection).
+    async fn get_file_content_hash(&self, file_id: i64) -> anyhow::Result<Option<String>>;
+
+    /// Update the stored `content_hash` for a file by ID.
+    async fn update_file_content_hash(
+        &self,
+        file_id: i64,
+        content_hash: &str,
+    ) -> anyhow::Result<()>;
+
+    /// Batch-fetch `(file_id, content_hash)` for the given file IDs (change detection).
+    async fn get_file_content_hashes(&self, file_ids: &[i64])
+        -> anyhow::Result<Vec<(i64, String)>>;
+
+    /// Find a file's relpath that has the given `content_hash` at a DIFFERENT relpath
+    /// (move detection). Returns the first match, if any.
+    async fn find_file_relpath_by_content_hash(
+        &self,
+        content_hash: &str,
+        exclude_relpath: &str,
+    ) -> anyhow::Result<Option<String>>;
+
+    /// Get a file's `(relpath, language, worktree abs_path)` for edge extraction.
+    /// Returns `None` if the file (or its worktree) is missing.
+    async fn get_file_edge_context(
+        &self,
+        file_id: i64,
+    ) -> anyhow::Result<Option<(String, Option<String>, String)>>;
+
     /// Get the count of chunks associated with a worktree.
     async fn get_worktree_chunk_count(&self, worktree_id: i64) -> anyhow::Result<i64>;
 
@@ -217,6 +246,19 @@ pub trait StoreChunks: Send + Sync {
         dst_chunk_id: i64,
         edge_type: &str,
     ) -> anyhow::Result<()>;
+
+    /// Delete every edge touching any chunk of a file (as src OR dst). Returns
+    /// the number of edges removed. Used before recomputing a file's edges.
+    async fn delete_edges_for_file(&self, file_id: i64) -> anyhow::Result<u64>;
+
+    /// Remove a worktree's association with the chunks of one file (by relpath),
+    /// then GC any chunk left referenced by no worktree. Returns the number of
+    /// `chunk_worktrees` rows removed. Used by incremental file-deletion handling.
+    async fn remove_worktree_from_chunks(
+        &self,
+        worktree_id: i64,
+        relpath: &str,
+    ) -> anyhow::Result<i64>;
 
     /// Get full chunk data by ID.
     async fn get_chunk_by_id(&self, chunk_id: i64) -> anyhow::Result<Option<ChunkFull>>;

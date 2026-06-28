@@ -172,7 +172,7 @@ pub fn calculate_ndcg_at_k(results: &[RankedResult], k: usize) -> f64 {
 
     // Calculate IDCG@K (ideal ranking)
     let mut ideal_results: Vec<_> = results.to_vec();
-    ideal_results.sort_by(|a, b| b.relevance_grade.cmp(&a.relevance_grade));
+    ideal_results.sort_by_key(|r| std::cmp::Reverse(r.relevance_grade));
 
     let idcg = ideal_results
         .iter()

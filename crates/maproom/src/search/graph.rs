@@ -5,8 +5,7 @@
 //! contribute different weights to the importance score.
 
 use crate::config::SearchConfig;
-use crate::db::traits::StoreGraph;
-use crate::db::SqliteStore;
+use crate::db::Store;
 use crate::search::executor_types::{RankedResult, RankedResults, SearchSource};
 use tracing::{debug, instrument};
 
@@ -69,7 +68,7 @@ impl GraphExecutor {
     /// ```
     #[instrument(skip(store, config))]
     pub async fn execute(
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         repo_id: i64,
         worktree_id: Option<i64>,
         limit: usize,
@@ -128,7 +127,7 @@ impl GraphExecutor {
     /// useful when combining with other search results.
     #[instrument(skip(store, chunk_ids), fields(chunk_count = chunk_ids.len()))]
     pub async fn execute_for_chunks(
-        store: &SqliteStore,
+        store: &(dyn Store + Send + Sync),
         chunk_ids: &[i64],
         repo_id: i64,
         worktree_id: Option<i64>,
