@@ -429,14 +429,46 @@ impl MarkdownMigrator {
             .await
     }
 
-    /// Delete a backup table
+    /// Delete a backup table.
+    ///
+    /// R02 (fix spec R-DBK-1..4): the name is validated against the exact
+    /// `chunks_backup_YYYYMMDD_HHMMSS` shape BEFORE any SQL runs (an arbitrary
+    /// identifier here used to be interpolated straight into `DROP TABLE IF
+    /// EXISTS`, which let `--backup chunks` drop the main chunks table), then
+    /// existence is verified so nonexistent backups error instead of
+    /// reporting false success.
     pub async fn delete_backup(&self, backup_table: &str) -> Result<()> {
+        // R-DBK-2: reject anything that is not a maproom backup table name,
+        // before any SQL. Prefixed "Configuration error:" so classify_error
+        // maps it to exit 2 once top-level classification (R-EXIT-5) runs.
+        if !is_valid_backup_table_name(backup_table) {
+            anyhow::bail!(
+                "Configuration error: '{}' is not a maproom backup table (expected chunks_backup_YYYYMMDD_HHMMSS)",
+                backup_table
+            );
+        }
+
         info!("Deleting backup table: {}", backup_table);
 
         let backup_table = backup_table.to_string();
         self.store
             .run(move |conn| {
-                conn.execute(&format!("DROP TABLE IF EXISTS {}", backup_table), [])?;
+                use rusqlite::params;
+
+                // R-DBK-3: verify existence (same param-bound pattern as
+                // rollback) so a valid-shaped but absent name errors.
+                let exists: bool = conn.query_row(
+                    "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name = ?1",
+                    params![&backup_table],
+                    |row| row.get(0),
+                )?;
+                if !exists {
+                    anyhow::bail!("Backup table {} does not exist", backup_table);
+                }
+
+                // R-DBK-4: drop the now-validated, existence-proven table.
+                // Quoted identifier; no IF EXISTS (existence was just proven).
+                conn.execute(&format!("DROP TABLE \"{}\"", backup_table), [])?;
                 Ok(())
             })
             .await?;
@@ -548,4 +580,109 @@ pub async fn verify_migration(
             Ok(results)
         })
         .await
+}
+
+/// True iff `name` is exactly `chunks_backup_YYYYMMDD_HHMMSS` (R02 / R-DBK-1).
+///
+/// The remainder after the prefix must be exactly 15 bytes: 8 ASCII digits,
+/// an underscore, then 6 ASCII digits. No regex dependency needed.
+fn is_valid_backup_table_name(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix("chunks_backup_") else {
+        return false;
+    };
+    let b = rest.as_bytes();
+    b.len() == 15
+        && b[..8].iter().all(|c| c.is_ascii_digit())
+        && b[8] == b'_'
+        && b[9..].iter().all(|c| c.is_ascii_digit())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::traits::StoreMigration;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static TEST_DB_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    async fn setup_test_store() -> SqliteStore {
+        let counter = TEST_DB_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let db_name = format!("file:memdb_mdmig_{}?mode=memory&cache=shared", counter);
+        let store = SqliteStore::connect(&db_name)
+            .await
+            .expect("Failed to create test store");
+        store.migrate().await.expect("Failed to run migrations");
+        store
+    }
+
+    async fn table_exists(store: &SqliteStore, name: &str) -> bool {
+        let name = name.to_string();
+        store
+            .run(move |conn| {
+                let exists: bool = conn.query_row(
+                    "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name = ?1",
+                    rusqlite::params![&name],
+                    |row| row.get(0),
+                )?;
+                Ok(exists)
+            })
+            .await
+            .unwrap()
+    }
+
+    #[test]
+    fn backup_name_validator_shapes() {
+        assert!(is_valid_backup_table_name("chunks_backup_20260702_123456"));
+        assert!(!is_valid_backup_table_name("chunks"));
+        assert!(!is_valid_backup_table_name("chunks_backup_bogus"));
+        assert!(!is_valid_backup_table_name("chunks_backup_2026070_123456"));
+        assert!(!is_valid_backup_table_name("chunks_backup_20260702-123456"));
+        assert!(!is_valid_backup_table_name("chunks_backup_20260702_1234567"));
+        assert!(!is_valid_backup_table_name("files"));
+        assert!(!is_valid_backup_table_name(""));
+    }
+
+    #[tokio::test]
+    async fn delete_backup_rejects_non_backup_name() {
+        let store = setup_test_store().await;
+        let migrator = MarkdownMigrator::new(store.clone());
+        let err = migrator.delete_backup("chunks").await.unwrap_err();
+        assert!(err.to_string().contains("not a maproom backup table"));
+        // The main chunks table must still exist.
+        assert!(table_exists(&store, "chunks").await);
+    }
+
+    #[tokio::test]
+    async fn delete_backup_rejects_malformed_timestamp() {
+        let store = setup_test_store().await;
+        let migrator = MarkdownMigrator::new(store.clone());
+        let err = migrator
+            .delete_backup("chunks_backup_bogus")
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("not a maproom backup table"));
+    }
+
+    #[tokio::test]
+    async fn delete_backup_errors_on_missing_table() {
+        let store = setup_test_store().await;
+        let migrator = MarkdownMigrator::new(store.clone());
+        let err = migrator
+            .delete_backup("chunks_backup_19990101_000000")
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("does not exist"));
+    }
+
+    #[tokio::test]
+    async fn delete_backup_drops_valid_backup() {
+        let store = setup_test_store().await;
+        let migrator = MarkdownMigrator::new(store.clone());
+        let backup = migrator.create_backup().await.unwrap();
+        assert!(table_exists(&store, &backup).await);
+        migrator.delete_backup(&backup).await.unwrap();
+        assert!(!table_exists(&store, &backup).await);
+        // Main table untouched.
+        assert!(table_exists(&store, "chunks").await);
+    }
 }

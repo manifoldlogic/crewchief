@@ -35,7 +35,10 @@ pub enum CacheCommand {
     /// Warm cache with queries
     Warm {
         /// Path to file containing queries (one per line)
-        #[arg(long, short)]
+        // R01 / R-CLAP-1: explicit `short = 'f'` — a bare `short` here derived
+        // `-q` from the field name, colliding with `queries` below and
+        // panicking clap's debug assertions on every invocation (exit 101).
+        #[arg(long, short = 'f')]
         queries_file: Option<PathBuf>,
 
         /// Individual queries to warm (can be repeated)

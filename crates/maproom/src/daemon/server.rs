@@ -76,12 +76,18 @@ impl ServerConfig {
 /// Shared state accessible by all client handlers
 pub struct DaemonState {
     pub store: Arc<dyn Store + Send + Sync>,
-    pub embedding_service: EmbeddingService,
+    /// Lazily-initialized embedding service (R16 / R-LAZY-5, OD-6). The old
+    /// eager `EmbeddingService::from_env()` here made `serve --socket` DOA in
+    /// provider-less environments AND mislabeled the failure as a
+    /// "Database error" (via DaemonError::DatabaseError's #[from] anyhow).
+    /// Kept as a OnceCell for parity with the stdio daemon so future real
+    /// handlers (MULTICN-2005) don't re-plumb; dispatch is a stub today.
+    pub embedding: tokio::sync::OnceCell<EmbeddingService>,
     pub sessions: Arc<SessionRegistry>,
 }
 
 impl DaemonState {
-    /// Initialize daemon state with database and embedding service
+    /// Initialize daemon state with database (embeddings init lazily).
     pub async fn new(_config: &ServerConfig) -> Result<Self, DaemonError> {
         // Route through the shared factory so the socket daemon honors the DSN
         // scheme (SQLite vs Postgres) identically to the STDIO daemon, and fails
@@ -90,13 +96,9 @@ impl DaemonState {
             .await
             .context("Failed to initialize database store")?;
 
-        let embedding_service = EmbeddingService::from_env()
-            .await
-            .context("Failed to initialize embedding service")?;
-
         Ok(Self {
             store,
-            embedding_service,
+            embedding: tokio::sync::OnceCell::new(),
             sessions: Arc::new(SessionRegistry::new()),
         })
     }

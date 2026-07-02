@@ -29,7 +29,7 @@
 //! let worktree_id = 1;
 //! let repo_path = Path::new("/workspace");
 //!
-//! let stats = incremental_update(&*client, worktree_id, repo_path).await?;
+//! let stats = incremental_update(&*client, worktree_id, "my-repo", "main", repo_path).await?;
 //!
 //! println!("Processed {} files, {} chunks",
 //!     stats.files_processed, stats.chunks_processed);
@@ -171,7 +171,8 @@ pub async fn remove_worktree_from_chunks(
 /// # use std::path::Path;
 /// # async fn example() -> anyhow::Result<()> {
 /// let client = db::connect().await?;
-/// let stats = incremental_update(&client, 1, Path::new("/workspace")).await?;
+/// let stats =
+///     incremental_update(client.as_ref(), 1, "my-repo", "main", Path::new("/workspace")).await?;
 ///
 /// println!("Files: {}, Chunks: {}, Cost: ${:.4}",
 ///     stats.files_processed,
@@ -183,6 +184,8 @@ pub async fn remove_worktree_from_chunks(
 pub async fn incremental_update(
     store: &(dyn Store + Send + Sync),
     worktree_id: i64,
+    repo: &str,
+    worktree: &str,
     repo_path: &Path,
 ) -> Result<UpdateStats> {
     // 1. Get current git tree SHA
@@ -217,71 +220,92 @@ pub async fn incremental_update(
         return Ok(UpdateStats::skipped());
     }
 
-    if last_indexed != "init" {
+    // R-WATCH-5: a fresh worktree ("init") has no diff base — the first index
+    // belongs to `scan`. Return WITHOUT stamping index_state (the old
+    // fall-through here stamped tree_sha with zero work, poisoning the next
+    // incremental scan into "No changes detected" against an empty index —
+    // the R08 bug).
+    if last_indexed == "init" {
         debug!(
             worktree_id = worktree_id,
-            last_sha = %last_indexed,
-            current_sha = %current_tree_sha,
-            "Tree SHA changed, processing diff"
+            "No previous tree SHA; first index is scan's job — not stamping index_state"
         );
-    } else {
-        debug!(
-            worktree_id = worktree_id,
-            "No previous tree SHA found, this is likely first index"
-        );
+        return Ok(UpdateStats::skipped());
     }
 
+    debug!(
+        worktree_id = worktree_id,
+        last_sha = %last_indexed,
+        current_sha = %current_tree_sha,
+        "Tree SHA changed, processing diff"
+    );
+
     // 4. Find changed files via git diff-tree
-    let changes = if last_indexed != "init" {
-        // git_diff_tree(old_tree, new_tree, repo_path)
-        git_diff_tree(&last_indexed, &current_tree_sha, repo_path).with_context(|| {
-            format!(
-                "Failed to get diff-tree between {} and {}",
-                last_indexed, current_tree_sha
-            )
-        })?
-    } else {
-        // No previous state - treat as full re-index
-        // This case should be rare as first index is done by `scan` command
-        debug!("No previous tree SHA, returning empty diff (full index handled separately)");
-        Vec::new()
-    };
+    let changes = git_diff_tree(&last_indexed, &current_tree_sha, repo_path).with_context(|| {
+        format!(
+            "Failed to get diff-tree between {} and {}",
+            last_indexed, current_tree_sha
+        )
+    })?;
 
     let mut stats = UpdateStats::new();
-    stats.files_processed = changes.len() as i32;
 
-    // 5. Process changed files based on status
-    // Note: Full processing is handled by the processor module
-    // This function just orchestrates and tracks stats
+    // 5. Process the diff for real (R-WATCH-4; the old body was a debug! stub
+    // that logged "Incremental update complete" with zero rows written — the
+    // R07 phantom). Added/Modified paths are pre-validated (R-WATCH-8: any
+    // failure is a hard Err BEFORE any index_state write, because
+    // upsert_files silently skips unreadable paths and the R08 invariant
+    // would be unenforceable), then submitted in ONE upsert_files call.
+    let mut to_upsert: Vec<std::path::PathBuf> = Vec::new();
     for change in &changes {
         let relpath = change.path.to_string_lossy();
         match change.status {
             FileStatus::Added | FileStatus::Modified => {
-                debug!(
-                    file = %relpath,
-                    status = ?change.status,
-                    "File needs processing"
-                );
-                // Actual processing happens through the upsert command
-                // This function tracks what needs to be done
+                let abs = repo_path.join(&change.path);
+                if abs.is_dir() {
+                    // Legitimately non-indexable; scan would skip it too (OD-4).
+                    stats.files_processed += 1;
+                    continue;
+                }
+                if !abs.is_file() {
+                    anyhow::bail!(
+                        "diff entry {} is missing from the working tree; refusing to advance tree_sha",
+                        relpath
+                    );
+                }
+                std::fs::File::open(&abs).with_context(|| {
+                    format!(
+                        "diff entry {} is unreadable; refusing to advance tree_sha",
+                        relpath
+                    )
+                })?;
+                to_upsert.push(change.path.clone());
             }
             FileStatus::Deleted => {
-                debug!(
-                    file = %relpath,
-                    "File deleted, removing chunks"
-                );
-                // Remove worktree from chunks for deleted files
                 let affected = remove_worktree_from_chunks(store, worktree_id, &relpath).await?;
                 debug!(
                     file = %relpath,
                     chunks_affected = affected,
                     "Removed worktree from chunks"
                 );
+                stats.files_processed += 1;
             }
         }
     }
 
-    // 6. Update index state with new tree SHA (after successful processing).
+    if !to_upsert.is_empty() {
+        let commit = crate::git::get_head_commit(repo_path)
+            .with_context(|| format!("Failed to get HEAD commit for {:?}", repo_path))?;
+        crate::indexer::upsert_files(store, repo, worktree, repo_path, &commit, &to_upsert)
+            .await
+            .context("incremental upsert of changed files failed")?;
+        stats.files_processed += to_upsert.len() as i32;
+    }
+
+    // 6. Update index state with the new tree SHA — reached ONLY when every
+    // diff entry was verifiably submitted (upsert Ok) or removed (delete Ok)
+    // or is legitimately non-indexable (R-WATCH-5 invariant: tree_sha never
+    // advances without verified work).
     store
         .update_index_state(worktree_id, &current_tree_sha, &stats)
         .await

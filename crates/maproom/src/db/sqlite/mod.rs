@@ -3093,6 +3093,20 @@ impl StoreMigration for SqliteStore {
         })
         .await
     }
+
+    async fn verify_schema(&self) -> anyhow::Result<Vec<String>> {
+        // R03 / R-VER-2: SQLite checks the shared core list PLUS the
+        // SQLite-only extension (context_cache) — 12 tables total.
+        self.run(move |conn| {
+            let required: Vec<&str> = crate::db::traits::REQUIRED_TABLES_CORE
+                .iter()
+                .chain(crate::db::traits::SQLITE_EXTRA_TABLES.iter())
+                .copied()
+                .collect();
+            migrations::missing_tables(conn, &required)
+        })
+        .await
+    }
 }
 
 // =============================================================================

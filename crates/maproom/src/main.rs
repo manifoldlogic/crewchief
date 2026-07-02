@@ -220,8 +220,11 @@ async fn handle_branch_switch(
         *worktree_id.write().unwrap() = new_wt_id;
     }
 
-    // 6. Re-index (log errors, don't crash)
-    if let Err(e) = incremental_update(store, new_wt_id, watch_path).await {
+    // 6. Re-index (log errors, don't crash). R-WATCH-4: incremental_update now
+    // performs real upserts of the commit diff, so it needs repo + worktree
+    // names; the HEAD^{tree} gate stays (right granularity for branch switches).
+    if let Err(e) = incremental_update(store, new_wt_id, repo, &effective_branch, watch_path).await
+    {
         tracing::warn!("Incremental update after branch switch failed: {}", e);
     }
 
@@ -1075,13 +1078,31 @@ async fn main() -> anyhow::Result<()> {
     match cli.command {
         Commands::Db { command } => match command {
             DbCommand::Migrate => {
-                // connect() auto-runs migrations, so this command just ensures
-                // the database exists and is fully migrated.
-                let _store = db::connect().await?;
+                // connect() auto-runs migrations, so this command ensures the
+                // database exists and is fully migrated — then verifies
+                // STRUCTURAL integrity (R03 / R-VER-4): version bookkeeping
+                // alone cannot see a required table dropped out from under an
+                // intact schema_migrations.
+                let store = db::connect().await?;
                 let backend = match db::connection::backend_for_url(&db::get_database_url()?) {
                     db::connection::Backend::Postgres => "PostgreSQL",
                     db::connection::Backend::Sqlite => "SQLite",
                 };
+                let missing = store.verify_schema().await?;
+                if !missing.is_empty() {
+                    let hint = match backend {
+                        "SQLite" => "delete the database file and re-run 'maproom scan'",
+                        _ => "restore from backup or recreate the database and re-run 'maproom scan'",
+                    };
+                    eprintln!(
+                        "❌ {backend} database is damaged; missing tables: {} ({hint})",
+                        missing.join(", ")
+                    );
+                    anyhow::bail!(
+                        "database schema is damaged; missing tables: {}",
+                        missing.join(", ")
+                    );
+                }
                 println!("✅ {backend} database is up to date");
             }
             DbCommand::CleanupStale { confirm, verbose } => {
@@ -1592,7 +1613,7 @@ async fn main() -> anyhow::Result<()> {
             }
 
             // Handle events
-            use maproom::incremental::incremental_update;
+            use maproom::incremental::handle_file_event;
             use tokio::signal;
 
             loop {
@@ -1627,11 +1648,15 @@ async fn main() -> anyhow::Result<()> {
                             println!("📁 {} {}", event_type, event.path.display());
                         }
 
-                        // Read worktree_id from lock (copy value, drop lock, then use)
+                        // Read worktree_id/branch from locks (copy values, drop locks, then use)
                         let wt_id = *worktree_id.read().unwrap();
+                        let branch_name = current_branch.read().unwrap().clone();
 
-                        // Trigger incremental update for the worktree
-                        match incremental_update(store.as_ref(), wt_id, &watch_path).await {
+                        // R06-R08 / R-WATCH-3: live events take a scoped, verified
+                        // upsert of exactly the changed file (handle_file_event)
+                        // instead of incremental_update, whose HEAD^{tree} gate
+                        // skipped every working-tree edit.
+                        match handle_file_event(store.as_ref(), wt_id, &repo, &branch_name, &watch_path, &event).await {
                             Ok(stats) => {
                                 if stats.files_processed > 0 {
                                     if json {
@@ -2625,6 +2650,20 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
         "Please report this error with full details".to_string(),
         1,
     )
+}
+
+#[cfg(test)]
+mod cli_surface {
+    use clap::CommandFactory;
+
+    /// R01 / R-CLAP-2: whole-surface clap guard. Catches ANY duplicate
+    /// short/long option or other builder invariant violation across every
+    /// command and subcommand on every `cargo test --bins` run — the class of
+    /// bug that made `cache warm` panic (exit 101) on all invocations.
+    #[test]
+    fn cli_debug_assert() {
+        super::Cli::command().debug_assert();
+    }
 }
 
 #[cfg(test)]

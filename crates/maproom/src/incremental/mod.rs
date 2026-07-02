@@ -42,6 +42,7 @@ pub mod git_poller;
 pub mod git_state;
 pub mod hash;
 pub mod ignore;
+pub mod live_events;
 pub mod multi_watcher;
 pub mod path_utils;
 pub mod processor;
@@ -59,6 +60,7 @@ pub use git_poller::{GitPoller, GitPollerConfig, GitPollerError, GitPollerStats}
 pub use git_state::{FileStatus, GitState, GitStateError};
 pub use hash::{ContentHash, FileHasher};
 pub use ignore::IgnorePatternMatcher;
+pub use live_events::handle_file_event;
 pub use multi_watcher::MultiWatcher;
 pub use path_utils::normalize_to_relpath;
 pub use processor::IncrementalProcessor;

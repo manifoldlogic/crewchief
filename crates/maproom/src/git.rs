@@ -50,6 +50,26 @@ pub fn get_git_tree_sha(repo_path: &Path) -> Result<String> {
     Ok(String::from_utf8(output.stdout)?.trim().to_string())
 }
 
+/// Gets the current HEAD commit hash (R06-R08 / fix spec R-WATCH-1).
+///
+/// Used by the live watch/incremental paths to attribute upserts to the
+/// current commit when indexing working-tree state.
+pub fn get_head_commit(repo_path: &Path) -> Result<String> {
+    let output = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(repo_path)
+        .output()?;
+
+    if !output.status.success() {
+        bail!(
+            "Failed to get HEAD commit: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    Ok(String::from_utf8(output.stdout)?.trim().to_string())
+}
+
 /// Gets the current branch name.
 ///
 /// # Arguments
