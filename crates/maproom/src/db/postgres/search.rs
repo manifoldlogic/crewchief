@@ -139,7 +139,10 @@ fn row_to_fts_hit(r: &sqlx::postgres::PgRow, normalized_query: &str) -> SearchHi
         base_score: None,
         kind_mult: None,
         exact_mult: Some(exact_mult),
-        preview: None,
+        // R10 / R-PREV-2: read the preview the SELECTs now carry — it was
+        // populated in the DB all along but the SELECT omitted it and this
+        // mapper hardcoded None (PG-only silent no-op of --preview).
+        preview: r.get::<Option<String>, _>("preview"),
     }
 }
 
@@ -280,7 +283,7 @@ impl StoreSearch for PostgresStore {
         let total: i64 = count_qb.build_query_scalar().fetch_one(&self.pool).await?;
 
         let mut qb = QueryBuilder::<sqlx::Postgres>::new(
-            "SELECT c.id, c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath, \
+            "SELECT c.id, c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath, c.preview, \
              ts_rank(c.ts_doc, to_tsquery('simple', ",
         );
         qb.push_bind(tsq.clone()).push(")) AS score");
@@ -309,7 +312,7 @@ impl StoreSearch for PostgresStore {
         }
         let rows = if let Some(wid) = worktree_id {
             sqlx::query(
-                "SELECT c.id, c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath, \
+                "SELECT c.id, c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath, c.preview, \
                     ts_rank(c.ts_doc, to_tsquery('simple', $1)) AS score \
                  FROM chunks c JOIN files f ON f.id = c.file_id \
                  JOIN chunk_worktrees cw ON cw.chunk_id = c.id \
@@ -324,7 +327,7 @@ impl StoreSearch for PostgresStore {
             .await?
         } else {
             sqlx::query(
-                "SELECT c.id, c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath, \
+                "SELECT c.id, c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath, c.preview, \
                     ts_rank(c.ts_doc, to_tsquery('simple', $1)) AS score \
                  FROM chunks c JOIN files f ON f.id = c.file_id \
                  WHERE c.ts_doc @@ to_tsquery('simple', $1) AND f.repo_id = $2 \

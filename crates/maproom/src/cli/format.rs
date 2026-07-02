@@ -118,6 +118,11 @@ pub fn format_hits_json_search(
 ) -> Result<String, serde_json::Error> {
     serde_json::to_string_pretty(&serde_json::json!({
         "hits": hits,
+        // R11 / R-TOT-1/2 (CC-3): `total_estimate` is the canonical key
+        // (matches the struct field, agent format, and agent docs);
+        // `total_matches` is DEPRECATED and dual-emitted for back-compat —
+        // removal scheduled for the next minor bump (0.x policy).
+        "total_estimate": meta.total_estimate,
         "total_matches": meta.total_estimate,
         "query": meta.query,
         "mode": meta.mode,
@@ -149,7 +154,10 @@ pub fn format_hits_json_vector(
 ) -> Result<String, serde_json::Error> {
     let output = serde_json::json!({
         "hits": hits,
+        // R11 / R-TOT-3 (OD-14): canonical `total_estimate` added alongside
+        // the legacy `total` (same dual-emit deprecation policy).
         "total": total,
+        "total_estimate": total,
         "query": query,
         "mode": mode,
         "k": k,
@@ -2332,5 +2340,32 @@ mod tests {
             "Output with empty fields does not match relaxed pattern: {}",
             output_empty
         );
+    }
+}
+
+#[cfg(test)]
+mod r11_total_keys_tests {
+    use super::*;
+
+    #[test]
+    fn json_search_emits_both_total_keys_equal() {
+        let meta = SearchMetadata {
+            query: "q".to_string(),
+            mode: "fts".to_string(),
+            hits: 0,
+            total_estimate: 7,
+        };
+        let out = format_hits_json_search(&[], &meta).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["total_estimate"], 7, "canonical key present (R11/CC-3)");
+        assert_eq!(v["total_matches"], 7, "deprecated key dual-emitted");
+    }
+
+    #[test]
+    fn json_vector_emits_total_estimate() {
+        let out = format_hits_json_vector(&[], 3, "q", "vector", 10, None).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["total"], 3, "legacy key retained (OD-14)");
+        assert_eq!(v["total_estimate"], 3, "canonical key added");
     }
 }

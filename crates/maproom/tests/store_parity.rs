@@ -1404,3 +1404,30 @@ async fn parity_search_unknown_worktree_returns_empty() {
 async fn parity_verify_schema_clean() {
     for_each(|_n, s| async move { check_verify_schema_clean(s.as_ref()).await }).await;
 }
+
+/// R10 / R-PREV-1/2: the main FTS path carries a non-empty preview on BOTH
+/// backends (the PG SELECT omitted the column and its mapper hardcoded None).
+async fn check_fts_hit_includes_preview(store: &(dyn Store + Send + Sync)) {
+    let b = unique_base();
+    let s = seed(store, "prev").await;
+    store
+        .insert_chunk(&chunk(s.file, s.wt, &format!("PV{b}"), "preview_probe_fn", "preview probe body", 1, 4))
+        .await
+        .unwrap();
+    let (hits, _) = store
+        .search_chunks_fts(&s.repo_name, None, "preview", 10, false, None, None)
+        .await
+        .unwrap();
+    assert!(!hits.is_empty(), "probe must match");
+    let p = hits[0].preview.as_deref().unwrap_or("");
+    assert!(
+        !p.is_empty(),
+        "FTS hits must carry the stored preview (R10; PG used to hardcode None)"
+    );
+}
+
+#[tokio::test]
+#[ignore]
+async fn parity_fts_hit_includes_preview() {
+    for_each(|_n, s| async move { check_fts_hit_includes_preview(s.as_ref()).await }).await;
+}

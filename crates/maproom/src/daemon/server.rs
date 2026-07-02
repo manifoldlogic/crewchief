@@ -104,6 +104,23 @@ impl DaemonState {
     }
 }
 
+/// RAII guard for the Unix socket file (R21 / R-SOCK-1): removes the socket
+/// on drop so every shutdown path (incl. select!-cancellation on signals)
+/// cleans up, symmetric with PidFileGuard.
+struct SocketFileGuard {
+    path: PathBuf,
+}
+
+impl Drop for SocketFileGuard {
+    fn drop(&mut self) {
+        if let Err(e) = std::fs::remove_file(&self.path) {
+            warn!(path = %self.path.display(), error = %e, "Failed to remove socket file");
+        } else {
+            info!(path = %self.path.display(), "Socket file removed");
+        }
+    }
+}
+
 /// RAII guard for PID file. Automatically cleans up on drop.
 pub struct PidFileGuard {
     path: PathBuf,
@@ -112,37 +129,43 @@ pub struct PidFileGuard {
 
 impl PidFileGuard {
     /// Create PID file with exclusive lock.
-    /// Returns error if PID file already exists and is locked (daemon already running).
+    /// Returns error if PID file already exists AND is still flock-held by a
+    /// live daemon. A stale PID file (previous daemon crashed / SIGKILLed, so
+    /// its RAII cleanup never ran) is taken over: the flock dies with its
+    /// process, so lock acquisition — not file existence — is the real
+    /// single-daemon guard (R21-adjacent robustness; pre-fix, one crashed
+    /// daemon permanently blocked every restart with AlreadyRunning).
     pub fn create(path: &Path) -> Result<Self, DaemonError> {
-        // O_EXCL ensures atomicity if file doesn't exist
+        // O_EXCL fast path when no file exists.
         #[cfg(unix)]
-        let mut file = OpenOptions::new()
+        let created = OpenOptions::new()
             .write(true)
             .create_new(true)
             .mode(0o600) // Owner read/write only
-            .open(path)
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::AlreadyExists {
-                    DaemonError::AlreadyRunning(path.to_path_buf())
-                } else {
-                    DaemonError::PidFileError(e)
-                }
-            })?;
+            .open(path);
 
         #[cfg(not(unix))]
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(path)
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::AlreadyExists {
-                    DaemonError::AlreadyRunning(path.to_path_buf())
-                } else {
-                    DaemonError::PidFileError(e)
-                }
-            })?;
+        let created = OpenOptions::new().write(true).create_new(true).open(path);
 
-        // Advisory lock (flock) as additional safeguard
+        let mut file = match created {
+            Ok(f) => f,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                // Stale-or-live? Open the existing file and let the flock
+                // decide (it is released automatically when its owner dies).
+                let f = OpenOptions::new()
+                    .write(true)
+                    .open(path)
+                    .map_err(DaemonError::PidFileError)?;
+                f.try_lock_exclusive()
+                    .map_err(|_| DaemonError::AlreadyRunning(path.to_path_buf()))?;
+                f.set_len(0).map_err(DaemonError::PidFileError)?;
+                info!(path = %path.display(), "Took over stale PID file (previous daemon did not shut down cleanly)");
+                f
+            }
+            Err(e) => return Err(DaemonError::PidFileError(e)),
+        };
+
+        // Advisory lock (flock) as the real single-daemon safeguard.
         file.try_lock_exclusive()
             .map_err(|_| DaemonError::AlreadyRunning(path.to_path_buf()))?;
 
@@ -208,6 +231,17 @@ impl SocketServer {
         let listener = UnixListener::bind(&self.config.socket_path)
             .map_err(|e| DaemonError::SocketError(format!("Failed to bind socket: {}", e)))?;
 
+        // R21 / R-SOCK-1: RAII socket-file cleanup, symmetric with
+        // PidFileGuard. The old straight-line unlink after the accept loop
+        // never ran when run_with_signal_handling's select! dropped this
+        // future on SIGTERM/SIGINT — stale .sock files accumulated. A guard
+        // covers normal return, idle break, shutdown break, AND
+        // cancellation-drop. (SIGKILL remains uncoverable; the stale-socket
+        // pre-bind removal above stays as the mitigation.)
+        let _socket_guard = SocketFileGuard {
+            path: self.config.socket_path.clone(),
+        };
+
         // Set socket permissions to 0600 (owner only)
         #[cfg(unix)]
         {
@@ -225,7 +259,13 @@ impl SocketServer {
 
         // Accept loop with idle timeout
         let mut shutdown_rx = self.shutdown_tx.subscribe();
-        let mut idle_check = interval(Duration::from_secs(60)); // Check every minute
+        // R20 / R-IDLE-1 (OD-15): the idle check ticks proportionally to the
+        // timeout (was a fixed 60s tick that quantized --idle-timeout 5 into
+        // ~69s: idle_since set up to 60s late, then checked at 60s grain).
+        // Worst-case overshoot is ~2 ticks <= timeout/2 for sub-60s timeouts.
+        let tick = (self.config.idle_timeout / 4)
+            .clamp(Duration::from_secs(1), Duration::from_secs(60));
+        let mut idle_check = interval(tick);
         let mut idle_since: Option<Instant> = Some(Instant::now());
 
         loop {
@@ -275,11 +315,7 @@ impl SocketServer {
         // Graceful shutdown
         self.graceful_shutdown().await?;
 
-        // Cleanup socket file
-        if let Err(e) = std::fs::remove_file(&self.config.socket_path) {
-            warn!(error = %e, "Failed to remove socket file");
-        }
-
+        // Socket file cleanup is handled by _socket_guard (R21 / R-SOCK-1).
         Ok(())
     }
 
@@ -332,22 +368,24 @@ pub async fn run_with_signal_handling(server: SocketServer) -> Result<(), Daemon
 
     let server = Arc::new(server);
 
-    // Run the server directly without spawning
-    // The shutdown signal will be sent via the broadcast channel
+    // R21 / R-SOCK-2 (OD-17): pin the run future so a signal does NOT drop it
+    // mid-flight — after broadcasting shutdown we AWAIT the loop, which
+    // processes the broadcast, drains sessions (graceful_shutdown), and drops
+    // its RAII guards. The old select! arms returned immediately, cancelling
+    // run() and skipping both drain and (pre-guard) socket cleanup.
+    let mut run_fut = Box::pin(server.run());
     let result = tokio::select! {
         _ = sigterm.recv() => {
             info!("SIGTERM received, initiating graceful shutdown");
             server.shutdown();
-            // Server will exit its run loop and clean up
-            Ok(())
+            (&mut run_fut).await
         }
         _ = sigint.recv() => {
             info!("SIGINT received, initiating graceful shutdown");
             server.shutdown();
-            // Server will exit its run loop and clean up
-            Ok(())
+            (&mut run_fut).await
         }
-        result = server.run() => {
+        result = &mut run_fut => {
             result
         }
     };
@@ -362,16 +400,15 @@ pub async fn run_with_signal_handling(server: SocketServer) -> Result<(), Daemon
 
     let server = Arc::new(server);
 
-    // Run the server directly without spawning
-    // The shutdown signal will be sent via the broadcast channel
+    // R21 / R-SOCK-2: same pin-and-resume as the unix variant.
+    let mut run_fut = Box::pin(server.run());
     let result = tokio::select! {
         _ = signal::ctrl_c() => {
             info!("Ctrl+C received, initiating graceful shutdown");
             server.shutdown();
-            // Server will exit its run loop and clean up
-            Ok(())
+            (&mut run_fut).await
         }
-        result = server.run() => {
+        result = &mut run_fut => {
             result
         }
     };
@@ -405,7 +442,14 @@ async fn handle_client(stream: UnixStream, state: Arc<DaemonState>) -> Result<()
                         let state_clone = state.clone();
                         let sid = session_id;
                         tokio::spawn(async move {
+                            // R19 / R-RPC-4: an ABSENT id is a notification —
+                            // handle it but never write a reply (same rule as
+                            // the stdio daemon's run loop).
+                            let is_notification = req.id.is_none();
                             let response = handle_request(req, &state_clone).await;
+                            if is_notification {
+                                return;
+                            }
                             if let Err(e) = state_clone.sessions.send_to_session(&sid, response) {
                                 warn!(error = %e, "Failed to send response");
                             }
@@ -468,7 +512,10 @@ async fn handle_request(req: JsonRpcRequest, _state: &DaemonState) -> JsonRpcMes
             "received": true
         })),
         error: None,
-        id: req.id.unwrap_or(serde_json::Value::Null),
+        // R-RPC-1/4 id semantics: Some(Some(v)) = id v; Some(None) = explicit
+        // null id (still answered); None = notification (reply suppressed at
+        // the dispatch site above).
+        id: req.id.flatten().unwrap_or(serde_json::Value::Null),
     })
 }
 
@@ -526,8 +573,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires embedding provider (Ollama)
-    async fn test_multiple_clients_concurrent() {
+        async fn test_multiple_clients_concurrent() {
         use tokio::net::UnixStream;
 
         let temp_dir = TempDir::new().unwrap();
@@ -565,10 +611,10 @@ mod tests {
 
                 // Send request
                 let request = JsonRpcMessage::Request(JsonRpcRequest {
-                    jsonrpc: "2.0".into(),
+                    jsonrpc: Some("2.0".into()),
                     method: format!("test_{}", i),
                     params: None,
-                    id: Some(serde_json::json!(i)),
+                    id: Some(Some(serde_json::json!(i))),
                 });
 
                 use futures::SinkExt;
@@ -617,8 +663,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires embedding provider (Ollama)
-    async fn test_session_cleanup_on_disconnect() {
+        async fn test_session_cleanup_on_disconnect() {
         use tokio::net::UnixStream;
 
         let temp_dir = TempDir::new().unwrap();
@@ -656,55 +701,46 @@ mod tests {
         assert_eq!(server.state.sessions.active_count(), 0);
     }
 
+    /// R20 / R-IDLE-2 (binding, UN-IGNORED — the old ignore reason, "Requires
+    /// embedding provider", died with R-LAZY-5's lazy init): the server must
+    /// idle-exit within 2*tick + timeout. With a 2s timeout the tick clamps
+    /// to 1s, so the bound is ~4s — the pre-R20 fixed 60s tick fails this
+    /// by an order of magnitude.
     #[tokio::test]
-    #[ignore] // Requires embedding provider (Ollama)
     async fn test_idle_timeout_triggers() {
         let temp_dir = TempDir::new().unwrap();
         let socket_path = temp_dir.path().join("test.sock");
         let pid_path = temp_dir.path().join("test.pid");
 
+        let idle_timeout = Duration::from_secs(2);
         let config = ServerConfig {
             socket_path,
             pid_path,
-            idle_timeout: Duration::from_millis(100), // Very short timeout for test
+            idle_timeout,
         };
 
         let server = SocketServer::new(config).await.unwrap();
+        let tick = (idle_timeout / 4).clamp(Duration::from_secs(1), Duration::from_secs(60));
+        let bound = 2 * tick + idle_timeout + Duration::from_secs(1); // +1s scheduling slack
 
-        // Start server in background
         let start_time = std::time::Instant::now();
         let handle = tokio::spawn(async move { server.run().await });
 
-        // Wait for idle check interval (60s) plus a bit more for processing
-        // Note: The server checks every 60 seconds, so we need to wait at least that long
-        // Since this is impractical for tests, we verify the server is still running
-        // and then manually trigger shutdown for cleanup
-
-        // Give server time to start and begin idle timeout
-        tokio::time::sleep(Duration::from_millis(200)).await;
-
-        // Server should still be running (idle check happens every 60s)
-        assert!(
-            !handle.is_finished(),
-            "Server should still be running (idle checks are every 60s)"
-        );
-
-        // For this test, we just verify the server starts correctly with a short idle timeout
-        // Full idle timeout behavior is tested in integration tests with shorter check intervals
-        // Clean up by aborting the task
-        handle.abort();
-
+        let result = tokio::time::timeout(bound, handle).await;
         let elapsed = start_time.elapsed();
-        assert!(
-            elapsed < Duration::from_secs(1),
-            "Test should complete quickly, got {:?}",
-            elapsed
-        );
+        match result {
+            Ok(join) => {
+                join.expect("server task join").expect("server run result");
+            }
+            Err(_) => panic!(
+                "server did not idle-exit within {bound:?} (elapsed {elapsed:?}) — \
+                 the R20 proportional tick is not in effect"
+            ),
+        }
     }
 
     #[tokio::test]
-    #[ignore] // Requires embedding provider (Ollama)
-    async fn test_active_client_prevents_idle_timeout() {
+        async fn test_active_client_prevents_idle_timeout() {
         use tokio::net::UnixStream;
 
         let temp_dir = TempDir::new().unwrap();
@@ -748,8 +784,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires embedding provider (Ollama)
-    async fn test_graceful_shutdown_waits_for_sessions() {
+        async fn test_graceful_shutdown_waits_for_sessions() {
         use tokio::net::UnixStream;
 
         let temp_dir = TempDir::new().unwrap();
