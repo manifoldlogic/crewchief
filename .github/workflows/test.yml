@@ -223,6 +223,11 @@ jobs:
           cargo test -p maproom --features postgres --test store_parity -- --ignored --test-threads=1
           cargo test -p maproom --features postgres --test pg_real_dedup -- --ignored --test-threads=1
 
+      - name: Run fail-loud negative tests (feature build, no live PG needed)
+        # F70: proves an unreachable postgres:// errors instead of silently
+        # falling back to SQLite. Not #[ignore]'d; needs no database service.
+        run: cargo test -p maproom --features postgres --test pg_negative -- --test-threads=1
+
       - name: Job Summary
         if: always()
         run: |

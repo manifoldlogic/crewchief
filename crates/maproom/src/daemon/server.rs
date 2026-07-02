@@ -4,7 +4,7 @@
 //! including:
 //! - Unix socket server with per-client task spawning
 //! - PID file management with O_EXCL + flock for single-daemon guarantee
-//! - Shared state (SqliteStore, EmbeddingService, SessionRegistry) via Arc
+//! - Shared state (dyn Store, EmbeddingService, SessionRegistry) via Arc
 //! - Session cleanup with RAII pattern
 //!
 //! Reference: MULTICN-2003 (Unix Socket Server)
@@ -26,11 +26,10 @@ use tokio_util::codec::Framed;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::config::SqliteConfig;
 use crate::daemon::protocol::{JsonRpcCodec, JsonRpcMessage};
 use crate::daemon::session::SessionRegistry;
 use crate::daemon::types::{JsonRpcRequest, JsonRpcResponse};
-use crate::db::{get_database_url, SqliteStore};
+use crate::db::{connect, Store};
 use crate::embedding::EmbeddingService;
 
 /// Errors that can occur during daemon server operations
@@ -50,12 +49,14 @@ pub enum DaemonError {
 }
 
 /// Server configuration
+///
+/// Note: the database is NOT configured here. Backend selection (SQLite vs
+/// Postgres) is owned by the shared `crate::db::connect()` factory, driven by
+/// `MAPROOM_DATABASE_URL` / `--database-url` (R-SEL-1, R-SEL-6).
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
     pub socket_path: PathBuf,
     pub pid_path: PathBuf,
-    pub database_path: String,
-    pub sqlite_config: SqliteConfig,
     pub idle_timeout: Duration,
 }
 
@@ -63,13 +64,10 @@ impl ServerConfig {
     /// Create default configuration for current user
     pub fn default_for_user() -> Result<Self> {
         let uid = users::get_current_uid();
-        let database_path = get_database_url()?;
 
         Ok(Self {
             socket_path: PathBuf::from(format!("/tmp/maproom-{}.sock", uid)),
             pid_path: PathBuf::from(format!("/tmp/maproom-{}.pid", uid)),
-            database_path,
-            sqlite_config: SqliteConfig::from_env().unwrap_or_default(),
             idle_timeout: Duration::from_secs(300), // 5 minutes
         })
     }
@@ -77,17 +75,20 @@ impl ServerConfig {
 
 /// Shared state accessible by all client handlers
 pub struct DaemonState {
-    pub store: SqliteStore,
+    pub store: Arc<dyn Store + Send + Sync>,
     pub embedding_service: EmbeddingService,
     pub sessions: Arc<SessionRegistry>,
 }
 
 impl DaemonState {
     /// Initialize daemon state with database and embedding service
-    pub async fn new(config: &ServerConfig) -> Result<Self, DaemonError> {
-        let store = SqliteStore::connect(&config.database_path)
+    pub async fn new(_config: &ServerConfig) -> Result<Self, DaemonError> {
+        // Route through the shared factory so the socket daemon honors the DSN
+        // scheme (SQLite vs Postgres) identically to the STDIO daemon, and fails
+        // loud on a postgres:// URL in a non-postgres build (F70 / R-SEL-1..4).
+        let store = connect()
             .await
-            .context("Failed to connect to SQLite database")?;
+            .context("Failed to initialize database store")?;
 
         let embedding_service = EmbeddingService::from_env()
             .await
@@ -530,14 +531,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let socket_path = temp_dir.path().join("test.sock");
         let pid_path = temp_dir.path().join("test.pid");
-        let db_path = temp_dir.path().join("test.db");
 
         // Create minimal config
         let config = ServerConfig {
             socket_path: socket_path.clone(),
             pid_path,
-            database_path: format!("sqlite://{}", db_path.display()),
-            sqlite_config: SqliteConfig::default(),
             idle_timeout: Duration::from_secs(300),
         };
 
@@ -624,13 +622,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let socket_path = temp_dir.path().join("test.sock");
         let pid_path = temp_dir.path().join("test.pid");
-        let db_path = temp_dir.path().join("test.db");
 
         let config = ServerConfig {
             socket_path: socket_path.clone(),
             pid_path,
-            database_path: format!("sqlite://{}", db_path.display()),
-            sqlite_config: SqliteConfig::default(),
             idle_timeout: Duration::from_secs(300),
         };
 
@@ -665,13 +660,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let socket_path = temp_dir.path().join("test.sock");
         let pid_path = temp_dir.path().join("test.pid");
-        let db_path = temp_dir.path().join("test.db");
 
         let config = ServerConfig {
             socket_path,
             pid_path,
-            database_path: format!("sqlite://{}", db_path.display()),
-            sqlite_config: SqliteConfig::default(),
             idle_timeout: Duration::from_millis(100), // Very short timeout for test
         };
 
@@ -716,13 +708,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let socket_path = temp_dir.path().join("test.sock");
         let pid_path = temp_dir.path().join("test.pid");
-        let db_path = temp_dir.path().join("test.db");
 
         let config = ServerConfig {
             socket_path: socket_path.clone(),
             pid_path,
-            database_path: format!("sqlite://{}", db_path.display()),
-            sqlite_config: SqliteConfig::default(),
             idle_timeout: Duration::from_secs(2), // Short timeout for test
         };
 
@@ -764,13 +753,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let socket_path = temp_dir.path().join("test.sock");
         let pid_path = temp_dir.path().join("test.pid");
-        let db_path = temp_dir.path().join("test.db");
 
         let config = ServerConfig {
             socket_path: socket_path.clone(),
             pid_path,
-            database_path: format!("sqlite://{}", db_path.display()),
-            sqlite_config: SqliteConfig::default(),
             idle_timeout: Duration::from_secs(300),
         };
 
