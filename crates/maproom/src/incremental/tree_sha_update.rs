@@ -282,11 +282,14 @@ pub async fn incremental_update(
                 to_upsert.push(change.path.clone());
             }
             FileStatus::Deleted => {
-                let affected = remove_worktree_from_chunks(store, worktree_id, &relpath).await?;
+                // R-GC-6: full unmap (junction + orphan GC + FTS + files rows).
+                let affected = store
+                    .unmap_superseded_file_chunks(worktree_id, &relpath, None)
+                    .await?;
                 debug!(
                     file = %relpath,
-                    chunks_affected = affected,
-                    "Removed worktree from chunks"
+                    junction_rows = affected,
+                    "Unmapped worktree from chunks"
                 );
                 stats.files_processed += 1;
             }

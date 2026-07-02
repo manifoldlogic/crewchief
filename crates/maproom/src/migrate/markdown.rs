@@ -91,14 +91,37 @@ impl MarkdownMigrator {
 
         info!("Starting markdown migration for repo: {}", repo_name);
 
-        // Create backup table
+        // R04 / R-MDM-1: pre-flight BEFORE any side effect. This command reads
+        // legacy `file_contents` rows, a table no schema this codebase can
+        // create has ever had — bail cleanly instead of erroring mid-migration
+        // (exit-2 classification via the Configuration error: prefix).
+        let has_file_contents: bool = self
+            .store
+            .run(move |conn| {
+                use rusqlite::params;
+                let exists: bool = conn.query_row(
+                    "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name = ?1",
+                    params!["file_contents"],
+                    |row| row.get(0),
+                )?;
+                Ok(exists)
+            })
+            .await?;
+        if !has_file_contents {
+            anyhow::bail!(
+                "Configuration error: this database has no legacy file_contents table; markdown content is not stored by the current schema — re-run 'maproom scan' instead"
+            );
+        }
+
+        // R04 / R-MDM-2: fetch the work list BEFORE creating the backup, so
+        // no orphan chunks_backup_* table is left behind on ANY failure.
+        let files = self.get_markdown_files(repo_name, worktree_name).await?;
+        info!("Found {} markdown files to migrate", files.len());
+
+        // Create backup table (only after the work list resolved).
         let backup_table = self.create_backup().await?;
         stats.backup_table = Some(backup_table.clone());
         info!("Created backup table: {}", backup_table);
-
-        // Get markdown files
-        let files = self.get_markdown_files(repo_name, worktree_name).await?;
-        info!("Found {} markdown files to migrate", files.len());
 
         // Migrate each file
         for file in files {
@@ -672,6 +695,23 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.to_string().contains("does not exist"));
+    }
+
+    #[tokio::test]
+    async fn migrate_bails_without_file_contents_and_leaves_no_backup() {
+        let store = setup_test_store().await;
+        let migrator = MarkdownMigrator::new(store.clone());
+        let err = migrator.migrate("any", None).await.unwrap_err();
+        assert!(
+            err.to_string().contains("file_contents"),
+            "error must name the missing legacy table: {err}"
+        );
+        // R-MDM-2: no orphan backup table left behind.
+        let backups = migrator.list_backups().await.unwrap();
+        assert!(
+            backups.is_empty(),
+            "no chunks_backup_* table may be created on failure: {backups:?}"
+        );
     }
 
     #[tokio::test]

@@ -1024,6 +1024,72 @@ impl StoreChunks for SqliteStore {
         .await
     }
 
+    async fn unmap_superseded_file_chunks(
+        &self,
+        worktree_id: i64,
+        relpath: &str,
+        keep_file_id: Option<i64>,
+    ) -> anyhow::Result<usize> {
+        let relpath = relpath.to_string();
+        self.write_with_retry(move |conn| {
+            // R09 / R-GC-2: four statements in ONE explicit transaction —
+            // write_with_retry itself provides NO transaction (it hands the
+            // closure a pooled connection and retries on busy); without the
+            // tx a mid-sequence retry re-runs partial work and the returned
+            // junction-row count becomes unreliable. Pattern of insert_chunk.
+            let tx = conn.transaction()?;
+
+            // 1. Unmap this worktree from superseded generations of relpath.
+            //    Repo-scoping subqueries are mandatory: relpath alone
+            //    collides across repos.
+            let removed = tx.execute(
+                "DELETE FROM chunk_worktrees \
+                 WHERE worktree_id = ?1 \
+                   AND chunk_id IN ( \
+                     SELECT c.id FROM chunks c \
+                     JOIN files f ON f.id = c.file_id \
+                     WHERE f.relpath = ?2 \
+                       AND (?3 IS NULL OR c.file_id <> ?3) \
+                       AND f.commit_id IN (SELECT id FROM commits WHERE repo_id = \
+                             (SELECT repo_id FROM worktrees WHERE id = ?1)) \
+                   )",
+                params![worktree_id, relpath, keep_file_id],
+            )?;
+
+            // 2. FTS5 'delete' for the about-to-be-orphaned chunks — BEFORE
+            //    step 3, while the rows still exist to read the originally
+            //    indexed values (fts_chunks is external-content, maintained
+            //    manually; columns match the insert in insert_chunk).
+            tx.execute(
+                "INSERT INTO fts_chunks(fts_chunks, rowid, content, docstring, symbol_name) \
+                 SELECT 'delete', id, preview, docstring, symbol_name FROM chunks \
+                 WHERE id NOT IN (SELECT DISTINCT chunk_id FROM chunk_worktrees)",
+                [],
+            )?;
+
+            // 3. Orphan-GC (existing template).
+            tx.execute(
+                "DELETE FROM chunks WHERE id NOT IN (SELECT DISTINCT chunk_id FROM chunk_worktrees)",
+                [],
+            )?;
+
+            // 4. Superseded, now-chunkless files rows (repo-scoped).
+            tx.execute(
+                "DELETE FROM files \
+                 WHERE relpath = ?2 \
+                   AND (?3 IS NULL OR id <> ?3) \
+                   AND commit_id IN (SELECT id FROM commits WHERE repo_id = \
+                         (SELECT repo_id FROM worktrees WHERE id = ?1)) \
+                   AND NOT EXISTS (SELECT 1 FROM chunks c WHERE c.file_id = files.id)",
+                params![worktree_id, relpath, keep_file_id],
+            )?;
+
+            tx.commit()?;
+            Ok(removed)
+        })
+        .await
+    }
+
     async fn find_chunk_by_symbol(
         &self,
         repo_id: i64,
@@ -1445,12 +1511,20 @@ impl StoreSearch for SqliteStore {
             let repo_id = resolve_repo_id(conn, &repo)?;
 
             let worktree_id: Option<i64> = if let Some(w) = worktree {
-                conn.query_row(
-                    "SELECT id FROM worktrees WHERE repo_id = ?1 AND name = ?2",
-                    params![repo_id, w],
-                    |row| row.get(0),
-                )
-                .optional()?
+                match conn
+                    .query_row(
+                        "SELECT id FROM worktrees WHERE repo_id = ?1 AND name = ?2",
+                        params![repo_id, w],
+                        |row| row.get(0),
+                    )
+                    .optional()?
+                {
+                    Some(id) => Some(id),
+                    // R18 / R-WTF-2: an unknown worktree NAME returns the
+                    // empty set (PG-aligned) instead of silently dropping the
+                    // filter and serving all-worktree results.
+                    None => return Ok((Vec::new(), 0)),
+                }
             } else {
                 None
             };
@@ -1969,12 +2043,18 @@ impl StoreSearch for SqliteStore {
             let repo_id = resolve_repo_id(conn, &repo)?;
 
             let worktree_id: Option<i64> = if let Some(ref w) = worktree {
-                conn.query_row(
-                    "SELECT id FROM worktrees WHERE repo_id = ?1 AND name = ?2",
-                    params![repo_id, w],
-                    |row| row.get(0),
-                )
-                .optional()?
+                match conn
+                    .query_row(
+                        "SELECT id FROM worktrees WHERE repo_id = ?1 AND name = ?2",
+                        params![repo_id, w],
+                        |row| row.get(0),
+                    )
+                    .optional()?
+                {
+                    Some(id) => Some(id),
+                    // R18 / R-WTF-2: unknown worktree name -> empty set.
+                    None => return Ok(Vec::new()),
+                }
             } else {
                 None
             };
@@ -2097,12 +2177,18 @@ impl StoreSearch for SqliteStore {
             let repo_id = resolve_repo_id(conn, &repo)?;
 
             let worktree_id: Option<i64> = if let Some(ref w) = worktree {
-                conn.query_row(
-                    "SELECT id FROM worktrees WHERE repo_id = ?1 AND name = ?2",
-                    params![repo_id, w],
-                    |row| row.get(0),
-                )
-                .optional()?
+                match conn
+                    .query_row(
+                        "SELECT id FROM worktrees WHERE repo_id = ?1 AND name = ?2",
+                        params![repo_id, w],
+                        |row| row.get(0),
+                    )
+                    .optional()?
+                {
+                    Some(id) => Some(id),
+                    // R18 / R-WTF-2: unknown worktree name -> empty set.
+                    None => return Ok(Vec::new()),
+                }
             } else {
                 None
             };
@@ -3169,8 +3255,13 @@ impl StoreCleanup for SqliteStore {
         worktree_id: i64,
     ) -> anyhow::Result<crate::db::WorktreeCleanupResult> {
         self.write_with_retry(move |conn| {
+            // R05 / R-STALE-1: the whole multi-table delete runs in ONE
+            // explicit transaction — write_with_retry provides no transaction,
+            // and a busy-retry mid-sequence would re-run a partial delete.
+            let tx = conn.transaction()?;
+
             // Get count of chunks that will be deleted
-            let chunks_deleted: i64 = conn
+            let chunks_deleted: i64 = tx
                 .query_row(
                     "SELECT COUNT(*) FROM chunks c
                  JOIN files f ON c.file_id = f.id
@@ -3181,7 +3272,7 @@ impl StoreCleanup for SqliteStore {
                 .unwrap_or(0);
 
             // Get count of files that will be deleted
-            let files_deleted: i64 = conn
+            let files_deleted: i64 = tx
                 .query_row(
                     "SELECT COUNT(*) FROM files WHERE worktree_id = ?1",
                     params![worktree_id],
@@ -3190,7 +3281,7 @@ impl StoreCleanup for SqliteStore {
                 .unwrap_or(0);
 
             // Delete code_embeddings for chunks in this worktree
-            let embeddings_deleted: i64 = conn
+            let embeddings_deleted: i64 = tx
                 .query_row(
                     "SELECT COUNT(*) FROM code_embeddings ce
                  WHERE ce.blob_sha IN (
@@ -3203,7 +3294,7 @@ impl StoreCleanup for SqliteStore {
                 )
                 .unwrap_or(0);
 
-            conn.execute(
+            tx.execute(
                 "DELETE FROM code_embeddings WHERE blob_sha IN (
                      SELECT c.blob_sha FROM chunks c
                      JOIN files f ON c.file_id = f.id
@@ -3213,13 +3304,13 @@ impl StoreCleanup for SqliteStore {
             )?;
 
             // Delete chunk_worktrees junction entries
-            conn.execute(
+            tx.execute(
                 "DELETE FROM chunk_worktrees WHERE worktree_id = ?1",
                 params![worktree_id],
             )?;
 
             // Delete chunk_edges for chunks in this worktree
-            conn.execute(
+            tx.execute(
                 "DELETE FROM chunk_edges WHERE src_chunk_id IN (
                      SELECT c.id FROM chunks c
                      JOIN files f ON c.file_id = f.id
@@ -3233,7 +3324,7 @@ impl StoreCleanup for SqliteStore {
             )?;
 
             // Delete chunks
-            conn.execute(
+            tx.execute(
                 "DELETE FROM chunks WHERE file_id IN (
                      SELECT id FROM files WHERE worktree_id = ?1
                  )",
@@ -3241,16 +3332,27 @@ impl StoreCleanup for SqliteStore {
             )?;
 
             // Delete files
-            conn.execute(
+            tx.execute(
                 "DELETE FROM files WHERE worktree_id = ?1",
                 params![worktree_id],
             )?;
 
             // Delete index_state
-            conn.execute(
+            tx.execute(
                 "DELETE FROM index_state WHERE worktree_id = ?1",
                 params![worktree_id],
             )?;
+
+            // R05 / R-STALE-1: remove the worktree REGISTRATION itself —
+            // this was the missing statement that made cleanup-stale claim
+            // "Deleted: 1/1" while detect_stale_worktrees re-reported the
+            // same stale row forever (PG cleanup.rs already deletes it).
+            tx.execute(
+                "DELETE FROM worktrees WHERE id = ?1",
+                params![worktree_id],
+            )?;
+
+            tx.commit()?;
 
             Ok(crate::db::WorktreeCleanupResult {
                 chunks_deleted: chunks_deleted as u64,

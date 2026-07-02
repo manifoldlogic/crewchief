@@ -64,7 +64,7 @@ MAPROOM_DATABASE_URL="sqlite://$w/w.db" "$BIN" scan --repo fx --path "$w/fx" --f
 n2=$(sqlite3 "$w/w.db" "SELECT count(*) FROM chunks;")
 if [ "$n2" -le $((n1 + 1)) ]; then pass "R09(count)"; else fail "R09(count)" "chunks $n1 -> $n2 (accumulation)"; fi
 if MAPROOM_DATABASE_URL="sqlite://$w/w.db" "$BIN" search --repo fx --query alphaOne --format json \
-  | jq -e '.results | length == 0' >/dev/null 2>&1
+  | jq -e '.hits | length == 0' >/dev/null 2>&1
 then pass "R09(stale-gone)"; else fail "R09(stale-gone)" "replaced symbol alphaOne still searchable"; fi
 rm -rf "$w"
 
@@ -226,7 +226,7 @@ if [ -n "${MAPROOM_TEST_PG_URL:-}" ]; then
   MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" db migrate >/dev/null 2>&1
   MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" scan --repo fxr --path "$w/fx" >/dev/null 2>&1
   if MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" search --repo fxr --query alphaOne --format json \
-    | jq -e '.results[0].preview != null' >/dev/null 2>&1
+    | jq -e '.hits[0].preview != null' >/dev/null 2>&1
   then pass "R10(pg)"; else fail "R10(pg)" "PG search json lacks preview"; fi
   # R09 PG: no accumulation
   n1=$(MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" status --format json 2>/dev/null | jq -r '.. | numbers' | head -1)
@@ -235,7 +235,7 @@ if [ -n "${MAPROOM_TEST_PG_URL:-}" ]; then
   MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" scan --repo fxr --path "$w/fx" --force >/dev/null 2>&1
   MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" scan --repo fxr --path "$w/fx" --force >/dev/null 2>&1
   if MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" search --repo fxr --query alphaOne --format json \
-    | jq -e '.results | length == 0' >/dev/null 2>&1
+    | jq -e '.hits | length == 0' >/dev/null 2>&1
   then pass "R09(pg-stale-gone)"; else fail "R09(pg-stale-gone)" "replaced symbol still searchable on PG"; fi
   rm -rf "$w"
 else

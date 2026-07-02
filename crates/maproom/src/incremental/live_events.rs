@@ -22,7 +22,6 @@ use crate::db::index_state::UpdateStats;
 use crate::db::Store;
 use crate::git::get_head_commit;
 use crate::incremental::events::{EventType, IndexingEvent};
-use crate::incremental::tree_sha_update::remove_worktree_from_chunks;
 
 /// Handle one live file event from the watch poller with a scoped, verified
 /// upsert/removal. Returns truthful [`UpdateStats`] (OD-4 accounting:
@@ -86,7 +85,10 @@ pub async fn handle_file_event(
                     .unwrap_or(old)
                     .to_string_lossy()
                     .to_string();
-                remove_worktree_from_chunks(store, worktree_id, &old_rel).await?;
+                // R-GC-6: full unmap (junction + orphan GC + FTS + files rows).
+                store
+                    .unmap_superseded_file_chunks(worktree_id, &old_rel, None)
+                    .await?;
                 stats.files_processed += 1;
             }
             let abs = if relpath.is_absolute() {
@@ -115,11 +117,15 @@ pub async fn handle_file_event(
             }
         }
         EventType::Deleted => {
-            let affected = remove_worktree_from_chunks(store, worktree_id, &relpath_str).await?;
+            // R-GC-6: full unmap (junction + orphan GC + FTS + files rows) —
+            // remove_worktree_from_chunks lacked files-row GC and FTS cleanup.
+            let affected = store
+                .unmap_superseded_file_chunks(worktree_id, &relpath_str, None)
+                .await?;
             debug!(
                 file = %relpath_str,
-                chunks_affected = affected,
-                "Removed worktree from chunks for deleted file"
+                junction_rows = affected,
+                "Unmapped worktree from chunks for deleted file"
             );
             stats.files_processed = 1;
         }

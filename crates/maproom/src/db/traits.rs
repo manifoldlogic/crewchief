@@ -260,6 +260,26 @@ pub trait StoreChunks: Send + Sync {
         relpath: &str,
     ) -> anyhow::Result<i64>;
 
+    /// Unmap `worktree_id` from chunks belonging to superseded generations of
+    /// `relpath` (files rows with the same relpath but a different file_id),
+    /// GC chunks orphaned by the unmap, and delete superseded files rows that
+    /// no longer own any chunks. `keep_file_id = None` means "no generation
+    /// survives" (the file was deleted from this worktree).
+    /// Returns the number of chunk_worktrees rows removed.
+    ///
+    /// R09 (fix spec R-GC-1, CC-2): every rescan/upsert used to mint a new
+    /// files+chunks generation per commit and never unmap the old one, so
+    /// deleted code stayed searchable and the index grew without bound on
+    /// both backends. R-WT-4 semantics: the content-addressed
+    /// `code_embeddings` pool is NEVER touched by this method; chunks still
+    /// mapped to any other worktree survive.
+    async fn unmap_superseded_file_chunks(
+        &self,
+        worktree_id: i64,
+        relpath: &str,
+        keep_file_id: Option<i64>,
+    ) -> anyhow::Result<usize>;
+
     /// Get full chunk data by ID.
     async fn get_chunk_by_id(&self, chunk_id: i64) -> anyhow::Result<Option<ChunkFull>>;
 

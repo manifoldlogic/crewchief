@@ -317,6 +317,30 @@ async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> Jso
                 }
             };
 
+            // R18 / R-WTF-1: validate the worktree name BEFORE execute_search
+            // (all execute_search errors collapse to -32000). An unknown
+            // worktree used to be silently unscoped -> wrong-scope results.
+            if let Some(ref w) = params.worktree {
+                let known = match worktree_exists(&state, &params.repo, w).await {
+                    Ok(known) => known,
+                    Err(e) => {
+                        error!("Worktree validation failed: {}", e);
+                        false
+                    }
+                };
+                if !known {
+                    return JsonRpcResponse::error(
+                        id,
+                        -32602,
+                        "Invalid params".to_string(),
+                        Some(serde_json::json!(format!(
+                            "unknown worktree '{}' for repo '{}'",
+                            w, params.repo
+                        ))),
+                    );
+                }
+            }
+
             match execute_search(state, params).await {
                 Ok(results) => JsonRpcResponse::success(id, results),
                 Err(e) => {
@@ -406,6 +430,35 @@ async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> Jso
             Some(serde_json::json!(request.method)),
         ),
     }
+}
+
+/// R18 / R-WTF-1: does `worktree` exist for `repo`? Repo resolution uses the
+/// same exact-or-suffix fuzzy match as execute_status. Unknown REPO returns
+/// true (out of scope here — existing repo-error behavior is preserved).
+async fn worktree_exists(state: &Arc<DaemonState>, repo: &str, worktree: &str) -> Result<bool> {
+    let all_repos = state
+        .store
+        .list_repos()
+        .await
+        .context("Failed to list repos")?;
+    let matched: Vec<_> = all_repos
+        .into_iter()
+        .filter(|r| r.name == repo || r.name.ends_with(&format!("/{}", repo)))
+        .collect();
+    if matched.is_empty() {
+        return Ok(true); // unknown repo keeps existing error behavior downstream
+    }
+    for r in matched {
+        let worktrees = state
+            .store
+            .list_worktrees(r.id)
+            .await
+            .context("Failed to list worktrees")?;
+        if worktrees.iter().any(|w| w.name == worktree) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 async fn execute_search(

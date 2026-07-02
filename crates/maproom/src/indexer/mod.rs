@@ -400,6 +400,20 @@ pub async fn scan_worktree(
         };
         let file_id = store.upsert_file(&file_record).await?;
 
+        // R09 / R-GC-4: unmap this worktree from superseded generations of
+        // this relpath (older commits' files rows) and GC what's orphaned —
+        // without this every rescan accumulated a new generation and deleted
+        // code stayed searchable. Ordering is safe: the current generation's
+        // chunks are inserted below, keyed to file_id, which the predicate
+        // excludes.
+        store
+            .unmap_superseded_file_chunks(
+                worktree_id,
+                relpath.to_string_lossy().as_ref(),
+                Some(file_id),
+            )
+            .await?;
+
         let chunks = parser::extract_chunks(&content, language);
         if chunks.is_empty() {
             // Fallback: single module chunk
@@ -527,6 +541,39 @@ pub async fn scan_worktree(
         }
     }
 
+    // R09 / R-GC-5: deleted-file reconciliation. Any relpath present in the
+    // index but absent from this walk was deleted from the worktree — unmap
+    // it entirely (keep_file_id = None). The walked set derives from the
+    // absolute file_paths via strip_prefix(root_abs), the same encoding used
+    // for FileRecord.relpath above.
+    {
+        let walked: std::collections::HashSet<String> = file_paths
+            .iter()
+            .map(|p| {
+                p.strip_prefix(&root_abs)
+                    .unwrap_or(p)
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .collect();
+        let mut indexed: Vec<String> = store
+            .get_chunks_for_worktree(worktree_id)
+            .await?
+            .into_iter()
+            .map(|(_, rel)| rel)
+            .collect();
+        indexed.sort();
+        indexed.dedup();
+        for rel in indexed {
+            if !walked.contains(&rel) {
+                let removed = store
+                    .unmap_superseded_file_chunks(worktree_id, &rel, None)
+                    .await?;
+                debug!(relpath = %rel, junction_rows = removed, "Reconciled deleted file");
+            }
+        }
+    }
+
     // Finish progress tracking and show timing
     if let Some(p) = &progress {
         p.finish();
@@ -630,6 +677,15 @@ pub async fn upsert_files(
             last_modified,
         };
         let file_id = store.upsert_file(&file_record).await?;
+        // R09 / R-GC-4: same superseded-generation reconciliation as
+        // scan_worktree (see comment there).
+        store
+            .unmap_superseded_file_chunks(
+                worktree_id,
+                relpath.to_string_lossy().as_ref(),
+                Some(file_id),
+            )
+            .await?;
         let chunks = parser::extract_chunks(&content, language.unwrap());
         if chunks.is_empty() {
             let preview = first_n_lines(&content, 40);
