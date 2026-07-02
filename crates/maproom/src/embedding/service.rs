@@ -115,8 +115,20 @@ impl EmbeddingService {
 
     /// Embed a batch of texts efficiently with caching.
     pub async fn embed_batch(&self, texts: Vec<String>) -> Result<Vec<Vector>, EmbeddingError> {
+        self.embed_batch_inner(texts).await.map(|(v, _cached)| v)
+    }
+
+    /// Batch embedding core that also reports how many texts were served
+    /// from cache (R15 / R-STATS-1: the service layer is the ONLY place that
+    /// can truthfully count cached vs from-API TEXTS — provider request
+    /// deltas are in units of HTTP requests, and one POST carries the whole
+    /// batch, so `total - request_delta` booked real API texts as cache hits).
+    async fn embed_batch_inner(
+        &self,
+        texts: Vec<String>,
+    ) -> Result<(Vec<Vector>, usize), EmbeddingError> {
         if texts.is_empty() {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), 0));
         }
 
         let total = texts.len();
@@ -131,6 +143,10 @@ impl EmbeddingService {
             if let Some(cached) = self.cache.get(text).await {
                 results.push((i, Some(cached)));
             } else {
+                // R15 / R-STATS-2: record the miss — the batch path never
+                // recorded misses, so cache_metrics.hit_rate() read 100%
+                // even on a fully cold cache.
+                self.cache.record_miss().await;
                 results.push((i, None));
                 uncached_indices.push(i);
                 uncached_texts.push(text.clone());
@@ -177,34 +193,27 @@ impl EmbeddingService {
             })
             .collect();
 
-        final_embeddings
+        final_embeddings.map(|v| (v, cached_count))
     }
 
     /// Embed a batch with detailed statistics.
+    ///
+    /// R15 / R-STATS-1: text-count stats come UNCONDITIONALLY from the
+    /// service layer (`cached` = texts served from cache, `from_api` =
+    /// total - cached). The old provider-metrics request delta subtracted
+    /// REQUESTS from a TEXT total — with one POST per batch (and providers
+    /// like Ollama not implementing metrics at all), every real API call was
+    /// booked as a cache hit ("Generated: 0, Cached: 20, API calls: 0").
+    /// Request counts remain available separately via `provider.metrics()`.
     pub async fn embed_batch_with_stats(
         &self,
         texts: Vec<String>,
     ) -> Result<(Vec<Vector>, BatchResult), EmbeddingError> {
         let total = texts.len();
 
-        // Get initial metrics if available
-        let initial_requests = self
-            .provider
-            .metrics()
-            .map(|m| m.total_requests)
-            .unwrap_or(0);
+        let (embeddings, cached) = self.embed_batch_inner(texts).await?;
 
-        let embeddings = self.embed_batch(texts).await?;
-
-        // Get final metrics if available
-        let final_requests = self
-            .provider
-            .metrics()
-            .map(|m| m.total_requests)
-            .unwrap_or(0);
-
-        let from_api = (final_requests - initial_requests) as usize;
-        let cached = total.saturating_sub(from_api);
+        let from_api = total.saturating_sub(cached);
         let cache_hit_rate = if total > 0 {
             cached as f64 / total as f64
         } else {

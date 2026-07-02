@@ -21,11 +21,16 @@ macro_rules! handle_agent_error {
     ($result:expr, $format:expr) => {
         match $result {
             Ok(value) => value,
-            Err(e) if $format == OutputFormat::Agent => {
+            // R13 / R-EXIT-1 (CC-4 classify-before-render): EVERY error is
+            // classified; the format controls only presentation.
+            // handle_agent_error prints the structured stdout line only for
+            // Agent format and always exits with the classified code — the
+            // old fallback arm propagated the error to anyhow (exit 1) for
+            // non-agent formats, making the exit code depend on --format.
+            Err(e) => {
                 let (error_type, suggestion, exit_code) = classify_error(&e);
                 handle_agent_error(&e, &$format, &error_type, &suggestion, exit_code);
             }
-            Err(e) => return Err(e),
         }
     };
 }
@@ -1038,20 +1043,49 @@ fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
     Ok((repo_name, branch_name, commit_hash))
 }
 
+/// R13 / R-EXIT-5 (CC-4): every `?`-propagated command error is classified
+/// before process exit — anyhow's default handler (unconditional exit 1) is
+/// no longer the terminal path for ANY command error. A `Configuration
+/// error:`-prefixed bail (e.g. migrate delete-backup name validation) exits 2
+/// in every output format.
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() {
+    if let Err(e) = real_main().await {
+        let (_error_type, _suggestion, exit_code) = classify_error(&e);
+        eprintln!("Error: {:?}", e);
+        std::process::exit(exit_code);
+    }
+}
+
+async fn real_main() -> anyhow::Result<()> {
     dotenv().ok();
-    fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .with_target(false)
-        .compact()
-        .init();
+    // R17 / R-LOG-1/2: tracing goes to STDERR (tracing-subscriber defaults to
+    // stdout, which interleaved ANSI log lines with the stdio daemon's
+    // newline-delimited JSON-RPC responses and corrupted the protocol), with
+    // ANSI gated on stderr actually being a terminal.
+    {
+        use std::io::IsTerminal;
+        fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .with_target(false)
+            .with_writer(std::io::stderr)
+            .with_ansi(std::io::stderr().is_terminal())
+            .compact()
+            .init();
+    }
 
     let cli = Cli::parse();
 
     // R-WIRE-5: an explicit --database-url overrides MAPROOM_DATABASE_URL for this
     // process, so db::connect()'s resolution observes flag > env > default.
     if let Some(url) = cli.database_url.as_deref() {
+        // R12 / R-URL-2: belt-and-braces — reject an empty flag value here
+        // with a message that names the flag (R-URL-1 in get_database_url
+        // covers the env var and anything that slips past).
+        if url.trim().is_empty() {
+            eprintln!("Configuration error: --database-url must not be empty");
+            std::process::exit(EXIT_CONFIG_ERROR);
+        }
         std::env::set_var("MAPROOM_DATABASE_URL", url);
     }
 
@@ -1062,15 +1096,24 @@ async fn main() -> anyhow::Result<()> {
     // guard — DaemonState routes through db::connect(), whose bail arm rejects a
     // postgres:// URL in non-postgres builds. This remains a harmless whole-binary
     // fast-fail (and protects non-serve commands); do not remove it.
-    if let Ok(url) = db::get_database_url() {
-        if matches!(
-            db::connection::backend_for_url(&url),
-            db::connection::Backend::Postgres
-        ) && !cfg!(feature = "postgres")
-        {
-            eprintln!(
-                "Configuration error: database URL uses the postgres scheme but maproom was built without --features postgres"
-            );
+    // R12 / R-URL-3: the guard must NOT swallow resolution errors (an empty
+    // env URL bails in get_database_url and must surface as exit 2 here, not
+    // later inside some per-command connect()).
+    match db::get_database_url() {
+        Ok(url) => {
+            if matches!(
+                db::connection::backend_for_url(&url),
+                db::connection::Backend::Postgres
+            ) && !cfg!(feature = "postgres")
+            {
+                eprintln!(
+                    "Configuration error: database URL uses the postgres scheme but maproom was built without --features postgres"
+                );
+                std::process::exit(EXIT_CONFIG_ERROR);
+            }
+        }
+        Err(e) => {
+            eprintln!("{e}");
             std::process::exit(EXIT_CONFIG_ERROR);
         }
     }

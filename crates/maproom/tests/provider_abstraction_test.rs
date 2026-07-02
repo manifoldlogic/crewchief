@@ -71,11 +71,13 @@ async fn test_ollama_provider_implements_trait() {
         "Provider name should be 'ollama'"
     );
 
-    // Verify metrics returns None (Ollama doesn't track metrics)
-    assert!(
-        provider.metrics().is_none(),
-        "Ollama provider should not track metrics"
-    );
+    // R15 / R-STATS-3 contract change: Ollama now tracks HTTP request counts
+    // (zero before any call; tokens/cost stay 0 for free local models).
+    let m = provider
+        .metrics()
+        .expect("Ollama provider now reports request metrics");
+    assert_eq!(m.total_requests, 0, "no requests made yet");
+    assert_eq!(m.total_tokens, 0);
 }
 
 /// Contract test: OpenAI provider correctly implements EmbeddingProvider trait.

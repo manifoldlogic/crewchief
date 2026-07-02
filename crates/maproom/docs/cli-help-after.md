@@ -63,6 +63,11 @@ ENVIRONMENT VARIABLES:
 
     OLLAMA_URL
         Ollama server URL. Default: http://localhost:11434
+        Endpoint resolution precedence (first set wins):
+          MAPROOM_EMBEDDING_API_ENDPOINT > MAPROOM_OLLAMA_URL > OLLAMA_URL
+          > OLLAMA_HOST > auto-detected > http://localhost:11434
+        Scheme-less host:port values (OLLAMA_HOST convention) get http://
+        prepended automatically.
 
 BEFORE SEARCHING:
     Always check indexing status before performing searches:

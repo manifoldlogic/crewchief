@@ -57,6 +57,12 @@ fn expand_tilde(path: &str) -> Result<String> {
 pub fn get_database_url() -> Result<String> {
     // 1. Check for explicit MAPROOM_DATABASE_URL (highest priority)
     if let Ok(url) = env::var("MAPROOM_DATABASE_URL") {
+        // R12 / R-URL-1: an empty URL used to fall through to rusqlite's
+        // empty-filename behavior — a private temp DB deleted on close, so
+        // every write was silently discarded with exit 0.
+        if url.trim().is_empty() {
+            anyhow::bail!("Configuration error: MAPROOM_DATABASE_URL / --database-url is empty");
+        }
         debug!("Using explicit MAPROOM_DATABASE_URL from environment");
 
         // Expand tilde in the path portion of sqlite:// URLs
@@ -89,6 +95,16 @@ pub fn get_database_url() -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[serial_test::serial]
+    fn get_database_url_rejects_empty() {
+        // R12 / R-URL-1
+        std::env::set_var("MAPROOM_DATABASE_URL", "   ");
+        let err = get_database_url().unwrap_err();
+        assert!(err.to_string().contains("empty"), "got: {err}");
+        std::env::remove_var("MAPROOM_DATABASE_URL");
+    }
+
     use super::*;
     use serial_test::serial;
 

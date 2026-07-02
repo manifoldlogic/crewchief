@@ -104,3 +104,63 @@ fn search_unknown_worktree_returns_invalid_params() {
         "known worktree must search; got: {ok_out}"
     );
 }
+
+// ============================================================================
+// R19 (fix spec §5.4): JSON-RPC 2.0 strictness
+// ============================================================================
+
+/// R-RPC-1: a request with NO id is a notification — no reply line at all.
+#[test]
+fn notification_receives_no_reply() {
+    let db = tempfile::TempDir::new().unwrap();
+    let url = format!("sqlite://{}/x.db", db.path().display());
+    let (stdout, _stderr) = serve(&url, &[r#"{"jsonrpc":"2.0","method":"ping"}"#]);
+    assert_eq!(
+        stdout.lines().filter(|l| !l.trim().is_empty()).count(),
+        0,
+        "notifications must not be answered; got: {stdout}"
+    );
+}
+
+/// R-RPC-1: explicit "id": null is a REQUEST (answered with "id":null).
+#[test]
+fn explicit_null_id_still_answered() {
+    let db = tempfile::TempDir::new().unwrap();
+    let url = format!("sqlite://{}/x.db", db.path().display());
+    let (stdout, _stderr) = serve(&url, &[r#"{"jsonrpc":"2.0","method":"ping","id":null}"#]);
+    assert!(
+        stdout.contains(r#""result":"pong""#),
+        "null-id request must be answered; got: {stdout}"
+    );
+}
+
+/// R-RPC-2: version != "2.0" → -32600 Invalid Request.
+#[test]
+fn jsonrpc_version_1_0_rejected_32600() {
+    let db = tempfile::TempDir::new().unwrap();
+    let url = format!("sqlite://{}/x.db", db.path().display());
+    let (stdout, _stderr) = serve(&url, &[r#"{"jsonrpc":"1.0","method":"ping","id":23}"#]);
+    assert!(stdout.contains("-32600"), "got: {stdout}");
+}
+
+/// R-RPC-2 (OD-10): MISSING version field → -32600, not -32700.
+#[test]
+fn missing_jsonrpc_field_rejected_32600() {
+    let db = tempfile::TempDir::new().unwrap();
+    let url = format!("sqlite://{}/x.db", db.path().display());
+    let (stdout, _stderr) = serve(&url, &[r#"{"method":"ping","id":24}"#]);
+    assert!(stdout.contains("-32600"), "missing version is an invalid REQUEST, not a parse error; got: {stdout}");
+    assert!(!stdout.contains("-32700"), "got: {stdout}");
+}
+
+/// R-RPC-3 (OD-11): batch arrays rejected with a single -32600.
+#[test]
+fn batch_array_rejected_32600() {
+    let db = tempfile::TempDir::new().unwrap();
+    let url = format!("sqlite://{}/x.db", db.path().display());
+    let (stdout, _stderr) = serve(&url, &[r#"[{"jsonrpc":"2.0","method":"ping","id":1}]"#]);
+    assert!(
+        stdout.contains("Batch requests are not supported") && stdout.contains("-32600"),
+        "got: {stdout}"
+    );
+}

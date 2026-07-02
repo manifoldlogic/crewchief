@@ -1,12 +1,35 @@
 use serde::{Deserialize, Serialize};
 
+/// R19 / R-RPC-1: deserializer for the `id` field that distinguishes ABSENT
+/// (notification) from explicit `null` (a request whose id is null). This fn
+/// only runs when the key is present, so it always wraps in `Some`; the
+/// `#[serde(default)]` outer `None` can only mean "field absent".
+fn deserialize_present_id<'de, D>(d: D) -> Result<Option<Option<serde_json::Value>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(Some(Option::<serde_json::Value>::deserialize(d)?))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcRequest {
-    #[allow(dead_code)]
-    pub jsonrpc: String, // Must be "2.0"
+    /// R19 / R-RPC-2 (OD-10): `Option` so a missing version is an Invalid
+    /// Request (-32600), not a parse error; validated == "2.0" in dispatch.
+    #[serde(default)]
+    pub jsonrpc: Option<String>,
     pub method: String,
     pub params: Option<serde_json::Value>,
-    pub id: Option<serde_json::Value>, // ID can be number, string, or null
+    /// `None` = field absent (JSON-RPC NOTIFICATION — the server MUST NOT
+    /// reply); `Some(None)` = explicit `"id": null` (a request; answered with
+    /// `"id":null`); `Some(Some(v))` = normal id. Serde's nested-Option
+    /// serialization does the right thing on the way out (inner `None` →
+    /// `null`), and the skip attr keeps absent ids absent.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub id: Option<Option<serde_json::Value>>,
 }
 
 #[derive(Debug, Deserialize)]

@@ -106,6 +106,12 @@ pub struct OllamaProvider {
     parallel_config: ParallelConfig,
     /// Semaphore to limit concurrent requests
     semaphore: Arc<Semaphore>,
+    /// R15 / R-STATS-3: actual HTTP POSTs made (one per batch request).
+    /// Incremented ONLY at the POST site in embed_batch_raw — single `embed`
+    /// delegates there and must not double-count. Feeds `metrics()` so the
+    /// pipeline's "API calls:" display is truthful (it played no role in
+    /// cached/from_api, which are text counts computed at the service layer).
+    request_count: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl OllamaProvider {
@@ -234,6 +240,7 @@ impl OllamaProvider {
         let semaphore = Arc::new(Semaphore::new(config.max_concurrency));
 
         Ok(Self {
+            request_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             client,
             endpoint,
             model,
@@ -490,6 +497,10 @@ impl OllamaProvider {
                 tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
             }
 
+            // R-STATS-3: count the actual HTTP request (retries included —
+            // total_requests means requests made, not batches succeeded).
+            self.request_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let response = match self
                 .client
                 .post(&self.endpoint)
@@ -616,6 +627,20 @@ impl OllamaProvider {
 
 #[async_trait]
 impl EmbeddingProvider for OllamaProvider {
+    fn metrics(&self) -> Option<crate::embedding::provider::ProviderMetrics> {
+        // R15 / R-STATS-3: request-count truth for the "API calls:" display.
+        // Tokens/cost are not tracked (free local models) — zeros, mirroring
+        // the ProviderMetrics contract.
+        Some(crate::embedding::provider::ProviderMetrics {
+            total_requests: self
+                .request_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            total_tokens: 0,
+            failed_requests: 0,
+            estimated_cost_usd: 0.0,
+        })
+    }
+
     /// Generate embedding vector for a single text.
     ///
     /// This method calls the Ollama API to generate a 768-dimensional embedding

@@ -274,23 +274,49 @@ pub async fn run() -> Result<()> {
     let mut lines = reader.lines();
 
     while let Ok(Some(line)) = lines.next_line().await {
-        let response = match serde_json::from_str::<JsonRpcRequest>(&line) {
-            Ok(request) => handle_request(request, state.clone()).await,
-            Err(e) => {
-                error!("Failed to parse request: {}", e);
-                JsonRpcResponse::error(
-                    serde_json::Value::Null,
-                    -32700,
-                    "Parse error".to_string(),
-                    Some(serde_json::json!(e.to_string())),
-                )
+        // R19 / R-RPC-3 (OD-11): a batch array is rejected explicitly with a
+        // single -32600 error object (it used to hit serde's seq-as-struct
+        // path and come back as a misleading -32700). Full batch dispatch is
+        // a tracked follow-up; no in-repo client sends batches.
+        let response: Option<JsonRpcResponse> = if line.trim_start().starts_with('[') {
+            Some(JsonRpcResponse::error(
+                serde_json::Value::Null,
+                -32600,
+                "Invalid Request".to_string(),
+                Some(serde_json::json!("Batch requests are not supported")),
+            ))
+        } else {
+            match serde_json::from_str::<JsonRpcRequest>(&line) {
+                Ok(request) => {
+                    // R19 / R-RPC-1: an ABSENT id marks a notification — the
+                    // handler runs, but the server MUST NOT reply. An explicit
+                    // "id": null is a request and keeps its {"id":null} reply.
+                    let is_notification = request.id.is_none();
+                    let resp = handle_request(request, state.clone()).await;
+                    if is_notification {
+                        None
+                    } else {
+                        Some(resp)
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to parse request: {}", e);
+                    Some(JsonRpcResponse::error(
+                        serde_json::Value::Null,
+                        -32700,
+                        "Parse error".to_string(),
+                        Some(serde_json::json!(e.to_string())),
+                    ))
+                }
             }
         };
 
-        let mut response_json = serde_json::to_string(&response)?;
-        response_json.push('\n');
-        stdout.write_all(response_json.as_bytes()).await?;
-        stdout.flush().await?;
+        if let Some(response) = response {
+            let mut response_json = serde_json::to_string(&response)?;
+            response_json.push('\n');
+            stdout.write_all(response_json.as_bytes()).await?;
+            stdout.flush().await?;
+        }
     }
 
     info!("Daemon mode exiting...");
@@ -298,7 +324,19 @@ pub async fn run() -> Result<()> {
 }
 
 async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> JsonRpcResponse {
-    let id = request.id.clone().unwrap_or(serde_json::Value::Null);
+    let id = request.id.clone().flatten().unwrap_or(serde_json::Value::Null);
+
+    // R19 / R-RPC-2 (OD-10): the version field must be exactly "2.0". For a
+    // notification the run loop suppresses this reply anyway (a malformed
+    // notification gets no answer, per spec).
+    if request.jsonrpc.as_deref() != Some("2.0") {
+        return JsonRpcResponse::error(
+            id,
+            -32600,
+            "Invalid Request".to_string(),
+            Some(serde_json::json!("jsonrpc must be \"2.0\"")),
+        );
+    }
 
     match request.method.as_str() {
         "ping" => JsonRpcResponse::success(id, serde_json::Value::String("pong".to_string())),
@@ -836,10 +874,10 @@ mod r16_lazy_embedding_tests {
         let state = memory_state().await;
         // ping-equivalent: any non-embedding request works.
         let req = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(),
+            jsonrpc: Some("2.0".to_string()),
             method: "ping".to_string(),
             params: None,
-            id: Some(serde_json::json!(1)),
+            id: Some(Some(serde_json::json!(1))),
         };
         let resp = handle_request(req, state).await;
         assert_eq!(resp.result, Some(serde_json::json!("pong")));
@@ -855,14 +893,14 @@ mod r16_lazy_embedding_tests {
         std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", "invalid-provider");
         let state = memory_state().await;
         let req = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(),
+            jsonrpc: Some("2.0".to_string()),
             method: "search".to_string(),
             params: Some(serde_json::json!({
                 "query": "anything",
                 "repo": "nope",
                 "mode": "vector"
             })),
-            id: Some(serde_json::json!(2)),
+            id: Some(Some(serde_json::json!(2))),
         };
         let resp = handle_request(req, state).await;
         std::env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
