@@ -1055,6 +1055,10 @@ async fn main() -> anyhow::Result<()> {
     // Classify a database-backend misconfiguration as a config error (exit 2),
     // not a runtime error: a postgres:// URL in a build without --features postgres
     // can never connect, so fail fast and clearly before dispatching any command.
+    // NOTE (F70): the socket daemon's backend safety no longer depends on this
+    // guard — DaemonState routes through db::connect(), whose bail arm rejects a
+    // postgres:// URL in non-postgres builds. This remains a harmless whole-binary
+    // fast-fail (and protects non-serve commands); do not remove it.
     if let Ok(url) = db::get_database_url() {
         if matches!(
             db::connection::backend_for_url(&url),

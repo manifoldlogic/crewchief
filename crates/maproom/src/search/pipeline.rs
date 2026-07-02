@@ -137,7 +137,7 @@ impl SearchPipeline {
     }
 
     /// Get reference to the database store (for testing and utilities).
-    pub fn store(&self) -> &crate::db::SqliteStore {
+    pub fn store(&self) -> &(dyn crate::db::Store + Send + Sync) {
         self.executors.store()
     }
 
@@ -590,8 +590,8 @@ impl SearchPipeline {
         &self,
         chunk_ids: &[i64],
     ) -> Result<HashMap<i64, ChunkDetails>, PipelineError> {
-        // TODO(IDXABS-2003): This needs to be implemented using SqliteStore.
-        // SqliteStore doesn't have a bulk chunk details fetch method yet.
+        // TODO(IDXABS-2003): This needs to be implemented via the Store trait.
+        // The store trait doesn't have a bulk chunk details fetch method yet.
         // This should query the chunks and files tables to get the needed fields.
         // See ticket IDXABS-4001 for search functionality updates.
 
