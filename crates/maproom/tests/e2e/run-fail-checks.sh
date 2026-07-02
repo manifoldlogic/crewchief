@@ -225,7 +225,7 @@ if [ -n "${MAPROOM_TEST_PG_URL:-}" ]; then
   PGDB="${MAPROOM_TEST_PG_URL%/*}/maproom_e2e_runner"
   MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" db migrate >/dev/null 2>&1
   MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" scan --repo fxr --path "$w/fx" >/dev/null 2>&1
-  if MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" search --repo fxr --query alphaOne --format json \
+  if MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" search --repo fxr --query alphaOne --format json --preview \
     | jq -e '.hits[0].preview != null' >/dev/null 2>&1
   then pass "R10(pg)"; else fail "R10(pg)" "PG search json lacks preview"; fi
   # R09 PG: no accumulation
@@ -234,7 +234,7 @@ if [ -n "${MAPROOM_TEST_PG_URL:-}" ]; then
     && git add a.ts && git -c user.email=t@t -c user.name=t commit -qm edit )
   MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" scan --repo fxr --path "$w/fx" --force >/dev/null 2>&1
   MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" scan --repo fxr --path "$w/fx" --force >/dev/null 2>&1
-  if MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" search --repo fxr --query alphaOne --format json \
+  if MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" search --repo fxr --query alphaOne --format json --preview \
     | jq -e '.hits | length == 0' >/dev/null 2>&1
   then pass "R09(pg-stale-gone)"; else fail "R09(pg-stale-gone)" "replaced symbol still searchable on PG"; fi
   rm -rf "$w"
