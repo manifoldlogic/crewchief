@@ -1,5 +1,15 @@
 # Watch Integration Tests
 
+> **STATUS: HISTORICAL.** This document describes `watch_integration.rs`, a
+> PostgreSQL-era test file that no longer exists. Current watch coverage lives
+> in `unified_watch_test.rs`, `watcher_integration_test.rs`,
+> `incremental_watcher_test.rs`, `incremental_multi_watcher_test.rs`,
+> `multi_watcher_integration_test.rs`, and `watch_auto_detect_test.rs`, which
+> run against the default SQLite backend (no PostgreSQL required). For
+> Postgres/pgvector CI, see the `test-postgres` job in
+> `.github/workflows/test.yml` — do not add a second service definition from
+> the examples below.
+
 Integration tests for the watch command fix (WATCHFIX-1005).
 
 ## Overview
@@ -236,31 +246,13 @@ DELETE FROM maproom.repos WHERE name LIKE 'test-repo-%';
 
 ### GitHub Actions Setup
 
-Add PostgreSQL service to workflow:
-
-```yaml
-jobs:
-  test:
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: maproom
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-    steps:
-      - name: Run watch integration tests
-        run: cargo test --test watch_integration -- --ignored
-        env:
-          MAPROOM_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/maproom
-```
+The Postgres/pgvector CI service already exists — it is the `test-postgres`
+job in `.github/workflows/test.yml` (a `pgvector/pgvector:pg16` service with a
+`pg_isready` health check, providing `MAPROOM_TEST_PG_URL` to the `#[ignore]`'d
+PG suites via per-suite scoped invocations of
+`cargo test -p maproom --features postgres ... -- --ignored --test-threads=1`).
+The current SQLite-based watch tests above run in the standard `test-rust` job
+and need no service container. Do not add a duplicate service definition.
 
 ## Related Files
 

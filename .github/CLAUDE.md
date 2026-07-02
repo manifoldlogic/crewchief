@@ -1,8 +1,8 @@
 # .github — CI/CD Workflows
 
-## CI Testing Philosophy: SQLite-Only
+## CI Testing Philosophy: SQLite by default, Postgres in a dedicated job
 
-Zero configuration, no external services. CI exercises only the default SQLite backend; the maproom crate's optional PostgreSQL/pgvector backend (`cargo build --features postgres`) is intentionally not run in CI.
+Most jobs are zero-configuration and exercise the default SQLite backend (no external services). The maproom crate's optional PostgreSQL/pgvector backend (`cargo build --features postgres`) is exercised by the dedicated `test-postgres` job in `workflows/test.yml`, which runs the `#[ignore]`'d PG suites against a `pgvector/pgvector:pg16` service container.
 
 ### Three-Tier Test Classification
 
