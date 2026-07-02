@@ -1,11 +1,14 @@
 name: Test
 
 # =============================================================================
-# CI Workflow: SQLite-Only Testing Strategy
+# CI Workflow: SQLite default backend + dedicated Postgres/pgvector job
 # =============================================================================
 #
-# Tests CrewChief packages using SQLite as the only database backend.
-# PostgreSQL support was intentionally removed for simplicity.
+# Tests CrewChief packages against the default SQLite backend throughout.
+# The maproom crate's optional PostgreSQL/pgvector backend is exercised by a
+# dedicated 'test-postgres' job (pgvector service container + the #[ignore]'d
+# PG suites, built with --features postgres). See F73 in
+# _SPECS/crewchief/research/maproom-postgres-trust-triad-spec.md.
 #
 # COST OPTIMIZATION:
 #   Jobs only run when their relevant code changes. A 'changes' job detects
@@ -14,7 +17,8 @@ name: Test
 #
 # JOB ORGANIZATION:
 #   - changes: Detect which paths changed (always runs, ~5s)
-#   - test-rust: Rust library tests (when Rust code changes)
+#   - test-rust: Rust library tests, SQLite backend (when Rust code changes)
+#   - test-postgres: Rust Postgres/pgvector integration tests (when Rust code changes)
 #   - test-typescript: TypeScript package tests (when TS code changes)
 #   - test-sqlite-e2e: CLI E2E tests (when Rust OR E2E tests change)
 #   - test-performance-regression: Performance budget validation (when Rust code changes)
@@ -162,10 +166,73 @@ jobs:
         run: |
           echo "## 🦀 Rust Tests" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Backend:** SQLite (only)" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend:** SQLite (default backend)" >> $GITHUB_STEP_SUMMARY
           echo "**Dependencies:** None - uses in-memory database" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Tests Rust \`maproom\` crate (SQLite is the only backend)." >> $GITHUB_STEP_SUMMARY
+          echo "Tests Rust \`maproom\` crate against the default SQLite backend." >> $GITHUB_STEP_SUMMARY
+
+  # Rust Postgres/pgvector integration tests (F73)
+  # Runs the #[ignore]'d PG suites (db::postgres::tests, store_parity, pg_real_dedup)
+  # against a real pgvector service. Invoked from repo root with -p maproom so the
+  # commands match the canonical local invocation in the trust-triad spec.
+  # NOTE: --test-threads=1 serializes tests WITHIN each binary; the in-crate suite
+  # runs DROP SCHEMA at setup, which is safe because the three invocations below
+  # run strictly sequentially — keep them as separate ordered commands.
+  test-postgres:
+    name: Rust Postgres Tests
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflow == 'true' }}
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: maproom
+          POSTGRES_PASSWORD: maproom
+          POSTGRES_DB: maproom_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U maproom -d maproom_test"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      MAPROOM_TEST_PG_URL: postgres://maproom:maproom@localhost:5432/maproom_test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+          key: postgres
+
+      - name: Run Postgres integration tests
+        # Scoped to exactly the three PG suites. A blanket `--lib --tests -- --ignored`
+        # would also run ~110 unrelated #[ignore]'d tests (Ollama/OpenAI providers,
+        # golden tests needing pre-indexed data, devcontainer-path fixtures) and fail.
+        run: |
+          cargo test -p maproom --features postgres --lib db::postgres -- --ignored --test-threads=1
+          cargo test -p maproom --features postgres --test store_parity -- --ignored --test-threads=1
+          cargo test -p maproom --features postgres --test pg_real_dedup -- --ignored --test-threads=1
+
+      - name: Job Summary
+        if: always()
+        run: |
+          echo "## 🐘 Rust Postgres Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend:** PostgreSQL 16 + pgvector" >> $GITHUB_STEP_SUMMARY
+          echo "**Service:** pgvector/pgvector:pg16" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** postgres://maproom:maproom@localhost:5432/maproom_test" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Runs the ignored PG suite (store_parity, pg_real_dedup, db::postgres::tests)." >> $GITHUB_STEP_SUMMARY
 
   # Gunmetal crate tests (native + wasm32 check + GUN.js wire interop)
   # Submodule checkout provides crates/gunmetal/sources/gun for the interop

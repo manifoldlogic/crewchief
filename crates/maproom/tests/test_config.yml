@@ -56,14 +56,9 @@ ci:
   # Use mocked API client for most tests in CI
   use_mock_client: true
 
-  # Docker Compose services for CI
-  services:
-    postgres:
-      image: pgvector/pgvector:pg16
-      port: 5432
-      database: maproom_test
-      user: test_user
-      password: test_password
+  # NOTE: The Postgres/pgvector CI service is NOT configured here. It lives in
+  # .github/workflows/test.yml (the `test-postgres` job), which provides
+  # MAPROOM_TEST_PG_URL to the #[ignore]'d PG suites.
 
   # Test timeout settings
   timeouts:
