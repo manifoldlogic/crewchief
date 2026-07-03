@@ -452,15 +452,25 @@ cargo test --test ollama_integration_test
 
 ### Database Integration Tests
 
-Most integration tests require PostgreSQL:
+The default integration suites (`cargo test --test '*'`) run against SQLite/mock
+stores and need no external database. Only the `#[ignore]`'d Postgres suites
+(`store_parity`, `pg_real_dedup`, the in-crate `db::postgres::tests`) require
+PostgreSQL + pgvector, built with `--features postgres`:
 
 ```bash
-# Set database URL
-export MAPROOM_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maproom_test
+# Set the Postgres test URL (the PG suites are skipped when unset)
+export MAPROOM_TEST_PG_URL=postgres://maproom:maproom@localhost:5432/maproom_test
 
-# Run all integration tests
-cargo test --test '*'
+# Run the ignored PG suites (canonical invocations — same as the CI test-postgres job).
+# Scoped per suite: a blanket `--lib --tests -- --ignored` would also run unrelated
+# ignored tests (Ollama/OpenAI, pre-indexed-data golden tests) and fail.
+cargo test -p maproom --features postgres --lib db::postgres -- --ignored --test-threads=1
+cargo test -p maproom --features postgres --test store_parity -- --ignored --test-threads=1
+cargo test -p maproom --features postgres --test pg_real_dedup -- --ignored --test-threads=1
 ```
+
+In CI this runs in the dedicated `test-postgres` job in
+`.github/workflows/test.yml` against a `pgvector/pgvector:pg16` service.
 
 ## Summary
 

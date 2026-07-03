@@ -191,16 +191,63 @@ fn deduplicate_search_hits(hits: Vec<SearchHit>, limit: usize) -> Vec<SearchHit>
 
 struct DaemonState {
     store: Arc<dyn Store + Send + Sync>,
-    embedding_service: EmbeddingService,
+    /// Lazily-initialized embedding service (R16 / fix spec R-LAZY-1, OD-5).
+    /// `serve` used to hard-require `EmbeddingService::from_env()` at startup,
+    /// making the daemon DOA in provider-less environments even though FTS /
+    /// context / status / ping need no embeddings. `get_or_try_init` does not
+    /// cache failures, so a provider that comes up later is picked up.
+    embedding: tokio::sync::OnceCell<EmbeddingService>,
+    /// Negative cache for failed lazy init (R-LAZY-8): hybrid is the daemon's
+    /// DEFAULT mode, and in a provider-less environment every default-mode
+    /// search would otherwise pay the full provider auto-detection probe cost
+    /// before falling back to FTS.
+    embed_failed_at: std::sync::Mutex<Option<std::time::Instant>>,
     context_assembler: DefaultAssemblyStrategy,
 }
 
 impl DaemonState {
-    fn new(store: Arc<dyn Store + Send + Sync>, embedding_service: EmbeddingService) -> Self {
+    fn new(store: Arc<dyn Store + Send + Sync>) -> Self {
         Self {
             store: store.clone(),
-            embedding_service,
+            embedding: tokio::sync::OnceCell::new(),
+            embed_failed_at: std::sync::Mutex::new(None),
             context_assembler: DefaultAssemblyStrategy::new(store),
+        }
+    }
+
+    /// Lazy accessor for the embedding service (R-LAZY-1). The
+    /// `.context("Failed to initialize embedding service")` is load-bearing
+    /// twice over: it coerces `EmbeddingError` into the accessor's
+    /// `anyhow::Result`, and its "embedding" substring guarantees
+    /// `error_details_from_anyhow` classifies failures as EmbeddingProvider.
+    async fn embedding_service(&self) -> Result<&EmbeddingService> {
+        if let Some(svc) = self.embedding.get() {
+            return Ok(svc);
+        }
+        {
+            let guard = self.embed_failed_at.lock().unwrap();
+            if let Some(at) = *guard {
+                if at.elapsed() < std::time::Duration::from_secs(30) {
+                    anyhow::bail!(
+                        "Failed to initialize embedding service (retry suppressed for 30s after last failure)"
+                    );
+                }
+            }
+        }
+        match self
+            .embedding
+            .get_or_try_init(|| async {
+                EmbeddingService::from_env()
+                    .await
+                    .context("Failed to initialize embedding service")
+            })
+            .await
+        {
+            Ok(svc) => Ok(svc),
+            Err(e) => {
+                *self.embed_failed_at.lock().unwrap() = Some(std::time::Instant::now());
+                Err(e)
+            }
         }
     }
 }
@@ -213,12 +260,13 @@ pub async fn run() -> Result<()> {
         .await
         .context("Failed to initialize database store")?;
 
-    // Initialize Embedding Service
-    let embedding_service = EmbeddingService::from_env()
-        .await
-        .context("Failed to initialize embedding service")?;
-
-    let state = Arc::new(DaemonState::new(store, embedding_service));
+    // R16 / R-LAZY-2: the embedding service initializes lazily on the first
+    // vector/hybrid request — serve MUST NOT fail (or block) on provider
+    // configuration at startup; FTS/context/status/ping need no embeddings.
+    // (The MAY-level eager warn-only init was skipped deliberately: Google/
+    // Vertex credential resolution can block for seconds at startup; the
+    // hybrid arm degrades to FTS and surfaces the reason per-request.)
+    let state = Arc::new(DaemonState::new(store));
 
     let stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
@@ -226,23 +274,49 @@ pub async fn run() -> Result<()> {
     let mut lines = reader.lines();
 
     while let Ok(Some(line)) = lines.next_line().await {
-        let response = match serde_json::from_str::<JsonRpcRequest>(&line) {
-            Ok(request) => handle_request(request, state.clone()).await,
-            Err(e) => {
-                error!("Failed to parse request: {}", e);
-                JsonRpcResponse::error(
-                    serde_json::Value::Null,
-                    -32700,
-                    "Parse error".to_string(),
-                    Some(serde_json::json!(e.to_string())),
-                )
+        // R19 / R-RPC-3 (OD-11): a batch array is rejected explicitly with a
+        // single -32600 error object (it used to hit serde's seq-as-struct
+        // path and come back as a misleading -32700). Full batch dispatch is
+        // a tracked follow-up; no in-repo client sends batches.
+        let response: Option<JsonRpcResponse> = if line.trim_start().starts_with('[') {
+            Some(JsonRpcResponse::error(
+                serde_json::Value::Null,
+                -32600,
+                "Invalid Request".to_string(),
+                Some(serde_json::json!("Batch requests are not supported")),
+            ))
+        } else {
+            match serde_json::from_str::<JsonRpcRequest>(&line) {
+                Ok(request) => {
+                    // R19 / R-RPC-1: an ABSENT id marks a notification — the
+                    // handler runs, but the server MUST NOT reply. An explicit
+                    // "id": null is a request and keeps its {"id":null} reply.
+                    let is_notification = request.id.is_none();
+                    let resp = handle_request(request, state.clone()).await;
+                    if is_notification {
+                        None
+                    } else {
+                        Some(resp)
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to parse request: {}", e);
+                    Some(JsonRpcResponse::error(
+                        serde_json::Value::Null,
+                        -32700,
+                        "Parse error".to_string(),
+                        Some(serde_json::json!(e.to_string())),
+                    ))
+                }
             }
         };
 
-        let mut response_json = serde_json::to_string(&response)?;
-        response_json.push('\n');
-        stdout.write_all(response_json.as_bytes()).await?;
-        stdout.flush().await?;
+        if let Some(response) = response {
+            let mut response_json = serde_json::to_string(&response)?;
+            response_json.push('\n');
+            stdout.write_all(response_json.as_bytes()).await?;
+            stdout.flush().await?;
+        }
     }
 
     info!("Daemon mode exiting...");
@@ -250,7 +324,19 @@ pub async fn run() -> Result<()> {
 }
 
 async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> JsonRpcResponse {
-    let id = request.id.clone().unwrap_or(serde_json::Value::Null);
+    let id = request.id.clone().flatten().unwrap_or(serde_json::Value::Null);
+
+    // R19 / R-RPC-2 (OD-10): the version field must be exactly "2.0". For a
+    // notification the run loop suppresses this reply anyway (a malformed
+    // notification gets no answer, per spec).
+    if request.jsonrpc.as_deref() != Some("2.0") {
+        return JsonRpcResponse::error(
+            id,
+            -32600,
+            "Invalid Request".to_string(),
+            Some(serde_json::json!("jsonrpc must be \"2.0\"")),
+        );
+    }
 
     match request.method.as_str() {
         "ping" => JsonRpcResponse::success(id, serde_json::Value::String("pong".to_string())),
@@ -268,6 +354,42 @@ async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> Jso
                     )
                 }
             };
+
+            // R18 / R-WTF-1: validate the worktree name BEFORE execute_search
+            // (all execute_search errors collapse to -32000). An unknown
+            // worktree used to be silently unscoped -> wrong-scope results.
+            if let Some(ref w) = params.worktree {
+                let known = match worktree_exists(&state, &params.repo, w).await {
+                    Ok(known) => known,
+                    Err(e) => {
+                        // Review [11]/[38]: a store failure during validation
+                        // is a retryable server error (-32000, like every
+                        // other store failure in this dispatch) — NOT a
+                        // -32602 "unknown worktree" verdict that makes agents
+                        // permanently drop a perfectly valid scope filter.
+                        error!("Worktree validation failed: {}", e);
+                        return JsonRpcResponse::error(
+                            id,
+                            -32000,
+                            "Internal error".to_string(),
+                            Some(serde_json::json!(format!(
+                                "worktree validation failed: {e:#}"
+                            ))),
+                        );
+                    }
+                };
+                if !known {
+                    return JsonRpcResponse::error(
+                        id,
+                        -32602,
+                        "Invalid params".to_string(),
+                        Some(serde_json::json!(format!(
+                            "unknown worktree '{}' for repo '{}'",
+                            w, params.repo
+                        ))),
+                    );
+                }
+            }
 
             match execute_search(state, params).await {
                 Ok(results) => JsonRpcResponse::success(id, results),
@@ -360,6 +482,43 @@ async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> Jso
     }
 }
 
+/// R18 / R-WTF-1: does `worktree` exist for `repo`? Repo resolution uses the
+/// same exact-or-suffix fuzzy match as execute_status. Unknown REPO returns
+/// true (out of scope here — existing repo-error behavior is preserved).
+async fn worktree_exists(state: &Arc<DaemonState>, repo: &str, worktree: &str) -> Result<bool> {
+    let all_repos = state
+        .store
+        .list_repos()
+        .await
+        .context("Failed to list repos")?;
+    // Review [12]: match case-insensitively, mirroring the stores this gate
+    // fronts (SQLite LIKE '%/x' is ASCII case-insensitive; PG uses ILIKE) —
+    // a case-sensitive gate rejected queries the store would happily serve.
+    let repo_lower = repo.to_ascii_lowercase();
+    let suffix_lower = format!("/{repo_lower}");
+    let matched: Vec<_> = all_repos
+        .into_iter()
+        .filter(|r| {
+            r.name.eq_ignore_ascii_case(repo)
+                || r.name.to_ascii_lowercase().ends_with(&suffix_lower)
+        })
+        .collect();
+    if matched.is_empty() {
+        return Ok(true); // unknown repo keeps existing error behavior downstream
+    }
+    for r in matched {
+        let worktrees = state
+            .store
+            .list_worktrees(r.id)
+            .await
+            .context("Failed to list worktrees")?;
+        if worktrees.iter().any(|w| w.name == worktree) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 async fn execute_search(
     state: Arc<DaemonState>,
     params: SearchParams,
@@ -402,9 +561,12 @@ async fn execute_search(
             hits
         }
         "vector" => {
-            // Vector mode: Semantic search using embeddings
+            // Vector mode: Semantic search using embeddings. R-LAZY-3: the
+            // lazy accessor's failure flows into the existing structured error
+            // path (classified EmbeddingProvider via its context string).
             let query_embedding = state
-                .embedding_service
+                .embedding_service()
+                .await?
                 .embed_text(&params.query)
                 .await
                 .context("Failed to generate query embedding")?;
@@ -424,9 +586,14 @@ async fn execute_search(
                 .context("Vector search execution failed")?
         }
         "hybrid" => {
-            // Hybrid mode: Try to get embedding for hybrid search
-            // Falls back gracefully if embedding service unavailable
-            let query_embedding_result = state.embedding_service.embed_text(&params.query).await;
+            // Hybrid mode: Try to get embedding for hybrid search.
+            // R-LAZY-4: a lazy-init failure folds into the same FTS fallback
+            // as an embed_text failure — the daemon's default mode degrades
+            // gracefully in provider-less environments.
+            let query_embedding_result = match state.embedding_service().await {
+                Ok(svc) => svc.embed_text(&params.query).await.map_err(anyhow::Error::from),
+                Err(e) => Err(e),
+            };
 
             match query_embedding_result {
                 Ok(query_embedding) => {
@@ -701,6 +868,71 @@ fn searchhit_to_fused_result(hit: &SearchHit, mode: &str) -> FusedResult {
         source_scores,
         hit.exact_mult.map(|m| m as f32),
     )
+}
+
+#[cfg(test)]
+mod r16_lazy_embedding_tests {
+    use super::*;
+
+    async fn memory_state() -> Arc<DaemonState> {
+        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let db = format!("file:memdb_daemon_r16_{n}?mode=memory&cache=shared");
+        let store = crate::db::SqliteStore::connect(&db).await.unwrap();
+        use crate::db::traits::StoreMigration;
+        store.migrate().await.unwrap();
+        Arc::new(DaemonState::new(Arc::new(store)))
+    }
+
+    /// R16 / R-LAZY-1: constructing daemon state must not touch the
+    /// embedding environment at all.
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn daemon_state_constructs_without_embedding_env() {
+        std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", "google");
+        std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", "/nonexistent");
+        let state = memory_state().await;
+        // ping-equivalent: any non-embedding request works.
+        let req = JsonRpcRequest {
+            jsonrpc: Some("2.0".to_string()),
+            method: "ping".to_string(),
+            params: None,
+            id: Some(Some(serde_json::json!(1))),
+        };
+        let resp = handle_request(req, state).await;
+        assert_eq!(resp.result, Some(serde_json::json!("pong")));
+        std::env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        std::env::remove_var("GOOGLE_APPLICATION_CREDENTIALS");
+    }
+
+    /// R16 / R-LAZY-3: a vector-mode search without a provider yields a
+    /// structured JSON-RPC error (not a dead daemon, not a raw chain).
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn vector_search_returns_structured_error_without_provider() {
+        std::env::set_var("MAPROOM_EMBEDDING_PROVIDER", "invalid-provider");
+        let state = memory_state().await;
+        let req = JsonRpcRequest {
+            jsonrpc: Some("2.0".to_string()),
+            method: "search".to_string(),
+            params: Some(serde_json::json!({
+                "query": "anything",
+                "repo": "nope",
+                "mode": "vector"
+            })),
+            id: Some(Some(serde_json::json!(2))),
+        };
+        let resp = handle_request(req, state).await;
+        std::env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
+        let err = resp.error.expect("vector search without provider must be a JSON-RPC error");
+        assert_eq!(err.code, -32000);
+        // Classified as an embedding-provider problem, with the process alive.
+        let data = serde_json::to_string(&err.data).unwrap_or_default();
+        assert!(
+            data.to_lowercase().contains("embedding"),
+            "error data should classify the embedding provider failure: {data}"
+        );
+    }
 }
 
 #[cfg(test)]

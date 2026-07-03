@@ -4,7 +4,7 @@
 //! including:
 //! - Unix socket server with per-client task spawning
 //! - PID file management with O_EXCL + flock for single-daemon guarantee
-//! - Shared state (SqliteStore, EmbeddingService, SessionRegistry) via Arc
+//! - Shared state (dyn Store, EmbeddingService, SessionRegistry) via Arc
 //! - Session cleanup with RAII pattern
 //!
 //! Reference: MULTICN-2003 (Unix Socket Server)
@@ -26,11 +26,10 @@ use tokio_util::codec::Framed;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::config::SqliteConfig;
 use crate::daemon::protocol::{JsonRpcCodec, JsonRpcMessage};
 use crate::daemon::session::SessionRegistry;
 use crate::daemon::types::{JsonRpcRequest, JsonRpcResponse};
-use crate::db::{get_database_url, SqliteStore};
+use crate::db::{connect, Store};
 use crate::embedding::EmbeddingService;
 
 /// Errors that can occur during daemon server operations
@@ -50,54 +49,112 @@ pub enum DaemonError {
 }
 
 /// Server configuration
+///
+/// Note: the database is NOT configured here. Backend selection (SQLite vs
+/// Postgres) is owned by the shared `crate::db::connect()` factory, driven by
+/// `MAPROOM_DATABASE_URL` / `--database-url` (R-SEL-1, R-SEL-6).
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
     pub socket_path: PathBuf,
     pub pid_path: PathBuf,
-    pub database_path: String,
-    pub sqlite_config: SqliteConfig,
     pub idle_timeout: Duration,
+    /// Review M11: OPTIONAL pinned database URL — None (production) keeps the
+    /// ambient `db::connect()` resolution (R-SEL-1 factory routing, F70
+    /// fail-loud included via connect_url's shared dispatch). Tests MUST pin
+    /// a per-test database here; the un-ignored socket tests briefly used
+    /// ambient resolution and mutated the developer's real DB (including a
+    /// live Postgres under MAPROOM_DATABASE_URL=postgres://...).
+    pub database_url: Option<String>,
 }
 
 impl ServerConfig {
     /// Create default configuration for current user
     pub fn default_for_user() -> Result<Self> {
         let uid = users::get_current_uid();
-        let database_path = get_database_url()?;
 
         Ok(Self {
             socket_path: PathBuf::from(format!("/tmp/maproom-{}.sock", uid)),
             pid_path: PathBuf::from(format!("/tmp/maproom-{}.pid", uid)),
-            database_path,
-            sqlite_config: SqliteConfig::from_env().unwrap_or_default(),
             idle_timeout: Duration::from_secs(300), // 5 minutes
+            database_url: None,
         })
     }
 }
 
 /// Shared state accessible by all client handlers
 pub struct DaemonState {
-    pub store: SqliteStore,
-    pub embedding_service: EmbeddingService,
+    pub store: Arc<dyn Store + Send + Sync>,
+    /// Lazily-initialized embedding service (R16 / R-LAZY-5, OD-6). The old
+    /// eager `EmbeddingService::from_env()` here made `serve --socket` DOA in
+    /// provider-less environments AND mislabeled the failure as a
+    /// "Database error" (via DaemonError::DatabaseError's #[from] anyhow).
+    /// Kept as a OnceCell for parity with the stdio daemon so future real
+    /// handlers (MULTICN-2005) don't re-plumb; dispatch is a stub today.
+    pub embedding: tokio::sync::OnceCell<EmbeddingService>,
     pub sessions: Arc<SessionRegistry>,
 }
 
 impl DaemonState {
-    /// Initialize daemon state with database and embedding service
+    /// Initialize daemon state with database (embeddings init lazily).
     pub async fn new(config: &ServerConfig) -> Result<Self, DaemonError> {
-        let store = SqliteStore::connect(&config.database_path)
-            .await
-            .context("Failed to connect to SQLite database")?;
-
-        let embedding_service = EmbeddingService::from_env()
-            .await
-            .context("Failed to initialize embedding service")?;
+        // Route through the shared factory so the socket daemon honors the DSN
+        // scheme (SQLite vs Postgres) identically to the STDIO daemon, and fails
+        // loud on a postgres:// URL in a non-postgres build (F70 / R-SEL-1..4).
+        // A pinned database_url (tests) goes through the SAME dispatch/bail
+        // (connect_url) — review M11.
+        let store = match &config.database_url {
+            Some(url) => crate::db::connect_url(url)
+                .await
+                .context("Failed to initialize database store")?,
+            None => connect()
+                .await
+                .context("Failed to initialize database store")?,
+        };
 
         Ok(Self {
             store,
-            embedding_service,
+            embedding: tokio::sync::OnceCell::new(),
             sessions: Arc::new(SessionRegistry::new()),
         })
+    }
+}
+
+#[cfg(unix)]
+fn libc_o_nofollow() -> i32 {
+    // O_NOFOLLOW is stable per-platform; avoid a direct libc dependency.
+    #[cfg(target_os = "linux")]
+    {
+        0o400000
+    }
+    #[cfg(target_os = "macos")]
+    {
+        0x0100
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        0
+    }
+}
+
+#[cfg(unix)]
+extern "C" {
+    fn geteuid() -> u32;
+}
+
+/// RAII guard for the Unix socket file (R21 / R-SOCK-1): removes the socket
+/// on drop so every shutdown path (incl. select!-cancellation on signals)
+/// cleans up, symmetric with PidFileGuard.
+struct SocketFileGuard {
+    path: PathBuf,
+}
+
+impl Drop for SocketFileGuard {
+    fn drop(&mut self) {
+        if let Err(e) = std::fs::remove_file(&self.path) {
+            warn!(path = %self.path.display(), error = %e, "Failed to remove socket file");
+        } else {
+            info!(path = %self.path.display(), "Socket file removed");
+        }
     }
 }
 
@@ -109,37 +166,86 @@ pub struct PidFileGuard {
 
 impl PidFileGuard {
     /// Create PID file with exclusive lock.
-    /// Returns error if PID file already exists and is locked (daemon already running).
+    /// Returns error if PID file already exists AND is still flock-held by a
+    /// live daemon. A stale PID file (previous daemon crashed / SIGKILLed, so
+    /// its RAII cleanup never ran) is taken over: the flock dies with its
+    /// process, so lock acquisition — not file existence — is the real
+    /// single-daemon guard (R21-adjacent robustness; pre-fix, one crashed
+    /// daemon permanently blocked every restart with AlreadyRunning).
     pub fn create(path: &Path) -> Result<Self, DaemonError> {
-        // O_EXCL ensures atomicity if file doesn't exist
+        // O_EXCL fast path when no file exists.
         #[cfg(unix)]
-        let mut file = OpenOptions::new()
+        let created = OpenOptions::new()
             .write(true)
             .create_new(true)
             .mode(0o600) // Owner read/write only
-            .open(path)
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::AlreadyExists {
-                    DaemonError::AlreadyRunning(path.to_path_buf())
-                } else {
-                    DaemonError::PidFileError(e)
-                }
-            })?;
+            .open(path);
 
         #[cfg(not(unix))]
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(path)
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::AlreadyExists {
-                    DaemonError::AlreadyRunning(path.to_path_buf())
-                } else {
-                    DaemonError::PidFileError(e)
-                }
-            })?;
+        let created = OpenOptions::new().write(true).create_new(true).open(path);
 
-        // Advisory lock (flock) as additional safeguard
+        let mut file = match created {
+            Ok(f) => f,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                // Stale-or-live? Open the existing file and let the flock
+                // decide (it is released automatically when its owner dies).
+                // Review [10]: /tmp is world-writable — open with O_NOFOLLOW
+                // (no symlink traversal to attacker-chosen targets), verify
+                // the inode is a regular file we own, and reset mode 0600.
+                // Review [25]: after acquiring the lock, re-stat the PATH and
+                // compare (dev, ino) with the locked fd — a concurrently
+                // dropping daemon unlinks before its flock releases, and
+                // adopting that doomed inode would leave us with no on-disk
+                // PID file (letting a third daemon start).
+                #[cfg(unix)]
+                let f = {
+                    use std::os::unix::fs::MetadataExt;
+                    let f = OpenOptions::new()
+                        .write(true)
+                        .custom_flags(libc_o_nofollow())
+                        .open(path)
+                        .map_err(DaemonError::PidFileError)?;
+                    let meta = f.metadata().map_err(DaemonError::PidFileError)?;
+                    if !meta.is_file() || meta.uid() != unsafe { geteuid() } {
+                        return Err(DaemonError::SocketError(format!(
+                            "refusing PID-file takeover: {} is not a regular file owned by this user",
+                            path.display()
+                        )));
+                    }
+                    f.try_lock_exclusive()
+                        .map_err(|_| DaemonError::AlreadyRunning(path.to_path_buf()))?;
+                    // Post-lock identity check: the path must still refer to
+                    // the inode we locked (nlink > 0 and same dev/ino).
+                    let on_disk = std::fs::symlink_metadata(path);
+                    let same = on_disk
+                        .map(|d| d.dev() == meta.dev() && d.ino() == meta.ino())
+                        .unwrap_or(false);
+                    if !same || f.metadata().map(|m| m.nlink()).unwrap_or(0) == 0 {
+                        return Err(DaemonError::AlreadyRunning(path.to_path_buf()));
+                    }
+                    let mut perms = meta.permissions();
+                    perms.set_mode(0o600);
+                    let _ = f.set_permissions(perms);
+                    f
+                };
+                #[cfg(not(unix))]
+                let f = {
+                    let f = OpenOptions::new()
+                        .write(true)
+                        .open(path)
+                        .map_err(DaemonError::PidFileError)?;
+                    f.try_lock_exclusive()
+                        .map_err(|_| DaemonError::AlreadyRunning(path.to_path_buf()))?;
+                    f
+                };
+                f.set_len(0).map_err(DaemonError::PidFileError)?;
+                info!(path = %path.display(), "Took over stale PID file (previous daemon did not shut down cleanly)");
+                f
+            }
+            Err(e) => return Err(DaemonError::PidFileError(e)),
+        };
+
+        // Advisory lock (flock) as the real single-daemon safeguard.
         file.try_lock_exclusive()
             .map_err(|_| DaemonError::AlreadyRunning(path.to_path_buf()))?;
 
@@ -176,6 +282,11 @@ pub struct SocketServer {
     config: ServerConfig,
     state: Arc<DaemonState>,
     shutdown_tx: broadcast::Sender<()>,
+    /// Review [08]: level-triggered shutdown flag. The broadcast alone is
+    /// edge-triggered — a signal landing before run() first subscribes would
+    /// send to zero receivers and be lost forever (daemon then only exits on
+    /// idle timeout / SIGKILL). run() checks this flag after subscribing.
+    shutdown_requested: std::sync::atomic::AtomicBool,
 }
 
 impl SocketServer {
@@ -188,6 +299,7 @@ impl SocketServer {
             config,
             state,
             shutdown_tx,
+            shutdown_requested: std::sync::atomic::AtomicBool::new(false),
         })
     }
 
@@ -204,6 +316,17 @@ impl SocketServer {
         // Bind Unix socket with restricted permissions
         let listener = UnixListener::bind(&self.config.socket_path)
             .map_err(|e| DaemonError::SocketError(format!("Failed to bind socket: {}", e)))?;
+
+        // R21 / R-SOCK-1: RAII socket-file cleanup, symmetric with
+        // PidFileGuard. The old straight-line unlink after the accept loop
+        // never ran when run_with_signal_handling's select! dropped this
+        // future on SIGTERM/SIGINT — stale .sock files accumulated. A guard
+        // covers normal return, idle break, shutdown break, AND
+        // cancellation-drop. (SIGKILL remains uncoverable; the stale-socket
+        // pre-bind removal above stays as the mitigation.)
+        let _socket_guard = SocketFileGuard {
+            path: self.config.socket_path.clone(),
+        };
 
         // Set socket permissions to 0600 (owner only)
         #[cfg(unix)]
@@ -222,7 +345,22 @@ impl SocketServer {
 
         // Accept loop with idle timeout
         let mut shutdown_rx = self.shutdown_tx.subscribe();
-        let mut idle_check = interval(Duration::from_secs(60)); // Check every minute
+        // Review [08]: a shutdown requested before this subscription existed
+        // was broadcast to nobody — honor the level-triggered flag now.
+        if self
+            .shutdown_requested
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            info!("Shutdown was requested before the accept loop started");
+            return Ok(());
+        }
+        // R20 / R-IDLE-1 (OD-15): the idle check ticks proportionally to the
+        // timeout (was a fixed 60s tick that quantized --idle-timeout 5 into
+        // ~69s: idle_since set up to 60s late, then checked at 60s grain).
+        // Worst-case overshoot is ~2 ticks <= timeout/2 for sub-60s timeouts.
+        let tick = (self.config.idle_timeout / 4)
+            .clamp(Duration::from_secs(1), Duration::from_secs(60));
+        let mut idle_check = interval(tick);
         let mut idle_since: Option<Instant> = Some(Instant::now());
 
         loop {
@@ -230,8 +368,14 @@ impl SocketServer {
                 Ok((stream, _addr)) = listener.accept() => {
                     idle_since = None; // Reset idle timer when client connects
                     let state = self.state.clone();
+                    // Review [09]: give every client handler a shutdown
+                    // receiver so graceful_shutdown's session drain can
+                    // actually complete — previously nothing ever told
+                    // connected clients to close and every signal shutdown
+                    // with a persistent client sat out the full 30s cap.
+                    let client_shutdown = self.shutdown_tx.subscribe();
                     tokio::spawn(async move {
-                        if let Err(e) = handle_client(stream, state).await {
+                        if let Err(e) = handle_client(stream, state, client_shutdown).await {
                             error!(error = %e, "Client handler error");
                         }
                     });
@@ -272,11 +416,7 @@ impl SocketServer {
         // Graceful shutdown
         self.graceful_shutdown().await?;
 
-        // Cleanup socket file
-        if let Err(e) = std::fs::remove_file(&self.config.socket_path) {
-            warn!(error = %e, "Failed to remove socket file");
-        }
-
+        // Socket file cleanup is handled by _socket_guard (R21 / R-SOCK-1).
         Ok(())
     }
 
@@ -313,6 +453,10 @@ impl SocketServer {
 
     /// Trigger shutdown (for testing or external signals)
     pub fn shutdown(&self) {
+        // Review [08]: set the level-triggered flag BEFORE the broadcast so a
+        // not-yet-subscribed run() still observes the request.
+        self.shutdown_requested
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         let _ = self.shutdown_tx.send(());
     }
 }
@@ -329,22 +473,24 @@ pub async fn run_with_signal_handling(server: SocketServer) -> Result<(), Daemon
 
     let server = Arc::new(server);
 
-    // Run the server directly without spawning
-    // The shutdown signal will be sent via the broadcast channel
+    // R21 / R-SOCK-2 (OD-17): pin the run future so a signal does NOT drop it
+    // mid-flight — after broadcasting shutdown we AWAIT the loop, which
+    // processes the broadcast, drains sessions (graceful_shutdown), and drops
+    // its RAII guards. The old select! arms returned immediately, cancelling
+    // run() and skipping both drain and (pre-guard) socket cleanup.
+    let mut run_fut = Box::pin(server.run());
     let result = tokio::select! {
         _ = sigterm.recv() => {
             info!("SIGTERM received, initiating graceful shutdown");
             server.shutdown();
-            // Server will exit its run loop and clean up
-            Ok(())
+            (&mut run_fut).await
         }
         _ = sigint.recv() => {
             info!("SIGINT received, initiating graceful shutdown");
             server.shutdown();
-            // Server will exit its run loop and clean up
-            Ok(())
+            (&mut run_fut).await
         }
-        result = server.run() => {
+        result = &mut run_fut => {
             result
         }
     };
@@ -359,16 +505,15 @@ pub async fn run_with_signal_handling(server: SocketServer) -> Result<(), Daemon
 
     let server = Arc::new(server);
 
-    // Run the server directly without spawning
-    // The shutdown signal will be sent via the broadcast channel
+    // R21 / R-SOCK-2: same pin-and-resume as the unix variant.
+    let mut run_fut = Box::pin(server.run());
     let result = tokio::select! {
         _ = signal::ctrl_c() => {
             info!("Ctrl+C received, initiating graceful shutdown");
             server.shutdown();
-            // Server will exit its run loop and clean up
-            Ok(())
+            (&mut run_fut).await
         }
-        result = server.run() => {
+        result = &mut run_fut => {
             result
         }
     };
@@ -377,7 +522,11 @@ pub async fn run_with_signal_handling(server: SocketServer) -> Result<(), Daemon
 }
 
 /// Handle a single client connection
-async fn handle_client(stream: UnixStream, state: Arc<DaemonState>) -> Result<()> {
+async fn handle_client(
+    stream: UnixStream,
+    state: Arc<DaemonState>,
+    mut shutdown: broadcast::Receiver<()>,
+) -> Result<()> {
     let mut framed = Framed::new(stream, JsonRpcCodec::new());
 
     // Create response channel for this session
@@ -402,7 +551,14 @@ async fn handle_client(stream: UnixStream, state: Arc<DaemonState>) -> Result<()
                         let state_clone = state.clone();
                         let sid = session_id;
                         tokio::spawn(async move {
+                            // R19 / R-RPC-4: an ABSENT id is a notification —
+                            // handle it but never write a reply (same rule as
+                            // the stdio daemon's run loop).
+                            let is_notification = req.id.is_none();
                             let response = handle_request(req, &state_clone).await;
+                            if is_notification {
+                                return;
+                            }
                             if let Err(e) = state_clone.sessions.send_to_session(&sid, response) {
                                 warn!(error = %e, "Failed to send response");
                             }
@@ -436,6 +592,13 @@ async fn handle_client(stream: UnixStream, state: Arc<DaemonState>) -> Result<()
                     }
                 }
             }
+            // Review [09]: server shutdown closes the connection so the
+            // graceful drain can complete (previously a persistent idle
+            // client pinned active_count > 0 for the whole 30s cap).
+            _ = shutdown.recv() => {
+                debug!(session_id = %session_id, "Server shutting down; closing client connection");
+                break;
+            }
         }
     }
 
@@ -456,6 +619,20 @@ impl Drop for SessionGuard {
 
 /// Handle a JSON-RPC request (stub implementation)
 async fn handle_request(req: JsonRpcRequest, _state: &DaemonState) -> JsonRpcMessage {
+    // Review [27] / R-RPC-2: validate the version exactly like the stdio
+    // daemon — both transports share one wire contract.
+    if req.jsonrpc.as_deref() != Some("2.0") {
+        return JsonRpcMessage::Response(JsonRpcResponse {
+            jsonrpc: "2.0".into(),
+            result: None,
+            error: Some(crate::daemon::types::JsonRpcError {
+                code: -32600,
+                message: "Invalid Request".into(),
+                data: Some(serde_json::json!("jsonrpc must be \"2.0\"")),
+            }),
+            id: req.id.clone().flatten().unwrap_or(serde_json::Value::Null),
+        });
+    }
     // TODO: Dispatch to actual method handlers (MULTICN-2005)
     // For now, simple echo response
     JsonRpcMessage::Response(JsonRpcResponse {
@@ -465,7 +642,10 @@ async fn handle_request(req: JsonRpcRequest, _state: &DaemonState) -> JsonRpcMes
             "received": true
         })),
         error: None,
-        id: req.id.unwrap_or(serde_json::Value::Null),
+        // R-RPC-1/4 id semantics: Some(Some(v)) = id v; Some(None) = explicit
+        // null id (still answered); None = notification (reply suppressed at
+        // the dispatch site above).
+        id: req.id.flatten().unwrap_or(serde_json::Value::Null),
     })
 }
 
@@ -523,22 +703,20 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires embedding provider (Ollama)
-    async fn test_multiple_clients_concurrent() {
+        async fn test_multiple_clients_concurrent() {
         use tokio::net::UnixStream;
 
         let temp_dir = TempDir::new().unwrap();
         let socket_path = temp_dir.path().join("test.sock");
         let pid_path = temp_dir.path().join("test.pid");
-        let db_path = temp_dir.path().join("test.db");
 
         // Create minimal config
         let config = ServerConfig {
             socket_path: socket_path.clone(),
             pid_path,
-            database_path: format!("sqlite://{}", db_path.display()),
-            sqlite_config: SqliteConfig::default(),
             idle_timeout: Duration::from_secs(300),
+            // Review M11: pin a per-test DB — never ambient connect().
+            database_url: Some(format!("sqlite://{}/test.db", temp_dir.path().display())),
         };
 
         let server = SocketServer::new(config).await.unwrap();
@@ -565,10 +743,10 @@ mod tests {
 
                 // Send request
                 let request = JsonRpcMessage::Request(JsonRpcRequest {
-                    jsonrpc: "2.0".into(),
+                    jsonrpc: Some("2.0".into()),
                     method: format!("test_{}", i),
                     params: None,
-                    id: Some(serde_json::json!(i)),
+                    id: Some(Some(serde_json::json!(i))),
                 });
 
                 use futures::SinkExt;
@@ -617,21 +795,19 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires embedding provider (Ollama)
-    async fn test_session_cleanup_on_disconnect() {
+        async fn test_session_cleanup_on_disconnect() {
         use tokio::net::UnixStream;
 
         let temp_dir = TempDir::new().unwrap();
         let socket_path = temp_dir.path().join("test.sock");
         let pid_path = temp_dir.path().join("test.pid");
-        let db_path = temp_dir.path().join("test.db");
 
         let config = ServerConfig {
             socket_path: socket_path.clone(),
             pid_path,
-            database_path: format!("sqlite://{}", db_path.display()),
-            sqlite_config: SqliteConfig::default(),
             idle_timeout: Duration::from_secs(300),
+            // Review M11: pin a per-test DB — never ambient connect().
+            database_url: Some(format!("sqlite://{}/test.db", temp_dir.path().display())),
         };
 
         let server = Arc::new(SocketServer::new(config).await.unwrap());
@@ -659,71 +835,60 @@ mod tests {
         assert_eq!(server.state.sessions.active_count(), 0);
     }
 
+    /// R20 / R-IDLE-2 (binding, UN-IGNORED — the old ignore reason, "Requires
+    /// embedding provider", died with R-LAZY-5's lazy init): the server must
+    /// idle-exit within 2*tick + timeout. With a 2s timeout the tick clamps
+    /// to 1s, so the bound is ~4s — the pre-R20 fixed 60s tick fails this
+    /// by an order of magnitude.
     #[tokio::test]
-    #[ignore] // Requires embedding provider (Ollama)
     async fn test_idle_timeout_triggers() {
         let temp_dir = TempDir::new().unwrap();
         let socket_path = temp_dir.path().join("test.sock");
         let pid_path = temp_dir.path().join("test.pid");
-        let db_path = temp_dir.path().join("test.db");
 
+        let idle_timeout = Duration::from_secs(2);
         let config = ServerConfig {
             socket_path,
             pid_path,
-            database_path: format!("sqlite://{}", db_path.display()),
-            sqlite_config: SqliteConfig::default(),
-            idle_timeout: Duration::from_millis(100), // Very short timeout for test
+            idle_timeout,
+            // Review M11: pin a per-test DB — never ambient connect().
+            database_url: Some(format!("sqlite://{}/test.db", temp_dir.path().display())),
         };
 
         let server = SocketServer::new(config).await.unwrap();
+        let tick = (idle_timeout / 4).clamp(Duration::from_secs(1), Duration::from_secs(60));
+        let bound = 2 * tick + idle_timeout + Duration::from_secs(1); // +1s scheduling slack
 
-        // Start server in background
         let start_time = std::time::Instant::now();
         let handle = tokio::spawn(async move { server.run().await });
 
-        // Wait for idle check interval (60s) plus a bit more for processing
-        // Note: The server checks every 60 seconds, so we need to wait at least that long
-        // Since this is impractical for tests, we verify the server is still running
-        // and then manually trigger shutdown for cleanup
-
-        // Give server time to start and begin idle timeout
-        tokio::time::sleep(Duration::from_millis(200)).await;
-
-        // Server should still be running (idle check happens every 60s)
-        assert!(
-            !handle.is_finished(),
-            "Server should still be running (idle checks are every 60s)"
-        );
-
-        // For this test, we just verify the server starts correctly with a short idle timeout
-        // Full idle timeout behavior is tested in integration tests with shorter check intervals
-        // Clean up by aborting the task
-        handle.abort();
-
+        let result = tokio::time::timeout(bound, handle).await;
         let elapsed = start_time.elapsed();
-        assert!(
-            elapsed < Duration::from_secs(1),
-            "Test should complete quickly, got {:?}",
-            elapsed
-        );
+        match result {
+            Ok(join) => {
+                join.expect("server task join").expect("server run result");
+            }
+            Err(_) => panic!(
+                "server did not idle-exit within {bound:?} (elapsed {elapsed:?}) — \
+                 the R20 proportional tick is not in effect"
+            ),
+        }
     }
 
     #[tokio::test]
-    #[ignore] // Requires embedding provider (Ollama)
-    async fn test_active_client_prevents_idle_timeout() {
+        async fn test_active_client_prevents_idle_timeout() {
         use tokio::net::UnixStream;
 
         let temp_dir = TempDir::new().unwrap();
         let socket_path = temp_dir.path().join("test.sock");
         let pid_path = temp_dir.path().join("test.pid");
-        let db_path = temp_dir.path().join("test.db");
 
         let config = ServerConfig {
             socket_path: socket_path.clone(),
             pid_path,
-            database_path: format!("sqlite://{}", db_path.display()),
-            sqlite_config: SqliteConfig::default(),
             idle_timeout: Duration::from_secs(2), // Short timeout for test
+            // Review M11: pin a per-test DB — never ambient connect().
+            database_url: Some(format!("sqlite://{}/test.db", temp_dir.path().display())),
         };
 
         let server = Arc::new(SocketServer::new(config).await.unwrap());
@@ -757,21 +922,19 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires embedding provider (Ollama)
-    async fn test_graceful_shutdown_waits_for_sessions() {
+        async fn test_graceful_shutdown_waits_for_sessions() {
         use tokio::net::UnixStream;
 
         let temp_dir = TempDir::new().unwrap();
         let socket_path = temp_dir.path().join("test.sock");
         let pid_path = temp_dir.path().join("test.pid");
-        let db_path = temp_dir.path().join("test.db");
 
         let config = ServerConfig {
             socket_path: socket_path.clone(),
             pid_path,
-            database_path: format!("sqlite://{}", db_path.display()),
-            sqlite_config: SqliteConfig::default(),
             idle_timeout: Duration::from_secs(300),
+            // Review M11: pin a per-test DB — never ambient connect().
+            database_url: Some(format!("sqlite://{}/test.db", temp_dir.path().display())),
         };
 
         let server = Arc::new(SocketServer::new(config).await.unwrap());

@@ -11,7 +11,7 @@
 //! use maproom::db::{self, UpdateStats};
 //!
 //! # async fn example() -> anyhow::Result<()> {
-//! let store = db::connect().await?;
+//! let store = db::connect_sqlite().await?;
 //! let worktree_id = 1;
 //!
 //! // Check if worktree has been indexed
@@ -69,7 +69,7 @@ pub struct UpdateStats {
 /// ```no_run
 /// # use maproom::db;
 /// # async fn example() -> anyhow::Result<()> {
-/// # let store = db::connect().await?;
+/// # let store = db::connect_sqlite().await?;
 /// let tree_sha = db::get_last_indexed_tree(&store, 1).await?;
 /// match tree_sha.as_str() {
 ///     "init" => println!("Never indexed, full scan required"),
@@ -121,7 +121,7 @@ pub async fn get_last_indexed_tree(store: &SqliteStore, worktree_id: i64) -> Res
 /// ```no_run
 /// # use maproom::db::{self, UpdateStats};
 /// # async fn example() -> anyhow::Result<()> {
-/// # let store = db::connect().await?;
+/// # let store = db::connect_sqlite().await?;
 /// let stats = UpdateStats {
 ///     files_processed: 150,
 ///     chunks_processed: 750,

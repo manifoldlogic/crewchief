@@ -88,10 +88,12 @@ export OPENAI_API_KEY=sk-...
 cargo test -- --ignored
 ```
 
-### Database Integration Tests
+### Database Integration Tests (Postgres/pgvector)
 ```bash
-export MAPROOM_DATABASE_URL=postgresql://localhost:5432/maproom_test
-cargo test --test vector_db_test -- --ignored
+export MAPROOM_TEST_PG_URL=postgres://maproom:maproom@localhost:5432/maproom_test
+cargo test -p maproom --features postgres --lib db::postgres -- --ignored --test-threads=1
+cargo test -p maproom --features postgres --test store_parity -- --ignored --test-threads=1
+cargo test -p maproom --features postgres --test pg_real_dedup -- --ignored --test-threads=1
 ```
 
 ### Performance Tests with Output
@@ -109,24 +111,25 @@ cargo test --test integration
 ### Environment Variables
 
 - `OPENAI_API_KEY` (optional): Required for real API tests (marked with `#[ignore]`)
-- `MAPROOM_DATABASE_URL` (optional): Required for database tests (marked with `#[ignore]`)
+- `MAPROOM_TEST_PG_URL` (optional): Required for the `#[ignore]`'d Postgres suites (skipped when unset)
 - `RUST_LOG` (optional): Set to `debug` for verbose logging
 
 ### Database Setup
 
-For database tests, ensure PostgreSQL with pgvector is running:
+For the Postgres suites, ensure PostgreSQL with pgvector is running:
 
 ```bash
 # Using Docker
 docker run -d \
   --name maproom-test-db \
-  -e POSTGRES_PASSWORD=test \
+  -e POSTGRES_USER=maproom \
+  -e POSTGRES_PASSWORD=maproom \
   -e POSTGRES_DB=maproom_test \
   -p 5432:5432 \
   pgvector/pgvector:pg16
 
-# Set MAPROOM_DATABASE_URL
-export MAPROOM_DATABASE_URL=postgresql://postgres:test@localhost:5432/maproom_test
+# Set MAPROOM_TEST_PG_URL
+export MAPROOM_TEST_PG_URL=postgres://maproom:maproom@localhost:5432/maproom_test
 ```
 
 ### Running Migrations
@@ -182,46 +185,28 @@ Tests are designed to work in CI environments:
 3. **Mock clients** used for most deterministic testing
 4. **Timeout handling** for long-running tests
 
-### GitHub Actions Example
+### GitHub Actions
 
-```yaml
-name: Test
+The Postgres/pgvector CI job already exists — see the `test-postgres` job in
+`.github/workflows/test.yml`. It runs a `pgvector/pgvector:pg16` service
+container (with a `pg_isready` health check), exports
+`MAPROOM_TEST_PG_URL=postgres://maproom:maproom@localhost:5432/maproom_test`,
+and invokes the canonical per-suite commands:
 
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: maproom_test
-        ports:
-          - 5432:5432
-
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-
-      - name: Run unit tests
-        run: cargo test
-
-      - name: Run integration tests
-        env:
-          MAPROOM_DATABASE_URL: postgresql://postgres:test@localhost:5432/maproom_test
-        run: cargo test -- --ignored --test-threads=1
+```bash
+cargo test -p maproom --features postgres --lib db::postgres -- --ignored --test-threads=1
+cargo test -p maproom --features postgres --test store_parity -- --ignored --test-threads=1
+cargo test -p maproom --features postgres --test pg_real_dedup -- --ignored --test-threads=1
 ```
+
+Do not duplicate the service definition here or in `test_config.yml`; the
+workflow file is the single source of truth.
 
 ## Troubleshooting
 
 ### Tests Fail with "connection refused"
 - Ensure PostgreSQL is running
-- Check MAPROOM_DATABASE_URL is correct
+- Check MAPROOM_TEST_PG_URL is correct
 - Verify pgvector extension is installed
 
 ### Tests Fail with "API key not found"

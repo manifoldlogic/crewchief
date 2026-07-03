@@ -513,3 +513,127 @@ fn test_budget_ceiling_enforcement() {
         "Cost tracking works during batch operations"
     );
 }
+
+// ============================================================================
+// R15 (fix spec §5.6): honest generate-embeddings stats
+// ============================================================================
+
+mod r15_honest_stats {
+    use maproom::embedding::cache::EmbeddingCache;
+    use maproom::embedding::ollama::OllamaProvider;
+    use maproom::embedding::provider::EmbeddingProvider;
+    use maproom::embedding::{CacheConfig, EmbeddingService};
+    use std::sync::Arc;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    async fn mock_ollama(expected_posts: u64) -> (MockServer, OllamaProvider) {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/embed"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "embeddings": (0..expected_posts.max(1)).map(|_| vec![0.1f32; 768]).collect::<Vec<_>>()
+            })))
+            .mount(&server)
+            .await;
+        let provider = OllamaProvider::new(
+            format!("{}/api/embed", server.uri()),
+            "nomic-embed-text".to_string(),
+            768,
+        )
+        .unwrap();
+        (server, provider)
+    }
+
+    fn service(provider: OllamaProvider) -> EmbeddingService {
+        let cache = Arc::new(
+            EmbeddingCache::new(CacheConfig {
+                max_entries: 100,
+                ttl_seconds: 3600,
+                enable_metrics: true,
+            })
+            .expect("cache"),
+        );
+        EmbeddingService::new(Box::new(provider), cache)
+    }
+
+    /// THE mechanical "provably performed network calls" check: the provider's
+    /// request counter equals the mock server's observed POST count.
+    #[tokio::test]
+    async fn ollama_metrics_count_http_requests() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/embed"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "embeddings": [vec![0.1f32; 768], vec![0.1f32; 768], vec![0.1f32; 768]]
+            })))
+            .expect(1..)
+            .mount(&server)
+            .await;
+        let provider = OllamaProvider::new(
+            format!("{}/api/embed", server.uri()),
+            "nomic-embed-text".to_string(),
+            768,
+        )
+        .unwrap();
+
+        let _ = provider
+            .embed_batch(vec!["a".into(), "b".into(), "c".into()])
+            .await
+            .expect("mock embed");
+
+        let posts = server.received_requests().await.unwrap().len() as u64;
+        let metric = provider.metrics().unwrap().total_requests;
+        assert!(posts >= 1, "mock must have been hit");
+        assert_eq!(
+            metric, posts,
+            "metrics().total_requests must equal actual HTTP POSTs (was hardcoded-absent before R15)"
+        );
+    }
+
+    /// Fresh cache, N texts: from_api == N (uncached TEXT count), cached == 0 —
+    /// the old request-delta arithmetic booked all N as cache hits.
+    #[tokio::test]
+    async fn batch_stats_book_api_calls_not_cache_hits() {
+        let (server, provider) = mock_ollama(3).await;
+        let svc = service(provider);
+
+        let (_vecs, stats) = svc
+            .embed_batch_with_stats(vec!["x".into(), "y".into(), "z".into()])
+            .await
+            .expect("batch with stats");
+
+        assert_eq!(stats.total, 3);
+        assert_eq!(stats.from_api, 3, "cold cache: every text came from the API");
+        assert_eq!(stats.cached, 0, "cold cache: nothing was a cache hit");
+        // Requests are a separate unit: the whole batch went in one POST.
+        let posts = server.received_requests().await.unwrap().len();
+        assert_eq!(posts, 1, "one POST carries the whole batch");
+    }
+
+    /// Cold-cache batch must record misses so hit_rate() reflects reality.
+    #[tokio::test]
+    async fn cache_misses_recorded_in_batch_path() {
+        let (_server, provider) = mock_ollama(2).await;
+        let cache = Arc::new(
+            EmbeddingCache::new(CacheConfig {
+                max_entries: 100,
+                ttl_seconds: 3600,
+                enable_metrics: true,
+            })
+            .expect("cache"),
+        );
+        let svc = EmbeddingService::new(Box::new(provider), cache.clone());
+
+        let _ = svc
+            .embed_batch(vec!["p".into(), "q".into()])
+            .await
+            .expect("batch");
+
+        let m = cache.metrics().await;
+        assert!(
+            m.misses >= 2,
+            "batch path must record per-text misses (was 0 -> fictional 100% hit rate); got {m:?}"
+        );
+    }
+}

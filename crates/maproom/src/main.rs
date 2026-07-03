@@ -21,11 +21,16 @@ macro_rules! handle_agent_error {
     ($result:expr, $format:expr) => {
         match $result {
             Ok(value) => value,
-            Err(e) if $format == OutputFormat::Agent => {
+            // R13 / R-EXIT-1 (CC-4 classify-before-render): EVERY error is
+            // classified; the format controls only presentation.
+            // handle_agent_error prints the structured stdout line only for
+            // Agent format and always exits with the classified code — the
+            // old fallback arm propagated the error to anyhow (exit 1) for
+            // non-agent formats, making the exit code depend on --format.
+            Err(e) => {
                 let (error_type, suggestion, exit_code) = classify_error(&e);
                 handle_agent_error(&e, &$format, &error_type, &suggestion, exit_code);
             }
-            Err(e) => return Err(e),
         }
     };
 }
@@ -159,10 +164,14 @@ async fn handle_branch_switch(
     use maproom::incremental::incremental_update;
     use maproom::indexer::BranchSwitchEvent;
 
-    // 0. Check debounce (skip if rapid switch)
+    // 0. Debounce COALESCES rapid switches instead of dropping them (review
+    // [05]: the old early-return silently lost the LAST switch in an
+    // A->B->C sequence, leaving current_branch/worktree_id stale while the
+    // now-live event path kept writing into the wrong worktree). Waiting out
+    // the window and re-reading HEAD below yields the final state.
     if !debouncer.should_handle() {
-        tracing::debug!("Debouncing rapid branch switch");
-        return Ok(());
+        tracing::debug!("Debouncing rapid branch switch (coalescing after window)");
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     }
 
     // 1. Detect new branch
@@ -220,8 +229,11 @@ async fn handle_branch_switch(
         *worktree_id.write().unwrap() = new_wt_id;
     }
 
-    // 6. Re-index (log errors, don't crash)
-    if let Err(e) = incremental_update(store, new_wt_id, watch_path).await {
+    // 6. Re-index (log errors, don't crash). R-WATCH-4: incremental_update now
+    // performs real upserts of the commit diff, so it needs repo + worktree
+    // names; the HEAD^{tree} gate stays (right granularity for branch switches).
+    if let Err(e) = incremental_update(store, new_wt_id, repo, &effective_branch, watch_path).await
+    {
         tracing::warn!("Incremental update after branch switch failed: {}", e);
     }
 
@@ -650,6 +662,12 @@ enum Commands {
         #[arg(long)]
         socket_path: Option<PathBuf>,
 
+        /// PID file path (default: /tmp/maproom-{uid}.pid). Mainly for test
+        /// harnesses that need isolated daemons; the default is the
+        /// single-daemon-per-user guard.
+        #[arg(long)]
+        pid_path: Option<PathBuf>,
+
         /// Idle timeout in seconds (default: 300 = 5 minutes)
         #[arg(long, default_value_t = 300)]
         idle_timeout: u64,
@@ -1035,35 +1053,77 @@ fn get_git_info(path: &Path) -> anyhow::Result<(String, String, String)> {
     Ok((repo_name, branch_name, commit_hash))
 }
 
+/// R13 / R-EXIT-5 (CC-4): every `?`-propagated command error is classified
+/// before process exit — anyhow's default handler (unconditional exit 1) is
+/// no longer the terminal path for ANY command error. A `Configuration
+/// error:`-prefixed bail (e.g. migrate delete-backup name validation) exits 2
+/// in every output format.
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() {
+    if let Err(e) = real_main().await {
+        let (_error_type, _suggestion, exit_code) = classify_error(&e);
+        eprintln!("Error: {:?}", e);
+        std::process::exit(exit_code);
+    }
+}
+
+async fn real_main() -> anyhow::Result<()> {
     dotenv().ok();
-    fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .with_target(false)
-        .compact()
-        .init();
+    // R17 / R-LOG-1/2: tracing goes to STDERR (tracing-subscriber defaults to
+    // stdout, which interleaved ANSI log lines with the stdio daemon's
+    // newline-delimited JSON-RPC responses and corrupted the protocol), with
+    // ANSI gated on stderr actually being a terminal.
+    {
+        use std::io::IsTerminal;
+        fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .with_target(false)
+            .with_writer(std::io::stderr)
+            .with_ansi(std::io::stderr().is_terminal())
+            .compact()
+            .init();
+    }
 
     let cli = Cli::parse();
 
     // R-WIRE-5: an explicit --database-url overrides MAPROOM_DATABASE_URL for this
     // process, so db::connect()'s resolution observes flag > env > default.
     if let Some(url) = cli.database_url.as_deref() {
+        // R12 / R-URL-2: belt-and-braces — reject an empty flag value here
+        // with a message that names the flag (R-URL-1 in get_database_url
+        // covers the env var and anything that slips past).
+        if url.trim().is_empty() {
+            eprintln!("Configuration error: --database-url must not be empty");
+            std::process::exit(EXIT_CONFIG_ERROR);
+        }
         std::env::set_var("MAPROOM_DATABASE_URL", url);
     }
 
     // Classify a database-backend misconfiguration as a config error (exit 2),
     // not a runtime error: a postgres:// URL in a build without --features postgres
     // can never connect, so fail fast and clearly before dispatching any command.
-    if let Ok(url) = db::get_database_url() {
-        if matches!(
-            db::connection::backend_for_url(&url),
-            db::connection::Backend::Postgres
-        ) && !cfg!(feature = "postgres")
-        {
-            eprintln!(
-                "Configuration error: database URL uses the postgres scheme but maproom was built without --features postgres"
-            );
+    // NOTE (F70): the socket daemon's backend safety no longer depends on this
+    // guard — DaemonState routes through db::connect(), whose bail arm rejects a
+    // postgres:// URL in non-postgres builds. This remains a harmless whole-binary
+    // fast-fail (and protects non-serve commands); do not remove it.
+    // R12 / R-URL-3: the guard must NOT swallow resolution errors (an empty
+    // env URL bails in get_database_url and must surface as exit 2 here, not
+    // later inside some per-command connect()).
+    match db::get_database_url() {
+        Ok(url) => {
+            if matches!(
+                db::connection::backend_for_url(&url),
+                db::connection::Backend::Postgres
+            ) && !cfg!(feature = "postgres")
+            {
+                eprintln!(
+                    "Configuration error: database URL uses the postgres scheme but maproom was built without --features postgres"
+                );
+                std::process::exit(EXIT_CONFIG_ERROR);
+            }
+        }
+        Err(e) => {
+            eprintln!("{e}");
             std::process::exit(EXIT_CONFIG_ERROR);
         }
     }
@@ -1071,13 +1131,31 @@ async fn main() -> anyhow::Result<()> {
     match cli.command {
         Commands::Db { command } => match command {
             DbCommand::Migrate => {
-                // connect() auto-runs migrations, so this command just ensures
-                // the database exists and is fully migrated.
-                let _store = db::connect().await?;
+                // connect() auto-runs migrations, so this command ensures the
+                // database exists and is fully migrated — then verifies
+                // STRUCTURAL integrity (R03 / R-VER-4): version bookkeeping
+                // alone cannot see a required table dropped out from under an
+                // intact schema_migrations.
+                let store = db::connect().await?;
                 let backend = match db::connection::backend_for_url(&db::get_database_url()?) {
                     db::connection::Backend::Postgres => "PostgreSQL",
                     db::connection::Backend::Sqlite => "SQLite",
                 };
+                let missing = store.verify_schema().await?;
+                if !missing.is_empty() {
+                    let hint = match backend {
+                        "SQLite" => "delete the database file and re-run 'maproom scan'",
+                        _ => "restore from backup or recreate the database and re-run 'maproom scan'",
+                    };
+                    // Review [14]: ONE stderr report (via the top-level
+                    // R-EXIT-5 handler), hint included — the old eprintln +
+                    // bail pair double-reported in two shapes and the
+                    // 'Error:'-line variant lost the recovery hint.
+                    anyhow::bail!(
+                        "{backend} database is damaged; missing tables: {} ({hint})",
+                        missing.join(", ")
+                    );
+                }
                 println!("✅ {backend} database is up to date");
             }
             DbCommand::CleanupStale { confirm, verbose } => {
@@ -1588,7 +1666,7 @@ async fn main() -> anyhow::Result<()> {
             }
 
             // Handle events
-            use maproom::incremental::incremental_update;
+            use maproom::incremental::handle_file_event;
             use tokio::signal;
 
             loop {
@@ -1623,11 +1701,15 @@ async fn main() -> anyhow::Result<()> {
                             println!("📁 {} {}", event_type, event.path.display());
                         }
 
-                        // Read worktree_id from lock (copy value, drop lock, then use)
+                        // Read worktree_id/branch from locks (copy values, drop locks, then use)
                         let wt_id = *worktree_id.read().unwrap();
+                        let branch_name = current_branch.read().unwrap().clone();
 
-                        // Trigger incremental update for the worktree
-                        match incremental_update(store.as_ref(), wt_id, &watch_path).await {
+                        // R06-R08 / R-WATCH-3: live events take a scoped, verified
+                        // upsert of exactly the changed file (handle_file_event)
+                        // instead of incremental_update, whose HEAD^{tree} gate
+                        // skipped every working-tree edit.
+                        match handle_file_event(store.as_ref(), wt_id, &repo, &branch_name, &watch_path, &event).await {
                             Ok(stats) => {
                                 if stats.files_processed > 0 {
                                     if json {
@@ -2185,6 +2267,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Serve {
             socket,
             socket_path,
+            pid_path,
             idle_timeout,
         } => {
             if socket {
@@ -2197,6 +2280,13 @@ async fn main() -> anyhow::Result<()> {
 
                 if let Some(path) = socket_path {
                     config.socket_path = path;
+                }
+
+                // Review [34]/[37]: overridable PID path so test harnesses
+                // (and multi-instance setups) don't collide on the global
+                // /tmp/maproom-{uid}.pid single-daemon guard.
+                if let Some(path) = pid_path {
+                    config.pid_path = path;
                 }
 
                 config.idle_timeout = std::time::Duration::from_secs(idle_timeout);
@@ -2621,6 +2711,20 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
         "Please report this error with full details".to_string(),
         1,
     )
+}
+
+#[cfg(test)]
+mod cli_surface {
+    use clap::CommandFactory;
+
+    /// R01 / R-CLAP-2: whole-surface clap guard. Catches ANY duplicate
+    /// short/long option or other builder invariant violation across every
+    /// command and subcommand on every `cargo test --bins` run — the class of
+    /// bug that made `cache warm` panic (exit 101) on all invocations.
+    #[test]
+    fn cli_debug_assert() {
+        super::Cli::command().debug_assert();
+    }
 }
 
 #[cfg(test)]

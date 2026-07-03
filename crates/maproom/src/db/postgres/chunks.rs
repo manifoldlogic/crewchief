@@ -297,6 +297,69 @@ impl StoreChunks for PostgresStore {
         Ok(deleted)
     }
 
+    async fn unmap_superseded_file_chunks(
+        &self,
+        worktree_id: i64,
+        relpath: &str,
+        keep_file_id: Option<i64>,
+    ) -> anyhow::Result<usize> {
+        // R09 / R-GC-3: three data statements in one transaction. Unlike the
+        // SQLite impl there is no FTS statement — ts_doc is a chunks column
+        // on PG. Deliberately does NOT touch code_embeddings (same R-WT-4
+        // content-pool rule as delete_chunks_by_ids above, applied by
+        // omission). Repo-scoping subqueries are mandatory: relpath alone
+        // collides across repos.
+        let mut tx = self.pool.begin().await?;
+        // Review [06]/[24]/[32]: candidate-scoped (see the SQLite impl's
+        // rationale — the global anti-join ran once per scanned file).
+        let candidate_ids: Vec<i64> = sqlx::query_scalar(
+            "SELECT c.id FROM chunks c \
+             JOIN files f ON f.id = c.file_id \
+             WHERE f.relpath = $2 \
+               AND ($3::bigint IS NULL OR c.file_id <> $3) \
+               AND f.commit_id IN (SELECT id FROM commits WHERE repo_id = \
+                     (SELECT repo_id FROM worktrees WHERE id = $1))",
+        )
+        .bind(worktree_id)
+        .bind(relpath)
+        .bind(keep_file_id)
+        .fetch_all(&mut *tx)
+        .await?;
+        if candidate_ids.is_empty() {
+            tx.commit().await?;
+            return Ok(0);
+        }
+        let removed = sqlx::query(
+            "DELETE FROM chunk_worktrees WHERE worktree_id = $1 AND chunk_id = ANY($2)",
+        )
+        .bind(worktree_id)
+        .bind(&candidate_ids)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "DELETE FROM chunks WHERE id = ANY($1) AND NOT EXISTS \
+             (SELECT 1 FROM chunk_worktrees cw WHERE cw.chunk_id = chunks.id)",
+        )
+        .bind(&candidate_ids)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "DELETE FROM files \
+             WHERE relpath = $2 \
+               AND ($3::bigint IS NULL OR id <> $3) \
+               AND commit_id IN (SELECT id FROM commits WHERE repo_id = \
+                     (SELECT repo_id FROM worktrees WHERE id = $1)) \
+               AND NOT EXISTS (SELECT 1 FROM chunks c WHERE c.file_id = files.id)",
+        )
+        .bind(worktree_id)
+        .bind(relpath)
+        .bind(keep_file_id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(removed.rows_affected() as usize)
+    }
+
     async fn get_chunks_for_worktree(
         &self,
         worktree_id: i64,

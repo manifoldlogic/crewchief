@@ -442,6 +442,27 @@ DROP TABLE IF EXISTS encoding_runs;
     }
 }
 
+/// Return the names from `required` that are missing from `sqlite_master`
+/// (R03 / fix spec R-VER-2). Promoted from the test-only core-tables check so
+/// `db migrate` can detect structural damage (e.g. a dropped `chunks` table)
+/// that version bookkeeping alone cannot see.
+pub fn missing_tables(conn: &Connection, required: &[&str]) -> Result<Vec<String>> {
+    let mut missing = Vec::new();
+    for name in required {
+        let exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name = ?1",
+                params![name],
+                |row| row.get(0),
+            )
+            .context("Failed to query sqlite_master for schema verification")?;
+        if !exists {
+            missing.push((*name).to_string());
+        }
+    }
+    Ok(missing)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -483,15 +504,20 @@ mod tests {
         assert_eq!(runner.current_version().unwrap(), 11);
         assert!(!runner.needs_migration().unwrap());
 
-        // Verify core tables exist (excluding virtual tables and dropped tables)
-        let table_count: i32 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('repos', 'worktrees', 'commits', 'files', 'chunks', 'chunk_edges', 'schema_migrations', 'chunk_worktrees', 'code_embeddings', 'index_state', 'context_cache', 'encoding_runs')",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(table_count, 12, "Expected 12 core tables to be created");
+        // Verify core tables exist (excluding virtual tables and dropped
+        // tables) — built from the shared consts so the required-table lists
+        // used by verify_schema can never drift from this test (R03/R-VER-2).
+        let required: Vec<&str> = crate::db::traits::REQUIRED_TABLES_CORE
+            .iter()
+            .chain(crate::db::traits::SQLITE_EXTRA_TABLES.iter())
+            .copied()
+            .collect();
+        assert_eq!(required.len(), 12, "Expected 12 required SQLite tables");
+        let missing = missing_tables(&conn, &required).unwrap();
+        assert!(
+            missing.is_empty(),
+            "Expected all required tables after migration; missing: {missing:?}"
+        );
 
         // Verify vec_chunks table does NOT exist (dropped by migration 6)
         let vec_chunks_exists: bool = conn
@@ -525,6 +551,37 @@ mod tests {
             )
             .unwrap_or(false);
         assert!(embeddings_exists, "code_embeddings table should exist");
+    }
+
+    #[test]
+    fn verify_schema_clean_on_fresh_db() {
+        let mut conn = setup_test_db();
+        MigrationRunner::new(&mut conn).migrate().unwrap();
+
+        let required: Vec<&str> = crate::db::traits::REQUIRED_TABLES_CORE
+            .iter()
+            .chain(crate::db::traits::SQLITE_EXTRA_TABLES.iter())
+            .copied()
+            .collect();
+        assert_eq!(missing_tables(&conn, &required).unwrap(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn verify_schema_reports_dropped_table() {
+        let mut conn = setup_test_db();
+        MigrationRunner::new(&mut conn).migrate().unwrap();
+
+        conn.execute("DROP TABLE chunks", []).unwrap();
+
+        let required: Vec<&str> = crate::db::traits::REQUIRED_TABLES_CORE
+            .iter()
+            .chain(crate::db::traits::SQLITE_EXTRA_TABLES.iter())
+            .copied()
+            .collect();
+        assert_eq!(
+            missing_tables(&conn, &required).unwrap(),
+            vec!["chunks".to_string()]
+        );
     }
 
     #[test]

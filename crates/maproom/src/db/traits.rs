@@ -260,6 +260,26 @@ pub trait StoreChunks: Send + Sync {
         relpath: &str,
     ) -> anyhow::Result<i64>;
 
+    /// Unmap `worktree_id` from chunks belonging to superseded generations of
+    /// `relpath` (files rows with the same relpath but a different file_id),
+    /// GC chunks orphaned by the unmap, and delete superseded files rows that
+    /// no longer own any chunks. `keep_file_id = None` means "no generation
+    /// survives" (the file was deleted from this worktree).
+    /// Returns the number of chunk_worktrees rows removed.
+    ///
+    /// R09 (fix spec R-GC-1, CC-2): every rescan/upsert used to mint a new
+    /// files+chunks generation per commit and never unmap the old one, so
+    /// deleted code stayed searchable and the index grew without bound on
+    /// both backends. R-WT-4 semantics: the content-addressed
+    /// `code_embeddings` pool is NEVER touched by this method; chunks still
+    /// mapped to any other worktree survive.
+    async fn unmap_superseded_file_chunks(
+        &self,
+        worktree_id: i64,
+        relpath: &str,
+        keep_file_id: Option<i64>,
+    ) -> anyhow::Result<usize>;
+
     /// Get full chunk data by ID.
     async fn get_chunk_by_id(&self, chunk_id: i64) -> anyhow::Result<Option<ChunkFull>>;
 
@@ -776,6 +796,27 @@ pub trait StoreEmbeddings: Send + Sync {
 /// `"20240101_initial_schema.sql"`). Future `PostgresStore` implementations
 /// may need an adapter layer to convert between string-based sqlx migration
 /// names and integer-based version numbers used by this trait.
+/// Tables every backend must have for the schema to be structurally intact
+/// (R03 / fix spec R-VER-2). The backends do NOT share one full list:
+/// SQLite additionally has `context_cache` ([`SQLITE_EXTRA_TABLES`]), which is
+/// a SQLite-only feature and absent from Postgres by design.
+pub const REQUIRED_TABLES_CORE: [&str; 11] = [
+    "repos",
+    "worktrees",
+    "commits",
+    "files",
+    "chunks",
+    "chunk_edges",
+    "schema_migrations",
+    "chunk_worktrees",
+    "code_embeddings",
+    "index_state",
+    "encoding_runs",
+];
+
+/// SQLite-only required tables, on top of [`REQUIRED_TABLES_CORE`].
+pub const SQLITE_EXTRA_TABLES: [&str; 1] = ["context_cache"];
+
 #[async_trait]
 pub trait StoreMigration: Send + Sync {
     /// Run all pending database migrations.
@@ -783,6 +824,12 @@ pub trait StoreMigration: Send + Sync {
 
     /// Get the set of already-applied migration versions.
     async fn get_applied_migrations(&self) -> anyhow::Result<HashSet<i32>>;
+
+    /// Verify structural schema integrity. Returns the names of required
+    /// tables that are missing (empty = healthy). Version bookkeeping alone
+    /// is not trusted: a DB can have an intact `schema_migrations` while a
+    /// required table was dropped out from under it (R03 / R-VER-1).
+    async fn verify_schema(&self) -> anyhow::Result<Vec<String>>;
 }
 
 // =============================================================================

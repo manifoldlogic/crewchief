@@ -201,3 +201,132 @@ fn test_cleanup_stale_empty_exits_0() {
         stdout
     );
 }
+
+// ============================================================================
+// Wave C (fix spec §5.1/§5.2) + R02/R03 process-level exit contracts
+// ============================================================================
+
+/// R13 / R-EXIT-1/2: identical config error → exit 2 in BOTH formats.
+#[test]
+fn config_error_exit_is_format_independent() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let db = format!("sqlite://{}/x.db", dir.path().display());
+    let json = maproom_cmd()
+        .env("MAPROOM_EMBEDDING_PROVIDER", "invalid")
+        .env("MAPROOM_DATABASE_URL", &db)
+        .args(["vector-search", "--repo", "x", "--query", "y"])
+        .output()
+        .unwrap();
+    let agent = maproom_cmd()
+        .env("MAPROOM_EMBEDDING_PROVIDER", "invalid")
+        .env("MAPROOM_DATABASE_URL", &db)
+        .args(["vector-search", "--repo", "x", "--query", "y", "--format", "agent"])
+        .output()
+        .unwrap();
+    assert_eq!(json.status.code(), Some(2), "json format must classify config errors (was 1)");
+    assert_eq!(agent.status.code(), Some(2));
+}
+
+/// R13: missing credentials in default json format exits 2 (was 1).
+#[test]
+fn vector_search_missing_credentials_exits_2_json() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let out = maproom_cmd()
+        .env("MAPROOM_EMBEDDING_PROVIDER", "openai") // no OPENAI_API_KEY (scrubbed)
+        .env("MAPROOM_DATABASE_URL", format!("sqlite://{}/x.db", dir.path().display()))
+        .args(["vector-search", "--repo", "x", "--query", "y"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+}
+
+/// R13 + R12: serve with an empty DSN is a config error (exit 2).
+#[test]
+fn serve_db_config_error_exits_2() {
+    let out = maproom_cmd()
+        .args(["--database-url", "", "serve"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+}
+
+/// R02 (deferred exact-code assertion): bad backup name exits 2 via R-EXIT-5.
+#[test]
+fn delete_backup_bad_name_exits_2() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let db = format!("sqlite://{}/g.db", dir.path().display());
+    let mig = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &db)
+        .args(["db", "migrate"])
+        .output()
+        .unwrap();
+    assert!(mig.status.success());
+    let out = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &db)
+        .args(["migrate", "delete-backup", "--backup", "chunks"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "Configuration error: bails must exit 2 once top-level classification runs; stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// R03: structurally damaged DB → db migrate exits 1 and names the table.
+#[tokio::test]
+async fn db_migrate_damaged_db_exits_1_names_table() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let db_path = format!("{}/dmg.db", dir.path().display());
+    let db = format!("sqlite://{db_path}");
+    let mig = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &db)
+        .args(["db", "migrate"])
+        .output()
+        .unwrap();
+    assert!(mig.status.success());
+    // Drop the chunks table through the crate's own store handle.
+    let store = maproom::db::SqliteStore::connect(&db_path).await.unwrap();
+    store
+        .run(|conn| {
+            conn.execute("DROP TABLE chunks", [])?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    drop(store);
+    let out = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &db)
+        .args(["db", "migrate"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1), "structural damage is a runtime error");
+    let all = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(all.contains("chunks"), "must name the missing table; got: {all}");
+}
+
+/// R12: empty --database-url flag exits 2.
+#[test]
+fn empty_database_url_flag_exits_2() {
+    let out = maproom_cmd()
+        .args(["--database-url", "", "status"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+}
+
+/// R12: empty MAPROOM_DATABASE_URL env exits 2.
+#[test]
+fn empty_database_url_env_exits_2() {
+    let out = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", "")
+        .args(["status"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+}

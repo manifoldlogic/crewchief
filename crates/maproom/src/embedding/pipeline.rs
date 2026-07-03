@@ -358,11 +358,16 @@ impl EmbeddingPipeline {
                 batch.len()
             );
 
-            // Check cost ceiling
+            // Check cost ceiling. Review [20]: gate only on SPENT money
+            // (current_cost > 0.0) — free providers (Ollama) report
+            // estimated_cost_usd = 0.0, and now that they implement
+            // metrics(), a plain >= comparison made `--max-cost 0` (the
+            // "never spend money" guard) break before the first batch:
+            // 0.0 >= 0.0 while nothing had been spent.
             if let Some(max_cost) = self.config.max_cost_usd {
                 if let Some(metrics) = self.service.provider_metrics() {
                     let current_cost = metrics.estimated_cost_usd;
-                    if current_cost >= max_cost {
+                    if current_cost > 0.0 && current_cost >= max_cost {
                         warn!(
                             "Cost ceiling reached: ${:.4} >= ${:.4}",
                             current_cost, max_cost
@@ -676,11 +681,16 @@ impl EmbeddingPipeline {
                 batch.len()
             );
 
-            // Check cost ceiling
+            // Check cost ceiling. Review [20]: gate only on SPENT money
+            // (current_cost > 0.0) — free providers (Ollama) report
+            // estimated_cost_usd = 0.0, and now that they implement
+            // metrics(), a plain >= comparison made `--max-cost 0` (the
+            // "never spend money" guard) break before the first batch:
+            // 0.0 >= 0.0 while nothing had been spent.
             if let Some(max_cost) = self.config.max_cost_usd {
                 if let Some(metrics) = self.service.provider_metrics() {
                     let current_cost = metrics.estimated_cost_usd;
-                    if current_cost >= max_cost {
+                    if current_cost > 0.0 && current_cost >= max_cost {
                         warn!(
                             "Cost ceiling reached: ${:.4} >= ${:.4}",
                             current_cost, max_cost

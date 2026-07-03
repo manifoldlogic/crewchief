@@ -106,11 +106,28 @@ pub struct OllamaProvider {
     parallel_config: ParallelConfig,
     /// Semaphore to limit concurrent requests
     semaphore: Arc<Semaphore>,
+    /// R15 / R-STATS-3: actual HTTP POSTs made (one per batch request).
+    /// Incremented ONLY at the POST site in embed_batch_raw — single `embed`
+    /// delegates there and must not double-count. Feeds `metrics()` so the
+    /// pipeline's "API calls:" display is truthful (it played no role in
+    /// cached/from_api, which are text counts computed at the service layer).
+    request_count: Arc<std::sync::atomic::AtomicU64>,
+    /// Review [19]: attempts that concluded in failure (network error, 5xx,
+    /// terminal API/parse errors). request_count counts every attempt made;
+    /// without this counterpart metrics() reported a fictional 100% success
+    /// rate (the OpenAI impl books terminal failures — R15 honest stats).
+    failed_requests: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl OllamaProvider {
     /// Default endpoint for Ollama embedding API.
     pub const DEFAULT_ENDPOINT: &'static str = "http://localhost:11434/api/embed";
+
+    /// Review [19]: book one failed attempt (see `failed_requests`).
+    fn note_failed_attempt(&self) {
+        self.failed_requests
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
 
     /// Default model for embeddings.
     pub const DEFAULT_MODEL: &'static str = "mxbai-embed-large";
@@ -234,6 +251,8 @@ impl OllamaProvider {
         let semaphore = Arc::new(Semaphore::new(config.max_concurrency));
 
         Ok(Self {
+            request_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            failed_requests: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             client,
             endpoint,
             model,
@@ -490,6 +509,10 @@ impl OllamaProvider {
                 tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
             }
 
+            // R-STATS-3: count the actual HTTP request (retries included —
+            // total_requests means requests made, not batches succeeded).
+            self.request_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let response = match self
                 .client
                 .post(&self.endpoint)
@@ -505,6 +528,7 @@ impl OllamaProvider {
                         attempt + 1,
                         e
                     );
+                    self.note_failed_attempt();
                     last_error = Some(EmbeddingError::Network(e));
                     continue;
                 }
@@ -516,6 +540,7 @@ impl OllamaProvider {
                 let body: OllamaResponse = match response.json().await {
                     Ok(b) => b,
                     Err(e) => {
+                        self.note_failed_attempt();
                         return Err(EmbeddingError::Api(ApiError::InvalidResponse(format!(
                             "Failed to parse batch response for {} texts: {}",
                             batch_size, e
@@ -525,6 +550,7 @@ impl OllamaProvider {
 
                 // Validate response has expected number of embeddings
                 if body.embeddings.len() != batch_size {
+                    self.note_failed_attempt();
                     return Err(EmbeddingError::Api(ApiError::InvalidResponse(format!(
                         "Batch size mismatch: sent {} texts but got {} embeddings",
                         batch_size,
@@ -538,6 +564,7 @@ impl OllamaProvider {
                 for embedding in body.embeddings.iter() {
                     if embedding.len() != expected_dim {
                         use crate::embedding::error::DimensionMismatchError;
+                        self.note_failed_attempt();
                         return Err(EmbeddingError::DimensionMismatch(
                             DimensionMismatchError::new(
                                 expected_dim,
@@ -570,6 +597,7 @@ impl OllamaProvider {
                         attempt + 1,
                         MAX_RETRIES + 1
                     );
+                    self.note_failed_attempt();
                     last_error = Some(EmbeddingError::Api(ApiError::ServerError {
                         status: status.as_u16(),
                         message: format!("Batch of {} texts failed: {}", batch_size, error_msg),
@@ -578,20 +606,24 @@ impl OllamaProvider {
                 }
                 // Don't retry on client errors
                 429 => {
+                    self.note_failed_attempt();
                     return Err(EmbeddingError::Api(ApiError::RateLimit {
                         retry_after_ms: 1000,
                     }));
                 }
                 401 => {
+                    self.note_failed_attempt();
                     return Err(EmbeddingError::Api(ApiError::Authentication(error_msg)));
                 }
                 400 => {
+                    self.note_failed_attempt();
                     return Err(EmbeddingError::Api(ApiError::BadRequest(format!(
                         "Batch of {} texts rejected: {}",
                         batch_size, error_msg
                     ))));
                 }
                 _ => {
+                    self.note_failed_attempt();
                     return Err(EmbeddingError::Api(ApiError::InvalidResponse(format!(
                         "HTTP {} for batch of {} texts: {}",
                         status, batch_size, error_msg
@@ -616,6 +648,22 @@ impl OllamaProvider {
 
 #[async_trait]
 impl EmbeddingProvider for OllamaProvider {
+    fn metrics(&self) -> Option<crate::embedding::provider::ProviderMetrics> {
+        // R15 / R-STATS-3: request-count truth for the "API calls:" display.
+        // Tokens/cost are not tracked (free local models) — zeros, mirroring
+        // the ProviderMetrics contract.
+        Some(crate::embedding::provider::ProviderMetrics {
+            total_requests: self
+                .request_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            total_tokens: 0,
+            failed_requests: self
+                .failed_requests
+                .load(std::sync::atomic::Ordering::Relaxed),
+            estimated_cost_usd: 0.0,
+        })
+    }
+
     /// Generate embedding vector for a single text.
     ///
     /// This method calls the Ollama API to generate a 768-dimensional embedding

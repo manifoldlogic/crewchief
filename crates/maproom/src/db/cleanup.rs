@@ -83,7 +83,7 @@ impl<'a> StaleWorktreeDetector<'a> {
     /// use maproom::db;
     ///
     /// # async fn example() -> anyhow::Result<()> {
-    /// let store = db::connect().await?;
+    /// let store = db::connect_sqlite().await?;
     ///
     /// let detector = StaleWorktreeDetector::new(&store);
     /// let stale_worktrees = detector.detect_stale_worktrees().await?;
@@ -261,7 +261,7 @@ impl<'a> WorktreeCleaner<'a> {
     /// use maproom::db;
     ///
     /// # async fn example() -> anyhow::Result<()> {
-    /// let store = db::connect().await?;
+    /// let store = db::connect_sqlite().await?;
     ///
     /// // Detect stale worktrees
     /// let detector = StaleWorktreeDetector::new(&store);

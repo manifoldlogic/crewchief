@@ -16,7 +16,6 @@
 use std::sync::Arc;
 
 use maproom::db::postgres::PostgresStore;
-use maproom::db::traits::{StoreCore, StoreEmbeddings};
 use maproom::db::Store;
 use maproom::incremental::{ChangeType, FileHasher, IncrementalProcessor, Trigger, UpdateTask};
 

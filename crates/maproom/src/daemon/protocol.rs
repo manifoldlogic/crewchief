@@ -142,10 +142,10 @@ mod tests {
         let mut buffer = BytesMut::new();
 
         let request = JsonRpcMessage::Request(JsonRpcRequest {
-            jsonrpc: "2.0".into(),
+            jsonrpc: Some("2.0".into()),
             method: "search".into(),
             params: Some(serde_json::json!({"query": "test"})),
-            id: Some(serde_json::json!(42)),
+            id: Some(Some(serde_json::json!(42))),
         });
 
         // Encode
@@ -169,10 +169,10 @@ mod tests {
         let mut buffer = BytesMut::new();
 
         let message = JsonRpcMessage::Request(JsonRpcRequest {
-            jsonrpc: "2.0".into(),
+            jsonrpc: Some("2.0".into()),
             method: "ping".into(),
             params: None,
-            id: Some(serde_json::json!(1)),
+            id: Some(Some(serde_json::json!(1))),
         });
 
         // Encode full message
@@ -202,10 +202,10 @@ mod tests {
         // Create message larger than MAX_MESSAGE_SIZE
         let huge_payload = "x".repeat(11 * 1024 * 1024); // 11MB
         let message = JsonRpcMessage::Request(JsonRpcRequest {
-            jsonrpc: "2.0".into(),
+            jsonrpc: Some("2.0".into()),
             method: "test".into(),
             params: Some(serde_json::json!({"data": huge_payload})),
-            id: Some(serde_json::json!(1)),
+            id: Some(Some(serde_json::json!(1))),
         });
 
         // Encoding huge message should fail

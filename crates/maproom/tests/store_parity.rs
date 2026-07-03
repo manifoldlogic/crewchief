@@ -411,22 +411,24 @@ async fn check_cleanup_orphan_gc(name: &str, store: &(dyn Store + Send + Sync)) 
         "orphan GC'd"
     );
 
-    // The following are PostgresStore properties of the arch-doc pivot (§3.2):
-    //   * multi-worktree chunks survive removal of one worktree (GC is by the
-    //     `chunk_worktrees` junction, not file ownership — R-WT-1/R-WT-4); and
-    //   * the content-addressed `code_embeddings` pool is persistent (R-WT-4).
-    // The legacy SqliteStore predates this pivot: its `delete_worktree_data` GCs
-    // chunks by file ownership and deletes `code_embeddings` (to keep its
-    // `vec_code` ANN index consistent). These are asserted on the Postgres backend
-    // only, matching the §7 scenario's intent for the NEW backend without mutating
-    // the SQLite reference impl.
+    // Junction-survival is a BOTH-backend property since review [07]: GC is
+    // by the `chunk_worktrees` junction, not file ownership (R-WT-1/R-WT-4),
+    // so a chunk still mapped to another worktree survives — and on SQLite
+    // its shared blob's embedding survives too (only last-reference blobs
+    // are GC'd, for vec_code/ANN consistency).
+    assert_eq!(
+        store.get_chunk_worktrees(shared).await.unwrap(),
+        vec![wb],
+        "shared kept in B"
+    );
+    assert_eq!(
+        res.embeddings_deleted, 0,
+        "shared blob's embedding must survive"
+    );
+    // Pool persistence beyond live references is the PG-only divergence
+    // (persistent content-addressed pool, R-WT-4; SQLite GCs unreferenced
+    // blobs deliberately).
     if name == "postgres" {
-        assert_eq!(
-            store.get_chunk_worktrees(shared).await.unwrap(),
-            vec![wb],
-            "shared kept in B"
-        );
-        assert_eq!(res.embeddings_deleted, 0, "embeddings kept (R-WT-4)");
         assert_eq!(
             store.get_global_embedding_count().await.unwrap(),
             emb_before,
@@ -1082,4 +1084,408 @@ async fn parity_hybrid() {
 #[ignore]
 async fn parity_graph() {
     for_each(|n, s| async move { check_graph(n, s.as_ref()).await }).await;
+}
+
+// ── Wave B (fix spec R09/R05/R18/R03) parity checks ─────────────────────────
+
+/// R09 / R-GC-1..4: unmapping superseded generations keeps only the surviving
+/// file generation's chunks and reports the junction rows removed.
+async fn check_unmap_superseded_file_chunks(store: &(dyn Store + Send + Sync)) {
+    let b = unique_base();
+    let s = seed(store, "gc").await;
+    let relpath = format!("src/gc_{b}.rs");
+
+    // Generation A: file row + two chunks.
+    let file_a = store
+        .upsert_file(&FileRecord {
+            repo_id: s.repo,
+            worktree_id: s.wt,
+            commit_id: s.commit,
+            relpath: relpath.clone(),
+            language: Some("rust".to_string()),
+            content_hash: format!("genA-{b}"),
+            size_bytes: 1,
+            last_modified: None,
+        })
+        .await
+        .unwrap();
+    store
+        .insert_chunk(&chunk(file_a, s.wt, &format!("A1{b}"), "old_fn_one", "old one", 1, 5))
+        .await
+        .unwrap();
+    store
+        .insert_chunk(&chunk(file_a, s.wt, &format!("A2{b}"), "old_fn_two", "old two", 6, 9))
+        .await
+        .unwrap();
+
+    // Generation B: new commit, same relpath, new content hash -> new file row.
+    let commit_b = store
+        .get_or_create_commit(s.repo, &format!("shaB-{b}"), None)
+        .await
+        .unwrap();
+    let file_b = store
+        .upsert_file(&FileRecord {
+            repo_id: s.repo,
+            worktree_id: s.wt,
+            commit_id: commit_b,
+            relpath: relpath.clone(),
+            language: Some("rust".to_string()),
+            content_hash: format!("genB-{b}"),
+            size_bytes: 1,
+            last_modified: None,
+        })
+        .await
+        .unwrap();
+    assert_ne!(file_a, file_b, "distinct generations must be distinct file rows");
+    store
+        .insert_chunk(&chunk(file_b, s.wt, &format!("B1{b}"), "new_fn", "new fn", 1, 4))
+        .await
+        .unwrap();
+
+    let removed = store
+        .unmap_superseded_file_chunks(s.wt, &relpath, Some(file_b))
+        .await
+        .unwrap();
+    assert_eq!(removed, 2, "both generation-A junction rows removed");
+
+    let rels: Vec<(i64, String)> = store
+        .get_chunks_for_worktree(s.wt)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|(_, r)| r == &relpath)
+        .collect();
+    assert_eq!(rels.len(), 1, "only the surviving generation's chunk remains: {rels:?}");
+}
+
+/// R09: keep_file_id = None removes every generation (file deleted).
+async fn check_unmap_superseded_none_removes_all_generations(store: &(dyn Store + Send + Sync)) {
+    let b = unique_base();
+    let s = seed(store, "gcnone").await;
+    let relpath = format!("src/gcnone_{b}.rs");
+    let file_a = store
+        .upsert_file(&FileRecord {
+            repo_id: s.repo,
+            worktree_id: s.wt,
+            commit_id: s.commit,
+            relpath: relpath.clone(),
+            language: Some("rust".to_string()),
+            content_hash: format!("gA-{b}"),
+            size_bytes: 1,
+            last_modified: None,
+        })
+        .await
+        .unwrap();
+    store
+        .insert_chunk(&chunk(file_a, s.wt, &format!("N1{b}"), "gone_fn", "gone", 1, 3))
+        .await
+        .unwrap();
+
+    let removed = store
+        .unmap_superseded_file_chunks(s.wt, &relpath, None)
+        .await
+        .unwrap();
+    assert_eq!(removed, 1);
+    let remaining = store
+        .get_chunks_for_worktree(s.wt)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|(_, r)| r == &relpath)
+        .count();
+    assert_eq!(remaining, 0, "no generation may survive keep_file_id=None");
+}
+
+/// R09 / CC-2 (R-WT-4): a second worktree's mapping AND the content-addressed
+/// embeddings pool survive another worktree's re-index. This parity test is
+/// the mechanical guard that no embedding deletes crept into the GC path.
+async fn check_unmap_superseded_preserves_shared_and_pool(store: &(dyn Store + Send + Sync)) {
+    let b = unique_base();
+    let s = seed(store, "gcshare").await;
+    let relpath = format!("src/gcshare_{b}.rs");
+    let wt2 = store
+        .get_or_create_worktree(s.repo, "feature", &format!("/wt/gcshare2-{b}"))
+        .await
+        .unwrap();
+
+    let file_a = store
+        .upsert_file(&FileRecord {
+            repo_id: s.repo,
+            worktree_id: s.wt,
+            commit_id: s.commit,
+            relpath: relpath.clone(),
+            language: Some("rust".to_string()),
+            content_hash: format!("shA-{b}"),
+            size_bytes: 1,
+            last_modified: None,
+        })
+        .await
+        .unwrap();
+    let blob = format!("SHARED{b}");
+    // Same chunk mapped to BOTH worktrees (insert_chunk upserts + maps).
+    store
+        .insert_chunk(&chunk(file_a, s.wt, &blob, "shared_fn", "shared", 1, 5))
+        .await
+        .unwrap();
+    store
+        .insert_chunk(&chunk(file_a, wt2, &blob, "shared_fn", "shared", 1, 5))
+        .await
+        .unwrap();
+    // Pool entry for the shared blob.
+    store
+        .upsert_embedding(&blob, &vec![0.01f32; 768], "test-model")
+        .await
+        .unwrap();
+    let pool_before = store.get_global_embedding_count().await.unwrap();
+
+    // wt1 re-indexes: generation B supersedes A *for wt1 only*.
+    let commit_b = store
+        .get_or_create_commit(s.repo, &format!("shB-{b}"), None)
+        .await
+        .unwrap();
+    let file_b = store
+        .upsert_file(&FileRecord {
+            repo_id: s.repo,
+            worktree_id: s.wt,
+            commit_id: commit_b,
+            relpath: relpath.clone(),
+            language: Some("rust".to_string()),
+            content_hash: format!("shB-{b}"),
+            size_bytes: 1,
+            last_modified: None,
+        })
+        .await
+        .unwrap();
+    store
+        .insert_chunk(&chunk(file_b, s.wt, &format!("SB{b}"), "shared_fn_v2", "v2", 1, 6))
+        .await
+        .unwrap();
+    store
+        .unmap_superseded_file_chunks(s.wt, &relpath, Some(file_b))
+        .await
+        .unwrap();
+
+    // wt2's mapping to the generation-A chunk survives. Probed via FTS
+    // search scoped to wt2: search joins the chunk_worktrees JUNCTION on
+    // BOTH backends (get_chunks_for_worktree is file-ownership-based on
+    // SQLite — a pre-existing backend divergence, unsuitable here).
+    let _ = wt2; // id used via the worktree NAME below
+    // Query on the ts-doc word ("shared") — tokenization of symbol names
+    // differs across backends; the ts text matches on both.
+    let (wt2_hits, _) = store
+        .search_chunks_fts(&s.repo_name, Some("feature"), "shared", 10, false, None, None)
+        .await
+        .unwrap();
+    assert!(
+        !wt2_hits.is_empty(),
+        "the other worktree's chunk mapping must survive (R-WT-4)"
+    );
+    // The embeddings pool is untouched.
+    let pool_after = store.get_global_embedding_count().await.unwrap();
+    assert_eq!(pool_before, pool_after, "code_embeddings pool must never shrink on re-index");
+}
+
+/// R05 / R-STALE-1: delete_worktree_data removes the worktree REGISTRATION so
+/// stale detection converges instead of re-reporting forever.
+async fn check_delete_worktree_data_removes_registration(store: &(dyn Store + Send + Sync)) {
+    let b = unique_base();
+    let s = seed(store, "stalereg").await;
+    store
+        .insert_chunk(&chunk(s.file, s.wt, &format!("SR{b}"), "stale_fn", "stale", 1, 3))
+        .await
+        .unwrap();
+
+    store.delete_worktree_data(s.wt).await.unwrap();
+
+    let names: Vec<String> = store
+        .list_worktrees(s.repo)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|w| w.name)
+        .collect();
+    assert!(
+        names.is_empty(),
+        "worktree registration must be deleted (was re-reported forever): {names:?}"
+    );
+    let stale = store.detect_stale_worktrees().await.unwrap();
+    assert!(
+        !stale.iter().any(|sw| sw.id == s.wt),
+        "deleted worktree must not be re-reported as stale"
+    );
+}
+
+/// R18 / R-WTF-2: an unknown worktree name yields the EMPTY set on all three
+/// search paths (it used to silently drop the filter on SQLite).
+async fn check_search_unknown_worktree_returns_empty(store: &(dyn Store + Send + Sync)) {
+    let b = unique_base();
+    let s = seed(store, "wtf").await;
+    store
+        .insert_chunk(&chunk(s.file, s.wt, &format!("WT{b}"), "wtf_probe_fn", "wtf probe fn", 1, 3))
+        .await
+        .unwrap();
+
+    let (hits, total) = store
+        .search_chunks_fts(&s.repo_name, Some("no-such-wt"), "wtf_probe_fn", 10, false, None, None)
+        .await
+        .unwrap();
+    assert!(hits.is_empty(), "fts: unknown worktree must be empty, got {hits:?}");
+    assert_eq!(total, 0);
+
+    let vhits = store
+        .search_chunks_vector(&s.repo_name, Some("no-such-wt"), &vec![0.01f32; 768], 10, false, None, None)
+        .await
+        .unwrap();
+    assert!(vhits.is_empty(), "vector: unknown worktree must be empty");
+
+    let hhits = store
+        .search_chunks_hybrid(
+            &s.repo_name,
+            Some("no-such-wt"),
+            "wtf_probe_fn",
+            &vec![0.01f32; 768],
+            10,
+            false,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(hhits.is_empty(), "hybrid: unknown worktree must be empty");
+
+    // Control: the KNOWN worktree still finds the probe.
+    let (known_hits, _) = store
+        .search_chunks_fts(&s.repo_name, Some("main"), "wtf_probe_fn", 10, false, None, None)
+        .await
+        .unwrap();
+    assert!(!known_hits.is_empty(), "control: known worktree must match");
+}
+
+/// R03 / R-VER-2/3: a fresh store on each backend verifies clean against its
+/// OWN required-table list (SQLite 12 incl. context_cache; PG 11 core).
+async fn check_verify_schema_clean(store: &(dyn Store + Send + Sync)) {
+    let missing = store.verify_schema().await.unwrap();
+    assert_eq!(missing, Vec::<String>::new(), "fresh schema must verify clean");
+}
+
+#[tokio::test]
+#[ignore]
+async fn parity_unmap_superseded_file_chunks() {
+    for_each(|_n, s| async move { check_unmap_superseded_file_chunks(s.as_ref()).await }).await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn parity_unmap_superseded_none_removes_all_generations() {
+    for_each(|_n, s| async move { check_unmap_superseded_none_removes_all_generations(s.as_ref()).await })
+        .await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn parity_unmap_superseded_preserves_shared_and_pool() {
+    for_each(|_n, s| async move { check_unmap_superseded_preserves_shared_and_pool(s.as_ref()).await })
+        .await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn parity_delete_worktree_data_removes_registration() {
+    for_each(|_n, s| async move { check_delete_worktree_data_removes_registration(s.as_ref()).await })
+        .await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn parity_search_unknown_worktree_returns_empty() {
+    for_each(|_n, s| async move { check_search_unknown_worktree_returns_empty(s.as_ref()).await }).await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn parity_verify_schema_clean() {
+    for_each(|_n, s| async move { check_verify_schema_clean(s.as_ref()).await }).await;
+}
+
+/// R10 / R-PREV-1/2: the main FTS path carries a non-empty preview on BOTH
+/// backends (the PG SELECT omitted the column and its mapper hardcoded None).
+async fn check_fts_hit_includes_preview(store: &(dyn Store + Send + Sync)) {
+    let b = unique_base();
+    let s = seed(store, "prev").await;
+    store
+        .insert_chunk(&chunk(s.file, s.wt, &format!("PV{b}"), "preview_probe_fn", "preview probe body", 1, 4))
+        .await
+        .unwrap();
+    let (hits, _) = store
+        .search_chunks_fts(&s.repo_name, None, "preview", 10, false, None, None)
+        .await
+        .unwrap();
+    assert!(!hits.is_empty(), "probe must match");
+    let p = hits[0].preview.as_deref().unwrap_or("");
+    assert!(
+        !p.is_empty(),
+        "FTS hits must carry the stored preview (R10; PG used to hardcode None)"
+    );
+}
+
+#[tokio::test]
+#[ignore]
+async fn parity_fts_hit_includes_preview() {
+    for_each(|_n, s| async move { check_fts_hit_includes_preview(s.as_ref()).await }).await;
+}
+
+/// Review H4: get_chunks_for_worktree is JUNCTION-scoped on BOTH backends —
+/// a chunk mapped to worktree B via chunk_worktrees is visible for B even
+/// when its files row belongs to worktree A (the branch-switch flow).
+async fn check_get_chunks_for_worktree_junction_scoped(store: &(dyn Store + Send + Sync)) {
+    let b = unique_base();
+    let s = seed(store, "junc").await;
+    let relpath = format!("src/junc_{b}.rs");
+    let wt2 = store
+        .get_or_create_worktree(s.repo, "feature", &format!("/wt/junc2-{b}"))
+        .await
+        .unwrap();
+    let file_a = store
+        .upsert_file(&FileRecord {
+            repo_id: s.repo,
+            worktree_id: s.wt, // files row OWNED by wt1
+            commit_id: s.commit,
+            relpath: relpath.clone(),
+            language: Some("rust".to_string()),
+            content_hash: format!("jc-{b}"),
+            size_bytes: 1,
+            last_modified: None,
+        })
+        .await
+        .unwrap();
+    store
+        .insert_chunk(&chunk(file_a, s.wt, &format!("J1{b}"), "junc_fn", "junc fn", 1, 3))
+        .await
+        .unwrap();
+    // Map the SAME chunk to wt2 via the junction (no wt2-owned files row).
+    store
+        .insert_chunk(&chunk(file_a, wt2, &format!("J1{b}"), "junc_fn", "junc fn", 1, 3))
+        .await
+        .unwrap();
+
+    let wt2_rels: Vec<String> = store
+        .get_chunks_for_worktree(wt2)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|(_, r)| r)
+        .filter(|r| r == &relpath)
+        .collect();
+    assert_eq!(
+        wt2_rels.len(),
+        1,
+        "junction-mapped chunk must be visible for wt2 (H4; ownership-scoping missed it)"
+    );
+}
+
+#[tokio::test]
+#[ignore]
+async fn parity_get_chunks_for_worktree_junction_scoped() {
+    for_each(|_n, s| async move { check_get_chunks_for_worktree_junction_scoped(s.as_ref()).await })
+        .await;
 }

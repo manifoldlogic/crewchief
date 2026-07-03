@@ -71,13 +71,22 @@ use serde::Serialize;
 /// ```
 pub async fn connect() -> anyhow::Result<std::sync::Arc<dyn Store + Send + Sync>> {
     let url = connection::get_database_url()?;
-    match connection::backend_for_url(&url) {
-        connection::Backend::Sqlite => {
-            Ok(std::sync::Arc::new(SqliteStore::connect(&url).await?))
-        }
+    connect_url(&url).await
+}
+
+/// Connect to a SPECIFIC database URL with the same backend dispatch (and the
+/// same fail-loud postgres-without-feature bail) as [`connect`]. Used where a
+/// caller must pin the destination instead of reading ambient configuration —
+/// notably test harnesses injecting per-test databases (review M11: the
+/// un-ignored socket-daemon tests used ambient connect() and mutated the
+/// developer's real ~/.maproom database — or a LIVE Postgres under this
+/// branch's documented MAPROOM_DATABASE_URL workflow).
+pub async fn connect_url(url: &str) -> anyhow::Result<std::sync::Arc<dyn Store + Send + Sync>> {
+    match connection::backend_for_url(url) {
+        connection::Backend::Sqlite => Ok(std::sync::Arc::new(SqliteStore::connect(url).await?)),
         #[cfg(feature = "postgres")]
         connection::Backend::Postgres => {
-            Ok(std::sync::Arc::new(postgres::PostgresStore::connect(&url).await?))
+            Ok(std::sync::Arc::new(postgres::PostgresStore::connect(url).await?))
         }
         #[cfg(not(feature = "postgres"))]
         connection::Backend::Postgres => anyhow::bail!(
