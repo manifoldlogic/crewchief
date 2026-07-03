@@ -247,6 +247,7 @@ jobs:
       - name: Trigger and wait for CLI release workflow
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           echo "Triggering CLI release workflow..."
           gh workflow run release-cli.yml \
@@ -278,6 +279,7 @@ jobs:
       - name: Trigger and wait for MCP release workflow
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           echo "Triggering MCP release workflow..."
           gh workflow run release-maproom-mcp.yml \
@@ -309,6 +311,7 @@ jobs:
       - name: Trigger and wait for VSCode release workflow
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           echo "Triggering VSCode release workflow for version ${{ needs.validate.outputs.vscode_version }}..."
 
