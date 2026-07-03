@@ -330,7 +330,7 @@ pub struct ParsedChunk {
 ///     kind: "function".to_string(),
 /// };
 ///
-/// let chunk_id = upsert_chunk_with_worktree(&store, &chunk, 1, &metrics).await?;
+/// let chunk_id = upsert_chunk_with_worktree(store.as_ref(), &chunk, 1, &metrics).await?;
 /// println!("Chunk ID: {}", chunk_id);
 /// # Ok(())
 /// # }

@@ -324,11 +324,14 @@ fn watch_binary_indexes_uncommitted_edit() {
     make_repo(repo.path());
     let db_url = format!("sqlite://{}/w.db", db.path().display());
 
-    // Scan baseline through the binary.
+    // Scan baseline through the binary. Review [39]: scrub ambient embedding
+    // config (like the sibling daemon suites) so a dev box with a broken
+    // provider exercises the same startup path as CI.
     let out = Command::new(&binary)
         .args(["scan", "--repo", "fx", "--path"])
         .arg(repo.path())
         .env("MAPROOM_DATABASE_URL", &db_url)
+        .env_remove("MAPROOM_EMBEDDING_PROVIDER")
         .output()
         .unwrap();
     assert!(out.status.success(), "scan failed: {}", String::from_utf8_lossy(&out.stderr));
@@ -340,31 +343,46 @@ fn watch_binary_indexes_uncommitted_edit() {
     )
     .unwrap();
 
-    // Run watch long enough for the 3s poller to deliver + index the event.
+    // Run watch and POLL search until the symbol appears (review [39]: a
+    // fixed 12s sleep was a pure timing assumption — loaded CI runners
+    // exceeded it and the kill landed before the upsert committed). The 30s
+    // deadline covers watch startup + the 3s git-status poll + the upsert
+    // with a wide margin; the happy path exits within a few seconds.
     let mut watch = Command::new(&binary)
         .args(["watch", "--repo", "fx", "--json", "--path"])
         .arg(repo.path())
         .env("MAPROOM_DATABASE_URL", &db_url)
+        .env_remove("MAPROOM_EMBEDDING_PROVIDER")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
         .unwrap();
-    std::thread::sleep(std::time::Duration::from_secs(12));
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let (found, last_stdout) = loop {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        let out = Command::new(&binary)
+            .args([
+                "search", "--repo", "fx", "--query", "betaTwo", "--format", "agent",
+            ])
+            .env("MAPROOM_DATABASE_URL", &db_url)
+            .env_remove("MAPROOM_EMBEDDING_PROVIDER")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+        if stdout.contains("betaTwo") {
+            break (true, stdout);
+        }
+        if std::time::Instant::now() >= deadline {
+            break (false, stdout);
+        }
+    };
     let _ = watch.kill();
     let _ = watch.wait();
 
-    // The uncommitted symbol must now be searchable.
-    let out = Command::new(&binary)
-        .args([
-            "search", "--repo", "fx", "--query", "betaTwo", "--format", "agent",
-        ])
-        .env("MAPROOM_DATABASE_URL", &db_url)
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        stdout.contains("betaTwo"),
-        "uncommitted edit was not indexed by watch (R06); search output:\n{stdout}"
+        found,
+        "uncommitted edit was not indexed by watch within 30s (R06); last search output:\n{last_stdout}"
     );
 }
 

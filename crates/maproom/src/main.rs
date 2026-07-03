@@ -164,10 +164,14 @@ async fn handle_branch_switch(
     use maproom::incremental::incremental_update;
     use maproom::indexer::BranchSwitchEvent;
 
-    // 0. Check debounce (skip if rapid switch)
+    // 0. Debounce COALESCES rapid switches instead of dropping them (review
+    // [05]: the old early-return silently lost the LAST switch in an
+    // A->B->C sequence, leaving current_branch/worktree_id stale while the
+    // now-live event path kept writing into the wrong worktree). Waiting out
+    // the window and re-reading HEAD below yields the final state.
     if !debouncer.should_handle() {
-        tracing::debug!("Debouncing rapid branch switch");
-        return Ok(());
+        tracing::debug!("Debouncing rapid branch switch (coalescing after window)");
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     }
 
     // 1. Detect new branch
@@ -658,6 +662,12 @@ enum Commands {
         #[arg(long)]
         socket_path: Option<PathBuf>,
 
+        /// PID file path (default: /tmp/maproom-{uid}.pid). Mainly for test
+        /// harnesses that need isolated daemons; the default is the
+        /// single-daemon-per-user guard.
+        #[arg(long)]
+        pid_path: Option<PathBuf>,
+
         /// Idle timeout in seconds (default: 300 = 5 minutes)
         #[arg(long, default_value_t = 300)]
         idle_timeout: u64,
@@ -1137,12 +1147,12 @@ async fn real_main() -> anyhow::Result<()> {
                         "SQLite" => "delete the database file and re-run 'maproom scan'",
                         _ => "restore from backup or recreate the database and re-run 'maproom scan'",
                     };
-                    eprintln!(
-                        "❌ {backend} database is damaged; missing tables: {} ({hint})",
-                        missing.join(", ")
-                    );
+                    // Review [14]: ONE stderr report (via the top-level
+                    // R-EXIT-5 handler), hint included — the old eprintln +
+                    // bail pair double-reported in two shapes and the
+                    // 'Error:'-line variant lost the recovery hint.
                     anyhow::bail!(
-                        "database schema is damaged; missing tables: {}",
+                        "{backend} database is damaged; missing tables: {} ({hint})",
                         missing.join(", ")
                     );
                 }
@@ -2257,6 +2267,7 @@ async fn real_main() -> anyhow::Result<()> {
         Commands::Serve {
             socket,
             socket_path,
+            pid_path,
             idle_timeout,
         } => {
             if socket {
@@ -2269,6 +2280,13 @@ async fn real_main() -> anyhow::Result<()> {
 
                 if let Some(path) = socket_path {
                     config.socket_path = path;
+                }
+
+                // Review [34]/[37]: overridable PID path so test harnesses
+                // (and multi-instance setups) don't collide on the global
+                // /tmp/maproom-{uid}.pid single-daemon guard.
+                if let Some(path) = pid_path {
+                    config.pid_path = path;
                 }
 
                 config.idle_timeout = std::time::Duration::from_secs(idle_timeout);

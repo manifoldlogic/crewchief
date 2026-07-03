@@ -180,13 +180,24 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
                     tracing::warn!(
                         "Ollama not detected and no MAPROOM_EMBEDDING_PROVIDER configured"
                     );
-                    return Err(EmbeddingError::Config(ConfigError::MissingConfig(
+                    // Review [17]: if the environment DID configure an ollama
+                    // endpoint, say so — "install Ollama" is misdirection when
+                    // the real problem is a configured host being down.
+                    let configured = ollama_base_url_from_env()
+                        .or_else(|| {
+                            env_nonempty("MAPROOM_EMBEDDING_API_ENDPOINT")
+                                .map(|e| ("MAPROOM_EMBEDDING_API_ENDPOINT", e))
+                        })
+                        .map(|(var, val)| {
+                            format!("\nNote: configured {var}={val} was not reachable.")
+                        })
+                        .unwrap_or_default();
+                    return Err(EmbeddingError::Config(ConfigError::MissingConfig(format!(
                         "No embedding provider configured. Options:\n\
                          1. Install and start Ollama (https://ollama.ai) for zero-config local embeddings\n\
                          2. Set MAPROOM_EMBEDDING_PROVIDER=openai and OPENAI_API_KEY=... for OpenAI\n\
-                         3. Set MAPROOM_EMBEDDING_PROVIDER=google and GOOGLE_PROJECT_ID=... for Google (future)"
-                            .to_string(),
-                    )));
+                         3. Set MAPROOM_EMBEDDING_PROVIDER=google and GOOGLE_PROJECT_ID=... for Google (future){configured}"
+                    ))));
                 }
             }
         }
@@ -467,6 +478,17 @@ fn normalize_endpoint_url(url: &str) -> String {
     format!("{}/api/embed", url)
 }
 
+/// Review [16]: an empty/whitespace env value means UNSET — CI files export
+/// `FOO=` intending "clear"; treating that as set produced the relative
+/// endpoint "/api/embed" and silently shadowed the whole OLLAMA_URL family
+/// (which already treats empty as unset in `ollama_base_url_from_env`).
+fn env_nonempty(var: &str) -> Option<String> {
+    env::var(var)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
 /// R14 / R-OLL-1: resolve the ollama embed endpoint with the documented
 /// precedence (first-set wins):
 ///   MAPROOM_EMBEDDING_API_ENDPOINT > MAPROOM_OLLAMA_URL > OLLAMA_URL >
@@ -474,7 +496,7 @@ fn normalize_endpoint_url(url: &str) -> String {
 /// OLLAMA_URL was documented in --help but never read — the endpoint was
 /// effectively hardcoded to localhost:11434.
 fn resolve_ollama_endpoint(detected_endpoint: Option<&str>) -> String {
-    if let Ok(explicit) = env::var("MAPROOM_EMBEDDING_API_ENDPOINT") {
+    if let Some(explicit) = env_nonempty("MAPROOM_EMBEDDING_API_ENDPOINT") {
         // Explicit config takes absolute precedence
         let normalized = normalize_endpoint_url(&explicit);
         tracing::info!(
@@ -518,7 +540,22 @@ fn ollama_base_url_from_env() -> Option<(&'static str, String)> {
             let base = if trimmed.contains("://") {
                 trimmed.to_string()
             } else {
-                format!("http://{}", trimmed)
+                // Review [18]: ollama's OLLAMA_HOST convention — a
+                // scheme-less bare host defaults to port 11434 (an explicit
+                // http://host keeps 80 / https://host keeps 443, matching
+                // ollama's own envconfig). Without this, OLLAMA_HOST=gpu-box
+                // silently targeted port 80.
+                let authority = trimmed.split('/').next().unwrap_or(trimmed);
+                let has_port = if let Some(v6) = authority.strip_prefix('[') {
+                    v6.contains("]:")
+                } else {
+                    authority.contains(':')
+                };
+                if has_port {
+                    format!("http://{}", trimmed)
+                } else {
+                    format!("http://{}:11434", trimmed)
+                }
             };
             return Some((var, base));
         }
@@ -615,8 +652,9 @@ async fn detect_ollama_endpoint() -> Option<String> {
     // Build fallback list
     let mut endpoints = Vec::new();
 
-    // 1. Check explicit endpoint config (extract base URL)
-    if let Ok(embed_endpoint) = env::var("MAPROOM_EMBEDDING_API_ENDPOINT") {
+    // 1. Check explicit endpoint config (extract base URL); empty/whitespace
+    //    means unset (review [16]).
+    if let Some(embed_endpoint) = env_nonempty("MAPROOM_EMBEDDING_API_ENDPOINT") {
         if let Some(base) = extract_base_url(&embed_endpoint) {
             endpoints.push(base);
         }
@@ -628,11 +666,19 @@ async fn detect_ollama_endpoint() -> Option<String> {
         endpoints.push(base);
     }
 
-    // 2. localhost (native development)
-    endpoints.push("http://localhost:11434".to_string());
+    // Review [17]: fall back to localhost/docker ONLY when the environment
+    // configures nothing. Probing the fallbacks alongside a configured-but-
+    // down host made detection "succeed" on localhost while the provider was
+    // then constructed against the dead configured endpoint (which outranks
+    // the detected one in resolve_ollama_endpoint) — minutes of doomed
+    // retries under a log line claiming a healthy detection.
+    if endpoints.is_empty() {
+        // 2. localhost (native development)
+        endpoints.push("http://localhost:11434".to_string());
 
-    // 3. Docker host (containerized development)
-    endpoints.push("http://host.docker.internal:11434".to_string());
+        // 3. Docker host (containerized development)
+        endpoints.push("http://host.docker.internal:11434".to_string());
+    }
 
     // Log all endpoints we'll try (helpful for debugging)
     tracing::debug!("Ollama detection fallback chain: {:?}", endpoints);

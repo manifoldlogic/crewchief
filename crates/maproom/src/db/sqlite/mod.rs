@@ -104,18 +104,22 @@ impl SqliteStore {
         }
 
         // Build PRAGMA statements from configuration
+        // Review [15]: busy_timeout FIRST — the WAL conversion during
+        // concurrent pool init used to race with a 0ms busy timeout, logging
+        // spurious 'ERROR database is locked' lines on every first-time DB
+        // creation (r2d2's error handler at default log level).
         let pragmas = format!(
             r#"
+                PRAGMA busy_timeout = {};
                 PRAGMA journal_mode = WAL;
                 PRAGMA synchronous = {};
-                PRAGMA busy_timeout = {};
                 PRAGMA wal_autocheckpoint = {};
                 PRAGMA cache_size = {};
                 PRAGMA mmap_size = {};
                 PRAGMA foreign_keys = ON;
                 "#,
-            config.pragmas.synchronous,
             config.pragmas.busy_timeout_ms,
+            config.pragmas.synchronous,
             config.pragmas.wal_autocheckpoint,
             -config.pragmas.cache_size_kb, // Negative for KB
             config.pragmas.mmap_size_bytes
@@ -1032,44 +1036,74 @@ impl StoreChunks for SqliteStore {
     ) -> anyhow::Result<usize> {
         let relpath = relpath.to_string();
         self.write_with_retry(move |conn| {
-            // R09 / R-GC-2: four statements in ONE explicit transaction —
-            // write_with_retry itself provides NO transaction (it hands the
-            // closure a pooled connection and retries on busy); without the
-            // tx a mid-sequence retry re-runs partial work and the returned
-            // junction-row count becomes unreliable. Pattern of insert_chunk.
+            // R09 / R-GC-2: one explicit transaction — write_with_retry
+            // itself provides NO transaction. Review [06]/[24]/[32]: every
+            // statement is SCOPED to the superseded candidate ids. The first
+            // cut ran GLOBAL orphan anti-joins (all chunks × all junction
+            // rows) once PER FILE from the scan loop — O(files × chunks)
+            // rescans — and cross-repo GC side effects. With the candidate
+            // list empty (the overwhelmingly common no-supersession case)
+            // this is now a single indexed SELECT and an early return.
             let tx = conn.transaction()?;
 
-            // 1. Unmap this worktree from superseded generations of relpath.
-            //    Repo-scoping subqueries are mandatory: relpath alone
-            //    collides across repos.
-            let removed = tx.execute(
-                "DELETE FROM chunk_worktrees \
-                 WHERE worktree_id = ?1 \
-                   AND chunk_id IN ( \
-                     SELECT c.id FROM chunks c \
+            // 0. Candidate superseded chunk ids (repo-scoped: relpath alone
+            //    collides across repos).
+            let candidate_ids: Vec<i64> = {
+                let mut stmt = tx.prepare(
+                    "SELECT c.id FROM chunks c \
                      JOIN files f ON f.id = c.file_id \
                      WHERE f.relpath = ?2 \
                        AND (?3 IS NULL OR c.file_id <> ?3) \
                        AND f.commit_id IN (SELECT id FROM commits WHERE repo_id = \
-                             (SELECT repo_id FROM worktrees WHERE id = ?1)) \
-                   )",
-                params![worktree_id, relpath, keep_file_id],
+                             (SELECT repo_id FROM worktrees WHERE id = ?1))",
+                )?;
+                let ids = stmt
+                    .query_map(params![worktree_id, relpath, keep_file_id], |row| {
+                        row.get::<_, i64>(0)
+                    })?
+                    .collect::<Result<Vec<_>, _>>()?;
+                ids
+            };
+            if candidate_ids.is_empty() {
+                tx.commit()?;
+                return Ok(0);
+            }
+            // i64 ids straight from the DB — safe to inline (no injection,
+            // and avoids SQLite's bind-parameter limit).
+            let id_list = candidate_ids
+                .iter()
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+
+            // 1. Unmap this worktree from the superseded generations.
+            let removed = tx.execute(
+                &format!(
+                    "DELETE FROM chunk_worktrees WHERE worktree_id = ?1 AND chunk_id IN ({id_list})"
+                ),
+                params![worktree_id],
             )?;
 
-            // 2. FTS5 'delete' for the about-to-be-orphaned chunks — BEFORE
-            //    step 3, while the rows still exist to read the originally
-            //    indexed values (fts_chunks is external-content, maintained
-            //    manually; columns match the insert in insert_chunk).
+            // 2. FTS5 'delete' for candidates now orphaned — BEFORE step 3,
+            //    while the rows still exist to read the originally indexed
+            //    values (fts_chunks is external-content, maintained manually).
             tx.execute(
-                "INSERT INTO fts_chunks(fts_chunks, rowid, content, docstring, symbol_name) \
-                 SELECT 'delete', id, preview, docstring, symbol_name FROM chunks \
-                 WHERE id NOT IN (SELECT DISTINCT chunk_id FROM chunk_worktrees)",
+                &format!(
+                    "INSERT INTO fts_chunks(fts_chunks, rowid, content, docstring, symbol_name) \
+                     SELECT 'delete', id, preview, docstring, symbol_name FROM chunks \
+                     WHERE id IN ({id_list}) \
+                       AND NOT EXISTS (SELECT 1 FROM chunk_worktrees cw WHERE cw.chunk_id = chunks.id)"
+                ),
                 [],
             )?;
 
-            // 3. Orphan-GC (existing template).
+            // 3. Orphan-GC, scoped to the candidates.
             tx.execute(
-                "DELETE FROM chunks WHERE id NOT IN (SELECT DISTINCT chunk_id FROM chunk_worktrees)",
+                &format!(
+                    "DELETE FROM chunks \
+                     WHERE id IN ({id_list}) \
+                       AND NOT EXISTS (SELECT 1 FROM chunk_worktrees cw WHERE cw.chunk_id = chunks.id)"
+                ),
                 [],
             )?;
 
@@ -3266,82 +3300,128 @@ impl StoreCleanup for SqliteStore {
             // R05 / R-STALE-1: the whole multi-table delete runs in ONE
             // explicit transaction — write_with_retry provides no transaction,
             // and a busy-retry mid-sequence would re-run a partial delete.
+            //
+            // Review [07]: junction-aware. The legacy impl GC'd by file
+            // ownership (destroying chunks still mapped to OTHER worktrees
+            // via chunk_worktrees), never issued the FTS5 external-content
+            // 'delete' (dead postings matched forever), and deleted shared
+            // code_embeddings. Now only chunks losing their LAST junction
+            // mapping are removed (FTS-deleted first); embeddings go only
+            // when their blob_sha loses its last surviving chunk (kept for
+            // vec_code/ANN consistency — SQLite intentionally diverges from
+            // PG's persistent pool here); surviving shared files are
+            // re-homed before the worktrees-row delete because
+            // files.worktree_id is NOT NULL ON DELETE CASCADE on SQLite
+            // (PG's is SET NULL).
             let tx = conn.transaction()?;
 
-            // Get count of chunks that will be deleted
-            let chunks_deleted: i64 = tx
-                .query_row(
-                    "SELECT COUNT(*) FROM chunks c
-                 JOIN files f ON c.file_id = f.id
-                 WHERE f.worktree_id = ?1",
-                    params![worktree_id],
-                    |row| row.get(0),
-                )
-                .unwrap_or(0);
+            // 0. Candidates: chunks mapped to this worktree via the junction
+            //    (captured BEFORE the unmap) plus chunks whose file rows this
+            //    worktree owns (they are cascade-exposed by the final
+            //    worktrees delete).
+            let candidate_ids: Vec<i64> = {
+                let mut stmt = tx.prepare(
+                    "SELECT cw.chunk_id FROM chunk_worktrees cw WHERE cw.worktree_id = ?1 \
+                     UNION \
+                     SELECT c.id FROM chunks c \
+                     JOIN files f ON f.id = c.file_id \
+                     WHERE f.worktree_id = ?1",
+                )?;
+                let ids = stmt
+                    .query_map(params![worktree_id], |row| row.get::<_, i64>(0))?
+                    .collect::<Result<Vec<_>, _>>()?;
+                ids
+            };
+            // i64 ids straight from the DB — safe to inline.
+            let id_list = candidate_ids
+                .iter()
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
 
-            // Get count of files that will be deleted
-            let files_deleted: i64 = tx
-                .query_row(
-                    "SELECT COUNT(*) FROM files WHERE worktree_id = ?1",
-                    params![worktree_id],
-                    |row| row.get(0),
-                )
-                .unwrap_or(0);
-
-            // Delete code_embeddings for chunks in this worktree
-            let embeddings_deleted: i64 = tx
-                .query_row(
-                    "SELECT COUNT(*) FROM code_embeddings ce
-                 WHERE ce.blob_sha IN (
-                     SELECT c.blob_sha FROM chunks c
-                     JOIN files f ON c.file_id = f.id
-                     WHERE f.worktree_id = ?1
-                 )",
-                    params![worktree_id],
-                    |row| row.get(0),
-                )
-                .unwrap_or(0);
-
-            tx.execute(
-                "DELETE FROM code_embeddings WHERE blob_sha IN (
-                     SELECT c.blob_sha FROM chunks c
-                     JOIN files f ON c.file_id = f.id
-                     WHERE f.worktree_id = ?1
-                 )",
-                params![worktree_id],
-            )?;
-
-            // Delete chunk_worktrees junction entries
+            // 1. Unmap this worktree.
             tx.execute(
                 "DELETE FROM chunk_worktrees WHERE worktree_id = ?1",
                 params![worktree_id],
             )?;
 
-            // Delete chunk_edges for chunks in this worktree
-            tx.execute(
-                "DELETE FROM chunk_edges WHERE src_chunk_id IN (
-                     SELECT c.id FROM chunks c
-                     JOIN files f ON c.file_id = f.id
-                     WHERE f.worktree_id = ?1
-                 ) OR dst_chunk_id IN (
-                     SELECT c.id FROM chunks c
-                     JOIN files f ON c.file_id = f.id
-                     WHERE f.worktree_id = ?1
-                 )",
-                params![worktree_id],
-            )?;
+            let (chunks_deleted, embeddings_deleted) = if candidate_ids.is_empty() {
+                (0i64, 0i64)
+            } else {
+                // 2. FTS5 'delete' for candidates now orphaned — BEFORE the
+                //    row delete, while the originally indexed values are
+                //    still readable (external-content discipline, same as
+                //    unmap_superseded_file_chunks).
+                tx.execute(
+                    &format!(
+                        "INSERT INTO fts_chunks(fts_chunks, rowid, content, docstring, symbol_name) \
+                         SELECT 'delete', id, preview, docstring, symbol_name FROM chunks \
+                         WHERE id IN ({id_list}) \
+                           AND NOT EXISTS (SELECT 1 FROM chunk_worktrees cw WHERE cw.chunk_id = chunks.id)"
+                    ),
+                    [],
+                )?;
 
-            // Delete chunks
-            tx.execute(
-                "DELETE FROM chunks WHERE file_id IN (
-                     SELECT id FROM files WHERE worktree_id = ?1
-                 )",
-                params![worktree_id],
-            )?;
+                // 3. Edges touching the orphans.
+                tx.execute(
+                    &format!(
+                        "DELETE FROM chunk_edges WHERE src_chunk_id IN ( \
+                             SELECT id FROM chunks WHERE id IN ({id_list}) \
+                               AND NOT EXISTS (SELECT 1 FROM chunk_worktrees cw WHERE cw.chunk_id = chunks.id) \
+                         ) OR dst_chunk_id IN ( \
+                             SELECT id FROM chunks WHERE id IN ({id_list}) \
+                               AND NOT EXISTS (SELECT 1 FROM chunk_worktrees cw WHERE cw.chunk_id = chunks.id) \
+                         )"
+                    ),
+                    [],
+                )?;
 
-            // Delete files
+                // 4. Embeddings whose blob_sha loses its LAST chunk: shared
+                //    blobs referenced by any surviving chunk are kept.
+                let embeddings_deleted = tx.execute(
+                    &format!(
+                        "DELETE FROM code_embeddings WHERE blob_sha IN ( \
+                             SELECT blob_sha FROM chunks WHERE id IN ({id_list}) \
+                               AND NOT EXISTS (SELECT 1 FROM chunk_worktrees cw WHERE cw.chunk_id = chunks.id) \
+                         ) AND blob_sha NOT IN ( \
+                             SELECT blob_sha FROM chunks \
+                             WHERE EXISTS (SELECT 1 FROM chunk_worktrees cw WHERE cw.chunk_id = chunks.id) \
+                         )"
+                    ),
+                    [],
+                )? as i64;
+
+                // 5. The orphan chunk rows themselves.
+                let chunks_deleted = tx.execute(
+                    &format!(
+                        "DELETE FROM chunks \
+                         WHERE id IN ({id_list}) \
+                           AND NOT EXISTS (SELECT 1 FROM chunk_worktrees cw WHERE cw.chunk_id = chunks.id)"
+                    ),
+                    [],
+                )? as i64;
+                (chunks_deleted, embeddings_deleted)
+            };
+
+            // 6. This worktree's now-chunkless files.
+            let files_deleted = tx.execute(
+                "DELETE FROM files \
+                 WHERE worktree_id = ?1 \
+                   AND NOT EXISTS (SELECT 1 FROM chunks c WHERE c.file_id = files.id)",
+                params![worktree_id],
+            )? as i64;
+
+            // 7. Re-home surviving shared files (their chunks are still
+            //    junction-mapped to other worktrees) so the worktrees-row
+            //    delete below can't cascade through files -> chunks. Every
+            //    surviving chunk has a junction row post-GC, so the subquery
+            //    can't be NULL.
             tx.execute(
-                "DELETE FROM files WHERE worktree_id = ?1",
+                "UPDATE files SET worktree_id = ( \
+                     SELECT MIN(cw.worktree_id) FROM chunk_worktrees cw \
+                     JOIN chunks c ON c.id = cw.chunk_id \
+                     WHERE c.file_id = files.id \
+                 ) WHERE worktree_id = ?1",
                 params![worktree_id],
             )?;
 

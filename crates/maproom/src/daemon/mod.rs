@@ -362,8 +362,20 @@ async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> Jso
                 let known = match worktree_exists(&state, &params.repo, w).await {
                     Ok(known) => known,
                     Err(e) => {
+                        // Review [11]/[38]: a store failure during validation
+                        // is a retryable server error (-32000, like every
+                        // other store failure in this dispatch) — NOT a
+                        // -32602 "unknown worktree" verdict that makes agents
+                        // permanently drop a perfectly valid scope filter.
                         error!("Worktree validation failed: {}", e);
-                        false
+                        return JsonRpcResponse::error(
+                            id,
+                            -32000,
+                            "Internal error".to_string(),
+                            Some(serde_json::json!(format!(
+                                "worktree validation failed: {e:#}"
+                            ))),
+                        );
                     }
                 };
                 if !known {
@@ -479,9 +491,17 @@ async fn worktree_exists(state: &Arc<DaemonState>, repo: &str, worktree: &str) -
         .list_repos()
         .await
         .context("Failed to list repos")?;
+    // Review [12]: match case-insensitively, mirroring the stores this gate
+    // fronts (SQLite LIKE '%/x' is ASCII case-insensitive; PG uses ILIKE) —
+    // a case-sensitive gate rejected queries the store would happily serve.
+    let repo_lower = repo.to_ascii_lowercase();
+    let suffix_lower = format!("/{repo_lower}");
     let matched: Vec<_> = all_repos
         .into_iter()
-        .filter(|r| r.name == repo || r.name.ends_with(&format!("/{}", repo)))
+        .filter(|r| {
+            r.name.eq_ignore_ascii_case(repo)
+                || r.name.to_ascii_lowercase().ends_with(&suffix_lower)
+        })
         .collect();
     if matched.is_empty() {
         return Ok(true); // unknown repo keeps existing error behavior downstream

@@ -120,12 +120,20 @@ pub fn search_fts(
 
     // Resolve worktree_id if specified
     let worktree_id: Option<i64> = if let Some(w) = worktree {
-        conn.query_row(
-            "SELECT id FROM worktrees WHERE repo_id = ?1 AND name = ?2",
-            params![repo_id, w],
-            |row| row.get(0),
-        )
-        .optional()?
+        match conn
+            .query_row(
+                "SELECT id FROM worktrees WHERE repo_id = ?1 AND name = ?2",
+                params![repo_id, w],
+                |row| row.get(0),
+            )
+            .optional()?
+        {
+            Some(id) => Some(id),
+            // R18 / R-WTF-2 (review [31]): an unknown worktree NAME returns
+            // the empty set (PG-aligned) instead of silently dropping the
+            // filter and serving all-worktree results.
+            None => return Ok(vec![]),
+        }
     } else {
         None
     };
@@ -278,12 +286,18 @@ pub fn count_fts_matches(
 
     // Resolve worktree_id if specified
     let worktree_id: Option<i64> = if let Some(w) = worktree {
-        conn.query_row(
-            "SELECT id FROM worktrees WHERE repo_id = ?1 AND name = ?2",
-            params![repo_id, w],
-            |row| row.get(0),
-        )
-        .optional()?
+        match conn
+            .query_row(
+                "SELECT id FROM worktrees WHERE repo_id = ?1 AND name = ?2",
+                params![repo_id, w],
+                |row| row.get(0),
+            )
+            .optional()?
+        {
+            Some(id) => Some(id),
+            // R18 / R-WTF-2 (review [31]): unknown worktree name -> empty.
+            None => return Ok(0),
+        }
     } else {
         None
     };

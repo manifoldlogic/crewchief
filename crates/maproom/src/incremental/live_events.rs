@@ -62,8 +62,20 @@ pub async fn handle_file_event(
                 debug!(path = %abs.display(), "Modified file no longer exists; awaiting Deleted event");
                 return Ok(stats);
             }
-            std::fs::File::open(&abs)
-                .with_context(|| format!("file exists but is unreadable: {}", abs.display()))?;
+            // Review [33]: validate indexability (UTF-8 readable) — a bare
+            // open() check let non-UTF8 files report files_processed=1 while
+            // upsert_files silently skipped them (the phantom class again).
+            match std::fs::read_to_string(&abs) {
+                Ok(_) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::InvalidData => {
+                    debug!(path = %abs.display(), "file is not valid UTF-8; not indexable (scan parity)");
+                    return Ok(stats);
+                }
+                Err(e) => {
+                    return Err(anyhow::anyhow!(e)
+                        .context(format!("file exists but is unreadable: {}", abs.display())));
+                }
+            }
 
             let commit = get_head_commit(watch_root)?;
             crate::indexer::upsert_files(

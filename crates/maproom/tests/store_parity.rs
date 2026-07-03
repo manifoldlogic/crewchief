@@ -411,22 +411,24 @@ async fn check_cleanup_orphan_gc(name: &str, store: &(dyn Store + Send + Sync)) 
         "orphan GC'd"
     );
 
-    // The following are PostgresStore properties of the arch-doc pivot (§3.2):
-    //   * multi-worktree chunks survive removal of one worktree (GC is by the
-    //     `chunk_worktrees` junction, not file ownership — R-WT-1/R-WT-4); and
-    //   * the content-addressed `code_embeddings` pool is persistent (R-WT-4).
-    // The legacy SqliteStore predates this pivot: its `delete_worktree_data` GCs
-    // chunks by file ownership and deletes `code_embeddings` (to keep its
-    // `vec_code` ANN index consistent). These are asserted on the Postgres backend
-    // only, matching the §7 scenario's intent for the NEW backend without mutating
-    // the SQLite reference impl.
+    // Junction-survival is a BOTH-backend property since review [07]: GC is
+    // by the `chunk_worktrees` junction, not file ownership (R-WT-1/R-WT-4),
+    // so a chunk still mapped to another worktree survives — and on SQLite
+    // its shared blob's embedding survives too (only last-reference blobs
+    // are GC'd, for vec_code/ANN consistency).
+    assert_eq!(
+        store.get_chunk_worktrees(shared).await.unwrap(),
+        vec![wb],
+        "shared kept in B"
+    );
+    assert_eq!(
+        res.embeddings_deleted, 0,
+        "shared blob's embedding must survive"
+    );
+    // Pool persistence beyond live references is the PG-only divergence
+    // (persistent content-addressed pool, R-WT-4; SQLite GCs unreferenced
+    // blobs deliberately).
     if name == "postgres" {
-        assert_eq!(
-            store.get_chunk_worktrees(shared).await.unwrap(),
-            vec![wb],
-            "shared kept in B"
-        );
-        assert_eq!(res.embeddings_deleted, 0, "embeddings kept (R-WT-4)");
         assert_eq!(
             store.get_global_embedding_count().await.unwrap(),
             emb_before,

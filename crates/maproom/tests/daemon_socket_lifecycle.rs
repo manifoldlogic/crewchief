@@ -24,9 +24,16 @@ fn binary_path() -> PathBuf {
 }
 
 fn spawn_socket_daemon(db_dir: &std::path::Path, sock: &std::path::Path, idle: u32) -> Child {
+    // Review [34]/[37]: a per-test --pid-path. Without it every daemon in
+    // this binary raced for the global /tmp/maproom-{uid}.pid: under the
+    // default parallel harness (or with a real user daemon running) the
+    // flock losers exited AlreadyRunning and 'socket must appear' flaked.
+    let pid_path = db_dir.join("daemon.pid");
     Command::new(binary_path())
         .args(["serve", "--socket", "--socket-path"])
         .arg(sock)
+        .arg("--pid-path")
+        .arg(&pid_path)
         .args(["--idle-timeout", &idle.to_string()])
         .env(
             "MAPROOM_DATABASE_URL",

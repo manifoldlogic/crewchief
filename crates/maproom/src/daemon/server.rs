@@ -119,6 +119,28 @@ impl DaemonState {
     }
 }
 
+#[cfg(unix)]
+fn libc_o_nofollow() -> i32 {
+    // O_NOFOLLOW is stable per-platform; avoid a direct libc dependency.
+    #[cfg(target_os = "linux")]
+    {
+        0o400000
+    }
+    #[cfg(target_os = "macos")]
+    {
+        0x0100
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        0
+    }
+}
+
+#[cfg(unix)]
+extern "C" {
+    fn geteuid() -> u32;
+}
+
 /// RAII guard for the Unix socket file (R21 / R-SOCK-1): removes the socket
 /// on drop so every shutdown path (incl. select!-cancellation on signals)
 /// cleans up, symmetric with PidFileGuard.
@@ -167,12 +189,55 @@ impl PidFileGuard {
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                 // Stale-or-live? Open the existing file and let the flock
                 // decide (it is released automatically when its owner dies).
-                let f = OpenOptions::new()
-                    .write(true)
-                    .open(path)
-                    .map_err(DaemonError::PidFileError)?;
-                f.try_lock_exclusive()
-                    .map_err(|_| DaemonError::AlreadyRunning(path.to_path_buf()))?;
+                // Review [10]: /tmp is world-writable — open with O_NOFOLLOW
+                // (no symlink traversal to attacker-chosen targets), verify
+                // the inode is a regular file we own, and reset mode 0600.
+                // Review [25]: after acquiring the lock, re-stat the PATH and
+                // compare (dev, ino) with the locked fd — a concurrently
+                // dropping daemon unlinks before its flock releases, and
+                // adopting that doomed inode would leave us with no on-disk
+                // PID file (letting a third daemon start).
+                #[cfg(unix)]
+                let f = {
+                    use std::os::unix::fs::MetadataExt;
+                    let f = OpenOptions::new()
+                        .write(true)
+                        .custom_flags(libc_o_nofollow())
+                        .open(path)
+                        .map_err(DaemonError::PidFileError)?;
+                    let meta = f.metadata().map_err(DaemonError::PidFileError)?;
+                    if !meta.is_file() || meta.uid() != unsafe { geteuid() } {
+                        return Err(DaemonError::SocketError(format!(
+                            "refusing PID-file takeover: {} is not a regular file owned by this user",
+                            path.display()
+                        )));
+                    }
+                    f.try_lock_exclusive()
+                        .map_err(|_| DaemonError::AlreadyRunning(path.to_path_buf()))?;
+                    // Post-lock identity check: the path must still refer to
+                    // the inode we locked (nlink > 0 and same dev/ino).
+                    let on_disk = std::fs::symlink_metadata(path);
+                    let same = on_disk
+                        .map(|d| d.dev() == meta.dev() && d.ino() == meta.ino())
+                        .unwrap_or(false);
+                    if !same || f.metadata().map(|m| m.nlink()).unwrap_or(0) == 0 {
+                        return Err(DaemonError::AlreadyRunning(path.to_path_buf()));
+                    }
+                    let mut perms = meta.permissions();
+                    perms.set_mode(0o600);
+                    let _ = f.set_permissions(perms);
+                    f
+                };
+                #[cfg(not(unix))]
+                let f = {
+                    let f = OpenOptions::new()
+                        .write(true)
+                        .open(path)
+                        .map_err(DaemonError::PidFileError)?;
+                    f.try_lock_exclusive()
+                        .map_err(|_| DaemonError::AlreadyRunning(path.to_path_buf()))?;
+                    f
+                };
                 f.set_len(0).map_err(DaemonError::PidFileError)?;
                 info!(path = %path.display(), "Took over stale PID file (previous daemon did not shut down cleanly)");
                 f
@@ -217,6 +282,11 @@ pub struct SocketServer {
     config: ServerConfig,
     state: Arc<DaemonState>,
     shutdown_tx: broadcast::Sender<()>,
+    /// Review [08]: level-triggered shutdown flag. The broadcast alone is
+    /// edge-triggered — a signal landing before run() first subscribes would
+    /// send to zero receivers and be lost forever (daemon then only exits on
+    /// idle timeout / SIGKILL). run() checks this flag after subscribing.
+    shutdown_requested: std::sync::atomic::AtomicBool,
 }
 
 impl SocketServer {
@@ -229,6 +299,7 @@ impl SocketServer {
             config,
             state,
             shutdown_tx,
+            shutdown_requested: std::sync::atomic::AtomicBool::new(false),
         })
     }
 
@@ -274,6 +345,15 @@ impl SocketServer {
 
         // Accept loop with idle timeout
         let mut shutdown_rx = self.shutdown_tx.subscribe();
+        // Review [08]: a shutdown requested before this subscription existed
+        // was broadcast to nobody — honor the level-triggered flag now.
+        if self
+            .shutdown_requested
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            info!("Shutdown was requested before the accept loop started");
+            return Ok(());
+        }
         // R20 / R-IDLE-1 (OD-15): the idle check ticks proportionally to the
         // timeout (was a fixed 60s tick that quantized --idle-timeout 5 into
         // ~69s: idle_since set up to 60s late, then checked at 60s grain).
@@ -288,8 +368,14 @@ impl SocketServer {
                 Ok((stream, _addr)) = listener.accept() => {
                     idle_since = None; // Reset idle timer when client connects
                     let state = self.state.clone();
+                    // Review [09]: give every client handler a shutdown
+                    // receiver so graceful_shutdown's session drain can
+                    // actually complete — previously nothing ever told
+                    // connected clients to close and every signal shutdown
+                    // with a persistent client sat out the full 30s cap.
+                    let client_shutdown = self.shutdown_tx.subscribe();
                     tokio::spawn(async move {
-                        if let Err(e) = handle_client(stream, state).await {
+                        if let Err(e) = handle_client(stream, state, client_shutdown).await {
                             error!(error = %e, "Client handler error");
                         }
                     });
@@ -367,6 +453,10 @@ impl SocketServer {
 
     /// Trigger shutdown (for testing or external signals)
     pub fn shutdown(&self) {
+        // Review [08]: set the level-triggered flag BEFORE the broadcast so a
+        // not-yet-subscribed run() still observes the request.
+        self.shutdown_requested
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         let _ = self.shutdown_tx.send(());
     }
 }
@@ -432,7 +522,11 @@ pub async fn run_with_signal_handling(server: SocketServer) -> Result<(), Daemon
 }
 
 /// Handle a single client connection
-async fn handle_client(stream: UnixStream, state: Arc<DaemonState>) -> Result<()> {
+async fn handle_client(
+    stream: UnixStream,
+    state: Arc<DaemonState>,
+    mut shutdown: broadcast::Receiver<()>,
+) -> Result<()> {
     let mut framed = Framed::new(stream, JsonRpcCodec::new());
 
     // Create response channel for this session
@@ -498,6 +592,13 @@ async fn handle_client(stream: UnixStream, state: Arc<DaemonState>) -> Result<()
                     }
                 }
             }
+            // Review [09]: server shutdown closes the connection so the
+            // graceful drain can complete (previously a persistent idle
+            // client pinned active_count > 0 for the whole 30s cap).
+            _ = shutdown.recv() => {
+                debug!(session_id = %session_id, "Server shutting down; closing client connection");
+                break;
+            }
         }
     }
 
@@ -518,6 +619,20 @@ impl Drop for SessionGuard {
 
 /// Handle a JSON-RPC request (stub implementation)
 async fn handle_request(req: JsonRpcRequest, _state: &DaemonState) -> JsonRpcMessage {
+    // Review [27] / R-RPC-2: validate the version exactly like the stdio
+    // daemon — both transports share one wire contract.
+    if req.jsonrpc.as_deref() != Some("2.0") {
+        return JsonRpcMessage::Response(JsonRpcResponse {
+            jsonrpc: "2.0".into(),
+            result: None,
+            error: Some(crate::daemon::types::JsonRpcError {
+                code: -32600,
+                message: "Invalid Request".into(),
+                data: Some(serde_json::json!("jsonrpc must be \"2.0\"")),
+            }),
+            id: req.id.clone().flatten().unwrap_or(serde_json::Value::Null),
+        });
+    }
     // TODO: Dispatch to actual method handlers (MULTICN-2005)
     // For now, simple echo response
     JsonRpcMessage::Response(JsonRpcResponse {

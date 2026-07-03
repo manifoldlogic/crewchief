@@ -310,27 +310,37 @@ impl StoreChunks for PostgresStore {
         // omission). Repo-scoping subqueries are mandatory: relpath alone
         // collides across repos.
         let mut tx = self.pool.begin().await?;
-        let removed = sqlx::query(
-            "DELETE FROM chunk_worktrees \
-             WHERE worktree_id = $1 \
-               AND chunk_id IN ( \
-                 SELECT c.id FROM chunks c \
-                 JOIN files f ON f.id = c.file_id \
-                 WHERE f.relpath = $2 \
-                   AND ($3::bigint IS NULL OR c.file_id <> $3) \
-                   AND f.commit_id IN (SELECT id FROM commits WHERE repo_id = \
-                         (SELECT repo_id FROM worktrees WHERE id = $1)) \
-               )",
+        // Review [06]/[24]/[32]: candidate-scoped (see the SQLite impl's
+        // rationale — the global anti-join ran once per scanned file).
+        let candidate_ids: Vec<i64> = sqlx::query_scalar(
+            "SELECT c.id FROM chunks c \
+             JOIN files f ON f.id = c.file_id \
+             WHERE f.relpath = $2 \
+               AND ($3::bigint IS NULL OR c.file_id <> $3) \
+               AND f.commit_id IN (SELECT id FROM commits WHERE repo_id = \
+                     (SELECT repo_id FROM worktrees WHERE id = $1))",
         )
         .bind(worktree_id)
         .bind(relpath)
         .bind(keep_file_id)
+        .fetch_all(&mut *tx)
+        .await?;
+        if candidate_ids.is_empty() {
+            tx.commit().await?;
+            return Ok(0);
+        }
+        let removed = sqlx::query(
+            "DELETE FROM chunk_worktrees WHERE worktree_id = $1 AND chunk_id = ANY($2)",
+        )
+        .bind(worktree_id)
+        .bind(&candidate_ids)
         .execute(&mut *tx)
         .await?;
         sqlx::query(
-            "DELETE FROM chunks WHERE NOT EXISTS \
+            "DELETE FROM chunks WHERE id = ANY($1) AND NOT EXISTS \
              (SELECT 1 FROM chunk_worktrees cw WHERE cw.chunk_id = chunks.id)",
         )
+        .bind(&candidate_ids)
         .execute(&mut *tx)
         .await?;
         sqlx::query(

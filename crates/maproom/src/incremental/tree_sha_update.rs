@@ -116,7 +116,7 @@ impl Default for UpdateStats {
 /// # use maproom::db;
 /// # async fn example() -> anyhow::Result<()> {
 /// let client = db::connect().await?;
-/// let affected = remove_worktree_from_chunks(&client, 1, "src/deleted.rs").await?;
+/// let affected = remove_worktree_from_chunks(client.as_ref(), 1, "src/deleted.rs").await?;
 /// println!("Removed worktree from {} chunks", affected);
 /// # Ok(())
 /// # }
@@ -256,11 +256,29 @@ pub async fn incremental_update(
     // failure is a hard Err BEFORE any index_state write, because
     // upsert_files silently skips unreadable paths and the R08 invariant
     // would be unenforceable), then submitted in ONE upsert_files call.
+    // Review [23]: apply the same .maproomignore discipline as scan — the
+    // branch-switch diff used to feed vendored/ignored paths straight into
+    // upsert_files, polluting the index until the next full-scan
+    // reconciliation removed them again (churn loop).
+    let ignore_matcher = {
+        let patterns = crate::incremental::ignore::load_ignore_patterns(repo_path)
+            .unwrap_or_default();
+        crate::incremental::IgnorePatternMatcher::with_patterns(patterns).ok()
+    };
+
     let mut to_upsert: Vec<std::path::PathBuf> = Vec::new();
     for change in &changes {
         let relpath = change.path.to_string_lossy();
         match change.status {
             FileStatus::Added | FileStatus::Modified => {
+                if let Some(m) = &ignore_matcher {
+                    if m.should_ignore(&change.path) {
+                        // Ignored by policy — legitimately non-indexed (OD-4).
+                        debug!(file = %relpath, "diff entry matches ignore patterns; skipping");
+                        stats.files_processed += 1;
+                        continue;
+                    }
+                }
                 let abs = repo_path.join(&change.path);
                 if abs.is_dir() {
                     // Legitimately non-indexable; scan would skip it too (OD-4).
@@ -268,18 +286,41 @@ pub async fn incremental_update(
                     continue;
                 }
                 if !abs.is_file() {
+                    // Review [03]: PRESENT-but-not-regular entries (dangling
+                    // symlinks, gitlink/absent submodules) are legitimate
+                    // diff-tree output that scan would skip — hard-bailing
+                    // wedged tree_sha forever on such repos. Only a truly
+                    // ABSENT path (severe worktree/diff skew) still refuses
+                    // to advance.
+                    if std::fs::symlink_metadata(&abs).is_ok() {
+                        debug!(file = %relpath, "diff entry is a non-regular file (symlink/gitlink); skipping");
+                        stats.files_processed += 1;
+                        continue;
+                    }
                     anyhow::bail!(
                         "diff entry {} is missing from the working tree; refusing to advance tree_sha",
                         relpath
                     );
                 }
-                std::fs::File::open(&abs).with_context(|| {
-                    format!(
-                        "diff entry {} is unreadable; refusing to advance tree_sha",
-                        relpath
-                    )
-                })?;
-                to_upsert.push(change.path.clone());
+                // Review [33]: validate INDEXABILITY, not mere openability —
+                // upsert_files silently skips read_to_string failures, so an
+                // open()-only check let non-UTF8 files count as processed
+                // and advance tree_sha. Non-UTF8 = scan-parity skip;
+                // any other read failure (permissions) stays a hard error
+                // (R-WATCH-8: never advance past an unreadable regular file).
+                match std::fs::read_to_string(&abs) {
+                    Ok(_) => to_upsert.push(change.path.clone()),
+                    Err(e) if e.kind() == std::io::ErrorKind::InvalidData => {
+                        debug!(file = %relpath, "diff entry is not valid UTF-8; skipping (scan parity)");
+                        stats.files_processed += 1;
+                    }
+                    Err(e) => {
+                        return Err(anyhow::anyhow!(e).context(format!(
+                            "diff entry {} is unreadable; refusing to advance tree_sha",
+                            relpath
+                        )));
+                    }
+                }
             }
             FileStatus::Deleted => {
                 // R-GC-6: full unmap (junction + orphan GC + FTS + files rows).

@@ -149,9 +149,15 @@ fn serve_socket_starts_and_idle_exits_without_provider() {
     let url = format!("sqlite://{}/r16s.db", db.path().display());
     let sock = db.path().join("r16.sock");
 
+    // Review [34]/[37]: per-test --pid-path so this daemon can't lose the
+    // global /tmp/maproom-{uid}.pid flock race against the lifecycle suite
+    // or a genuinely running user daemon.
+    let pid = db.path().join("r16.pid");
     let out = serve_cmd(&url)
         .args(["serve", "--socket", "--socket-path"])
         .arg(&sock)
+        .arg("--pid-path")
+        .arg(&pid)
         .args(["--idle-timeout", "3"])
         .stdin(Stdio::null())
         .output()
