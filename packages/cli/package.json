@@ -3,6 +3,11 @@
   "version": "1.7.0",
   "private": false,
   "description": "CrewChief: Multi-agent orchestration CLI for coordinating AI agents via git worktrees.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/manifoldlogic/crewchief.git",
+    "directory": "packages/cli"
+  },
   "license": "MIT",
   "type": "module",
   "engines": {
