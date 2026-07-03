@@ -156,9 +156,15 @@ jobs:
         # Use --test-threads=1 because:
         # 1. Env var race conditions in provider tests (mitigated by #[serial] but kept for safety)
         # 2. Git poller integration tests have filesystem timing sensitivity that flakes under parallel execution
-        # Exclude doc tests (--lib --bins --tests) because many doc examples have
-        # compilation errors (private fn references, missing imports) - pre-existing on main
+        # Doc tests run as a separate step below (they don't share the env-var
+        # or filesystem-timing concerns, so they keep default parallelism).
         run: cargo test --lib --bins --tests -- --test-threads=1
+        working-directory: crates/maproom
+
+      - name: Run doc tests
+        # Doc examples are compiled against the public API; skipping them let
+        # the connect() -> Arc<dyn Store> change silently break 7 examples.
+        run: cargo test --doc
         working-directory: crates/maproom
 
       - name: Job Summary
