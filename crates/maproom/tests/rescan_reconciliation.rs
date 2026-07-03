@@ -48,7 +48,7 @@ async fn chunk_count(db_dir: &Path) -> i64 {
 }
 
 fn setup(repo: &Path) {
-    git(repo, &["init", "-q"]);
+    git(repo, &["init", "-q", "-b", "main"]);
     std::fs::write(
         repo.join("a.ts"),
         "export function alphaOne() { return 1; }\n",

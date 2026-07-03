@@ -38,7 +38,7 @@ fn git(dir: &Path, args: &[&str]) {
 
 /// Create a temp git repo with one committed TypeScript file.
 fn make_repo(dir: &Path) {
-    git(dir, &["init", "-q"]);
+    git(dir, &["init", "-q", "-b", "main"]);
     std::fs::write(
         dir.join("a.ts"),
         "export function alphaOne() { return 1; }\n",

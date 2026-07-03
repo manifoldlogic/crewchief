@@ -31,7 +31,7 @@ command -v jq >/dev/null || { say "jq required"; exit 1; }
 
 # fx fixture: $1 = workdir (created); DB at $1/w.db, repo at $1/fx
 make_fx() {
-  ( cd "$1" && git init -q fx && cd fx \
+  ( cd "$1" && git init -q -b main fx && cd fx \
     && printf 'export function alphaOne() { return 1; }\n' > a.ts \
     && git add a.ts && git -c user.email=t@t -c user.name=t commit -qm init )
   MAPROOM_DATABASE_URL="sqlite://$1/w.db" "$PWD/$BIN" scan --repo fx --path "$1/fx" >/dev/null 2>&1
@@ -85,7 +85,7 @@ rm -rf "$w"
 
 # ---------- R05: cleanup-stale removes registration and converges ----------
 w=$(mktemp -d)
-( cd "$w" && git init -q doomed && cd doomed && printf 'x\n' > f.txt \
+( cd "$w" && git init -q -b main doomed && cd doomed && printf 'x\n' > f.txt \
   && git add f.txt && git -c user.email=t@t -c user.name=t commit -qm i )
 MAPROOM_DATABASE_URL="sqlite://$w/c.db" "$BIN" scan --repo doomed --path "$w/doomed" >/dev/null 2>&1
 rm -rf "$w/doomed"
@@ -219,7 +219,7 @@ if [ -n "${MAPROOM_TEST_PG_URL:-}" ]; then
   cargo build -q -p maproom --features postgres >/dev/null 2>&1 || true
   # R10: PG search emits preview
   w=$(mktemp -d)
-  ( cd "$w" && git init -q fx && cd fx \
+  ( cd "$w" && git init -q -b main fx && cd fx \
     && printf 'export function alphaOne() { return 1; }\n' > a.ts \
     && git add a.ts && git -c user.email=t@t -c user.name=t commit -qm init )
   PGDB="${MAPROOM_TEST_PG_URL%/*}/maproom_e2e_runner"

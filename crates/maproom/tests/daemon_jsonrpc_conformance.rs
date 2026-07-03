@@ -58,7 +58,7 @@ fn serve(db_url: &str, lines: &[&str]) -> (String, String) {
 fn scanned_fixture() -> (tempfile::TempDir, tempfile::TempDir, String) {
     let repo = tempfile::TempDir::new().unwrap();
     let db = tempfile::TempDir::new().unwrap();
-    git(repo.path(), &["init", "-q"]);
+    git(repo.path(), &["init", "-q", "-b", "main"]);
     std::fs::write(
         repo.path().join("a.ts"),
         "export function alphaOne() { return 1; }\n",

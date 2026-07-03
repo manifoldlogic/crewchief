@@ -79,7 +79,7 @@ fn serve_answers_ping_with_broken_google_env() {
 fn serve_fts_search_works_without_provider() {
     let repo = tempfile::TempDir::new().unwrap();
     let db = tempfile::TempDir::new().unwrap();
-    git(repo.path(), &["init", "-q"]);
+    git(repo.path(), &["init", "-q", "-b", "main"]);
     std::fs::write(
         repo.path().join("a.ts"),
         "export function alphaOne() { return 1; }\n",
@@ -113,7 +113,7 @@ fn serve_fts_search_works_without_provider() {
 fn hybrid_search_falls_back_to_fts_without_provider() {
     let repo = tempfile::TempDir::new().unwrap();
     let db = tempfile::TempDir::new().unwrap();
-    git(repo.path(), &["init", "-q"]);
+    git(repo.path(), &["init", "-q", "-b", "main"]);
     std::fs::write(
         repo.path().join("a.ts"),
         "export function alphaOne() { return 1; }\n",
