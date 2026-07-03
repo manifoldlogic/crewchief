@@ -216,7 +216,13 @@ then pass "R15(cargo)"; else fail "R15(cargo)" "embedding_service_test red"; fi
 # ---------- PG-gated probes ----------
 if [ -n "${MAPROOM_TEST_PG_URL:-}" ]; then
   PGBIN=target/debug/maproom   # requires a --features postgres build for PG probes
-  cargo build -q -p maproom --features postgres >/dev/null 2>&1 || true
+  # A failed postgres build must FAIL the PG probes, not silently run them
+  # against a stale non-postgres binary (which errors exit-2 on postgres://
+  # URLs for an unrelated reason, masking the real build breakage).
+  if ! cargo build -q -p maproom --features postgres >/dev/null 2>&1; then
+    fail "R10(pg)" "cargo build --features postgres failed; probe not run"
+    fail "R09(pg-stale-gone)" "cargo build --features postgres failed; probe not run"
+  else
   # R10: PG search emits preview
   w=$(mktemp -d)
   ( cd "$w" && git init -q -b main fx && cd fx \
@@ -238,6 +244,7 @@ if [ -n "${MAPROOM_TEST_PG_URL:-}" ]; then
     | jq -e '.hits | length == 0' >/dev/null 2>&1
   then pass "R09(pg-stale-gone)"; else fail "R09(pg-stale-gone)" "replaced symbol still searchable on PG"; fi
   rm -rf "$w"
+  fi
 else
   SKIPPED_PG=1
   say "SKIPPED-PG: MAPROOM_TEST_PG_URL unset — R10(pg) and R09(pg) probes not run (milestone gate requires them; see fix spec §8.5)"

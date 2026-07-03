@@ -373,6 +373,15 @@ impl MarkdownMigrator {
 
     /// Rollback migration from a backup table
     pub async fn rollback(&self, backup_table: &str) -> Result<()> {
+        // Same R-DBK-2 gate as delete_backup: the name is format!-interpolated
+        // into SQL below, so reject non-backup shapes before any query runs.
+        if !is_valid_backup_table_name(backup_table) {
+            anyhow::bail!(
+                "Configuration error: '{}' is not a maproom backup table (expected chunks_backup_YYYYMMDD_HHMMSS)",
+                backup_table
+            );
+        }
+
         info!("Starting rollback from backup table: {}", backup_table);
 
         let backup_table = backup_table.to_string();

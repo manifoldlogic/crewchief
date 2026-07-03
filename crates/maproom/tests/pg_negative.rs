@@ -124,7 +124,9 @@ fn feature_build_unreachable_postgres_errors_with_no_sqlite_fallback() {
         )
         .args(["serve", "--socket", "--socket-path"])
         .arg(&sock)
-        .stdout(std::process::Stdio::piped())
+        // stdout is never read; a piped-but-undrained pipe could fill and
+        // block the child, turning a clean failure into a bogus 20s timeout.
+        .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
         .spawn()
         .expect("Failed to spawn binary");
