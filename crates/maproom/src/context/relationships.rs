@@ -95,30 +95,44 @@ pub async fn find_callers(
     chunk_id: i64,
     max_depth: i32,
 ) -> Result<Vec<RelatedChunk>> {
-    // Use SqliteStore's find_callers method
     let graph_results = store
         .find_callers(chunk_id, Some(max_depth as usize))
         .await?;
+    graph_results_to_related(store, graph_results).await
+}
 
-    // Convert GraphResult to RelatedChunk
+/// Shared enrichment: one batched fetch (F34's `get_chunks_by_ids`) instead
+/// of a per-result `get_chunk_by_id` N+1.
+async fn graph_results_to_related(
+    store: &(dyn Store + Send + Sync),
+    graph_results: Vec<crate::db::GraphResult>,
+) -> Result<Vec<RelatedChunk>> {
+    if graph_results.is_empty() {
+        return Ok(Vec::new());
+    }
+    let ids: Vec<i64> = graph_results.iter().map(|r| r.chunk_id).collect();
+    let chunks: std::collections::HashMap<i64, _> = store
+        .get_chunks_by_ids(&ids)
+        .await?
+        .into_iter()
+        .map(|c| (c.id, c))
+        .collect();
     let mut related_chunks = Vec::new();
     for result in graph_results {
-        // Get chunk details for each caller
-        if let Some(chunk) = store.get_chunk_by_id(result.chunk_id).await? {
+        if let Some(chunk) = chunks.get(&result.chunk_id) {
             related_chunks.push(RelatedChunk {
                 id: chunk.id,
-                relpath: chunk.file_path,
-                symbol_name: chunk.symbol_name,
-                kind: chunk.kind,
+                relpath: chunk.file_path.clone(),
+                symbol_name: chunk.symbol_name.clone(),
+                kind: chunk.kind.clone(),
                 start_line: chunk.start_line,
                 end_line: chunk.end_line,
-                preview: chunk.preview,
+                preview: chunk.preview.clone(),
                 depth: result.depth as i32,
                 relevance: 0.7_f64.powi(result.depth as i32), // Decay by 0.7 per hop
             });
         }
     }
-
     Ok(related_chunks)
 }
 
@@ -147,31 +161,10 @@ pub async fn find_callees(
     chunk_id: i64,
     max_depth: i32,
 ) -> Result<Vec<RelatedChunk>> {
-    // Use SqliteStore's find_callees method
     let graph_results = store
         .find_callees(chunk_id, Some(max_depth as usize))
         .await?;
-
-    // Convert GraphResult to RelatedChunk
-    let mut related_chunks = Vec::new();
-    for result in graph_results {
-        // Get chunk details for each callee
-        if let Some(chunk) = store.get_chunk_by_id(result.chunk_id).await? {
-            related_chunks.push(RelatedChunk {
-                id: chunk.id,
-                relpath: chunk.file_path,
-                symbol_name: chunk.symbol_name,
-                kind: chunk.kind,
-                start_line: chunk.start_line,
-                end_line: chunk.end_line,
-                preview: chunk.preview,
-                depth: result.depth as i32,
-                relevance: 0.7_f64.powi(result.depth as i32), // Decay by 0.7 per hop
-            });
-        }
-    }
-
-    Ok(related_chunks)
+    graph_results_to_related(store, graph_results).await
 }
 
 /// Find imports (dependencies) of the given chunk.

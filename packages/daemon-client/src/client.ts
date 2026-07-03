@@ -65,11 +65,18 @@ export interface SearchResult {
 export interface ContextParams {
   chunk_id: string;
   budget_tokens?: number;
+  /**
+   * F81/F82: relationship expansion now defaults ON daemon-side —
+   * omitted callers/callees/tests/imports are treated as true (docs,
+   * config and the React options remain opt-in). Pass explicit false
+   * to suppress a segment.
+   */
   expand?: {
     callers?: boolean;
     callees?: boolean;
     tests?: boolean;
     docs?: boolean;
+    imports?: boolean;
     config?: boolean;
     max_depth?: number;
     routes?: boolean;

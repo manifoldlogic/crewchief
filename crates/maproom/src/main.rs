@@ -307,19 +307,40 @@ enum Commands {
         #[arg(long, default_value_t = 6000)]
         budget: usize,
 
-        /// Include caller functions
+        /// Include caller functions (default: enabled; F81)
         #[arg(long)]
         callers: bool,
 
-        /// Include callee functions
+        /// Exclude caller functions
+        #[arg(long, conflicts_with = "callers")]
+        no_callers: bool,
+
+        /// Include callee functions (default: enabled; F81)
         #[arg(long)]
         callees: bool,
 
-        /// Include test files
+        /// Exclude callee functions
+        #[arg(long, conflicts_with = "callees")]
+        no_callees: bool,
+
+        /// Include test files (default: enabled; F81)
         #[arg(long)]
         tests: bool,
 
-        /// Include documentation
+        /// Exclude test files
+        #[arg(long, conflicts_with = "tests")]
+        no_tests: bool,
+
+        /// Include import/export relationships (default: enabled; F82)
+        #[arg(long)]
+        imports: bool,
+
+        /// Exclude import/export relationships
+        #[arg(long, conflicts_with = "imports")]
+        no_imports: bool,
+
+        /// Include documentation (accepted for forward compatibility; the
+        /// documentation-expansion engine is not implemented yet)
         #[arg(long)]
         docs: bool,
 
@@ -2325,14 +2346,27 @@ async fn real_main() -> anyhow::Result<()> {
             chunk_id,
             budget,
             callers,
+            no_callers,
             callees,
+            no_callees,
             tests,
+            no_tests,
+            imports,
+            no_imports,
             docs,
             config,
             max_depth,
             format,
             json: _,
         } => {
+            // F81: relationship expansion defaults ON; --no-* opts out. The
+            // positive flags remain accepted (now redundant) for backward
+            // compatibility with existing scripts.
+            let _ = (callers, callees, tests, imports);
+            let callers = !no_callers;
+            let callees = !no_callees;
+            let tests = !no_tests;
+            let imports = !no_imports;
             // F13 / AFM-04: classify-before-render, same contract as search —
             // every error goes through classify_error; Agent format gets the
             // structured stdout line; exit code is the classified one.
@@ -2350,9 +2384,10 @@ async fn real_main() -> anyhow::Result<()> {
                 callees,
                 tests,
                 docs,
+                imports,
                 config,
                 max_depth,
-                ..Default::default()
+                ..ExpandOptions::primary_only()
             };
 
             // Execute context assembly
@@ -2824,20 +2859,30 @@ mod tests {
             chunk_id,
             budget,
             callers,
+            no_callers,
             callees,
             tests,
+            imports,
+            no_imports,
             docs,
             config,
             max_depth,
             format,
             json,
+            ..
         } = cli.command
         {
             assert_eq!(chunk_id, 12345);
             assert_eq!(budget, 6000); // default
+            // F81: the positive flags parse false when absent (they are
+            // redundant back-compat flags); the EFFECTIVE default is ON via
+            // the --no-* inversion in the handler.
             assert_eq!(callers, false);
+            assert_eq!(no_callers, false);
             assert_eq!(callees, false);
             assert_eq!(tests, false);
+            assert_eq!(imports, false);
+            assert_eq!(no_imports, false);
             assert_eq!(docs, false);
             assert_eq!(config, false);
             assert_eq!(max_depth, 2); // default
@@ -2846,6 +2891,46 @@ mod tests {
         } else {
             panic!("Expected Context command");
         }
+    }
+
+    /// F81: the --no-* suppression flags parse; --no-callers conflicts with
+    /// --callers.
+    #[test]
+    fn test_context_command_parsing_no_flags() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "context",
+            "--chunk-id",
+            "7",
+            "--no-callers",
+            "--no-tests",
+            "--no-imports",
+        ]);
+        if let Commands::Context {
+            no_callers,
+            no_callees,
+            no_tests,
+            no_imports,
+            ..
+        } = cli.command
+        {
+            assert!(no_callers);
+            assert!(!no_callees);
+            assert!(no_tests);
+            assert!(no_imports);
+        } else {
+            panic!("Expected Context command");
+        }
+
+        let conflict = Cli::try_parse_from(&[
+            "maproom",
+            "context",
+            "--chunk-id",
+            "7",
+            "--callers",
+            "--no-callers",
+        ]);
+        assert!(conflict.is_err(), "--callers conflicts with --no-callers");
     }
 
     #[test]
@@ -2874,6 +2959,7 @@ mod tests {
             max_depth,
             format,
             json,
+            ..
         } = cli.command
         {
             assert_eq!(chunk_id, 99999);
@@ -2920,6 +3006,7 @@ mod tests {
             max_depth,
             format,
             json,
+            ..
         } = cli.command
         {
             assert_eq!(chunk_id, 42);

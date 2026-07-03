@@ -91,9 +91,13 @@ and related code without reading full files.
 ```bash
 maproom context \
   --chunk-id 12345 \
-  --callers --callees \
   --format agent
 ```
+
+Relationship expansion (callers, callees, tests, imports) is ON by default;
+use `--no-callers` / `--no-callees` / `--no-tests` / `--no-imports` to
+suppress a segment, and `--max-depth N` (default 2) to control transitive
+traversal depth.
 
 Example output:
 

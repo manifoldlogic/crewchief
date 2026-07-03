@@ -764,6 +764,7 @@ async fn execute_context(
         callees: params.expand.callees,
         tests: params.expand.tests,
         docs: params.expand.docs,
+        imports: params.expand.imports,
         config: params.expand.config,
         max_depth: params.expand.max_depth,
         routes: params.expand.routes,
