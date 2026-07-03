@@ -330,15 +330,15 @@ pub fn resolve_repo_id(conn: &Connection, repo: &str) -> anyhow::Result<i64> {
     };
 
     match suffix_matches.len() {
-        0 => anyhow::bail!("Repository not found: {}", repo),
+        0 => Err(crate::db::StoreError::RepositoryNotFound(repo.to_string()).into()),
         1 => Ok(suffix_matches[0].0),
         _ => {
             let names: Vec<&str> = suffix_matches.iter().map(|(_, n)| n.as_str()).collect();
-            anyhow::bail!(
-                "Ambiguous repository name '{}'. Matches: {}",
-                repo,
-                names.join(", ")
-            )
+            Err(crate::db::StoreError::AmbiguousRepository {
+                name: repo.to_string(),
+                matches: names.join(", "),
+            }
+            .into())
         }
     }
 }
@@ -719,6 +719,32 @@ impl StoreCore for SqliteStore {
                 |row| row.get(0),
             )?;
             Ok(count)
+        })
+        .await
+    }
+
+    async fn get_worktree_embedding_dim_breakdown(
+        &self,
+        worktree_id: i64,
+    ) -> anyhow::Result<Vec<(i32, i64)>> {
+        self.run(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT ce.embedding_dim, COUNT(DISTINCT cw.chunk_id)
+                 FROM chunk_worktrees cw
+                 JOIN chunks c ON c.id = cw.chunk_id
+                 JOIN code_embeddings ce ON ce.blob_sha = c.blob_sha
+                 WHERE cw.worktree_id = ?1
+                 GROUP BY ce.embedding_dim
+                 ORDER BY ce.embedding_dim",
+            )?;
+            let rows = stmt.query_map(params![worktree_id], |row| {
+                Ok((row.get::<_, i32>(0)?, row.get::<_, i64>(1)?))
+            })?;
+            let mut out = Vec::new();
+            for r in rows {
+                out.push(r?);
+            }
+            Ok(out)
         })
         .await
     }
@@ -1186,6 +1212,52 @@ impl StoreChunks for SqliteStore {
                 )
                 .optional()?;
             Ok(result)
+        })
+        .await
+    }
+
+    async fn get_chunks_by_ids(
+        &self,
+        chunk_ids: &[i64],
+    ) -> anyhow::Result<Vec<crate::db::ChunkFull>> {
+        if chunk_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        // i64 ids — safe to inline, and avoids the bind-parameter limit
+        // (same pattern as get_chunks_metadata).
+        let id_list = chunk_ids
+            .iter()
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        self.run(move |conn| {
+            let mut stmt = conn.prepare(&format!(
+                "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature,
+                        c.docstring, c.start_line, c.end_line, c.preview, f.relpath
+                 FROM chunks c
+                 JOIN files f ON f.id = c.file_id
+                 WHERE c.id IN ({id_list})"
+            ))?;
+            let rows = stmt.query_map([], |row| {
+                Ok(crate::db::ChunkFull {
+                    id: row.get(0)?,
+                    file_id: row.get(1)?,
+                    blob_sha: row.get(2)?,
+                    symbol_name: row.get(3)?,
+                    kind: row.get(4)?,
+                    signature: row.get(5)?,
+                    docstring: row.get(6)?,
+                    start_line: row.get(7)?,
+                    end_line: row.get(8)?,
+                    preview: row.get(9)?,
+                    file_path: row.get(10)?,
+                })
+            })?;
+            let mut chunks = Vec::new();
+            for c in rows {
+                chunks.push(c?);
+            }
+            Ok(chunks)
         })
         .await
     }

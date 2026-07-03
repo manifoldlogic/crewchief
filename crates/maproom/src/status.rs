@@ -31,7 +31,18 @@ pub struct WorktreeStatus {
     pub last_updated: Option<String>,
     pub embedding_count: i64,
     pub embedding_percentage: f64,
+    /// F76: embedded-chunk count per embedding dimension. More than one
+    /// entry = mixed dimensions (model changed mid-corpus) — vector recall
+    /// is silently degraded and `format_text` prints an explicit WARNING.
+    #[serde(default)]
+    pub embedding_dims: Vec<EmbeddingDimCount>,
     pub languages: HashMap<String, i64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EmbeddingDimCount {
+    pub dim: i32,
+    pub count: i64,
 }
 
 /// Query database for worktree status information.
@@ -82,6 +93,14 @@ pub async fn get_status(
                 (embedding_count as f64 / chunk_count as f64) * 100.0
             };
 
+            // F76: per-dimension breakdown (mixed dims -> visible warning)
+            let embedding_dims: Vec<EmbeddingDimCount> = store
+                .get_worktree_embedding_dim_breakdown(worktree.id)
+                .await?
+                .into_iter()
+                .map(|(dim, count)| EmbeddingDimCount { dim, count })
+                .collect();
+
             // Get language breakdown for this worktree
             let language_breakdown = store.get_worktree_language_breakdown(worktree.id).await?;
             let languages: HashMap<String, i64> = language_breakdown.into_iter().collect();
@@ -95,6 +114,7 @@ pub async fn get_status(
                 last_updated,
                 embedding_count,
                 embedding_percentage,
+                embedding_dims,
                 languages,
             });
         }
@@ -167,6 +187,31 @@ pub fn format_text(status: &StatusResponse, verbose: bool) -> String {
                     format_number(worktree.embedding_count),
                     worktree.embedding_percentage
                 ));
+
+                // F76: dimension breakdown + explicit mixed-dim warning.
+                // Plain-text markers only — no color semantics (colorblind-safe).
+                if !worktree.embedding_dims.is_empty() {
+                    let dims_str: Vec<String> = worktree
+                        .embedding_dims
+                        .iter()
+                        .map(|d| format!("{}d ({})", d.dim, format_number(d.count)))
+                        .collect();
+                    output.push_str(&format!(
+                        "    Embedding dims: {}\n",
+                        dims_str.join(", ")
+                    ));
+                    if worktree.embedding_dims.len() > 1 {
+                        let dims_only: Vec<String> = worktree
+                            .embedding_dims
+                            .iter()
+                            .map(|d| d.dim.to_string())
+                            .collect();
+                        output.push_str(&format!(
+                            "    WARNING: mixed embedding dimensions ({}) — vector search recall is degraded; re-run `maproom scan --generate-embeddings --force` with a single embedding model\n",
+                            dims_only.join(", ")
+                        ));
+                    }
+                }
 
                 // Languages line with sorted list
                 output.push_str("    Languages: ");
@@ -522,6 +567,90 @@ mod tests {
         assert_eq!(worktree_status.chunk_count, 4);
         assert_eq!(worktree_status.embedding_count, 3);
         assert_eq!(worktree_status.embedding_percentage, 75.0);
+        // F76: single-dim store — one breakdown entry, and format_text must
+        // NOT warn.
+        assert_eq!(worktree_status.embedding_dims.len(), 1);
+        assert_eq!(worktree_status.embedding_dims[0].dim, 1024);
+        assert_eq!(worktree_status.embedding_dims[0].count, 3);
+        let text = format_text(&status, false);
+        assert!(text.contains("Embedding dims: 1024d (3)"), "{text}");
+        assert!(!text.contains("WARNING"), "single dim must not warn: {text}");
+    }
+
+    /// F76: mixed embedding dimensions produce a per-dim breakdown and an
+    /// explicit plain-text WARNING (no color semantics — colorblind-safe).
+    #[tokio::test]
+    async fn test_mixed_embedding_dims_warn() {
+        let store = Arc::new(SqliteStore::connect(":memory:").await.unwrap());
+        store.migrate().await.unwrap();
+        let repo_id = store.get_or_create_repo("mix-repo", "/mix").await.unwrap();
+        let worktree_id = store
+            .get_or_create_worktree(repo_id, "main", "/mix")
+            .await
+            .unwrap();
+        let commit_id = store.get_or_create_commit(repo_id, "c1", None).await.unwrap();
+        let file = FileRecord {
+            repo_id,
+            worktree_id,
+            commit_id,
+            relpath: "m.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "hm".to_string(),
+            size_bytes: 1,
+            last_modified: None,
+        };
+        let file_id = store.upsert_file(&file).await.unwrap();
+        for i in 0..3 {
+            store
+                .insert_chunk(&ChunkRecord {
+                    file_id,
+                    worktree_id,
+                    blob_sha: format!("mixblob{i}"),
+                    symbol_name: Some(format!("m{i}")),
+                    kind: "function".to_string(),
+                    signature: None,
+                    docstring: None,
+                    start_line: (i * 10 + 1) as i32,
+                    end_line: (i * 10 + 5) as i32,
+                    preview: "p".to_string(),
+                    ts_doc_text: String::new(),
+                    recency_score: 1.0,
+                    churn_score: 0.0,
+                    metadata: None,
+                })
+                .await
+                .unwrap();
+        }
+        // two chunks at 768, one at 1024 — the mid-corpus model change
+        for (i, dim) in [(0, 768i64), (1, 768), (2, 1024)] {
+            let blob = format!("mixblob{i}");
+            store
+                .run(move |conn| {
+                    conn.execute(
+                        "INSERT INTO code_embeddings (blob_sha, embedding, embedding_dim, model_version)
+                         VALUES (?1, ?2, ?3, ?4)",
+                        params![blob, vec![0u8; 16], dim, "m"],
+                    )?;
+                    Ok(())
+                })
+                .await
+                .unwrap();
+        }
+
+        let status = get_status(store.clone(), None, None, false).await.unwrap();
+        let wt = &status.repos[0].worktrees[0];
+        assert_eq!(wt.embedding_dims.len(), 2, "two distinct dims: {:?}", wt.embedding_dims);
+        assert_eq!((wt.embedding_dims[0].dim, wt.embedding_dims[0].count), (768, 2));
+        assert_eq!((wt.embedding_dims[1].dim, wt.embedding_dims[1].count), (1024, 1));
+
+        let text = format_text(&status, false);
+        assert!(
+            text.contains("WARNING: mixed embedding dimensions (768, 1024)"),
+            "explicit warning required: {text}"
+        );
+        // JSON carries the field too
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("\"embedding_dims\""), "{json}");
     }
 
     #[tokio::test]
@@ -591,6 +720,7 @@ mod tests {
                     chunk_count: 6276,
                     embedding_count: 6226,
                     embedding_percentage: 99.2,
+                    embedding_dims: Vec::new(),
                     languages,
                     last_updated: Some("2026-02-04 00:59:41".to_string()),
                 }],
@@ -618,6 +748,7 @@ mod tests {
                     chunk_count: 0,
                     embedding_count: 0,
                     embedding_percentage: 0.0,
+                    embedding_dims: Vec::new(),
                     languages: HashMap::new(),
                     last_updated: None,
                 }],
@@ -648,6 +779,7 @@ mod tests {
                     chunk_count: 100,
                     embedding_count: 100,
                     embedding_percentage: 100.0,
+                    embedding_dims: Vec::new(),
                     languages,
                     last_updated: Some("2026-02-04 00:00:00".to_string()),
                 }],
@@ -677,6 +809,7 @@ mod tests {
                     chunk_count: 100,
                     embedding_count: 100,
                     embedding_percentage: 100.0,
+                    embedding_dims: Vec::new(),
                     languages,
                     last_updated: Some("2026-02-04 00:00:00".to_string()),
                 }],
@@ -706,6 +839,7 @@ mod tests {
                     chunk_count: 100,
                     embedding_count: 100,
                     embedding_percentage: 100.0,
+                    embedding_dims: Vec::new(),
                     languages,
                     last_updated: Some("2026-02-04 00:00:00".to_string()),
                 }],
@@ -735,6 +869,7 @@ mod tests {
                     chunk_count: 100,
                     embedding_count: 100,
                     embedding_percentage: 100.0,
+                    embedding_dims: Vec::new(),
                     languages,
                     last_updated: Some("2026-02-04 00:00:00".to_string()),
                 }],
@@ -758,6 +893,7 @@ mod tests {
                         chunk_count: 100,
                         embedding_count: 100,
                         embedding_percentage: 100.0,
+                        embedding_dims: Vec::new(),
                         languages: HashMap::new(),
                         last_updated: Some("2026-02-04 00:00:00".to_string()),
                     }],
@@ -769,6 +905,7 @@ mod tests {
                         chunk_count: 200,
                         embedding_count: 200,
                         embedding_percentage: 100.0,
+                        embedding_dims: Vec::new(),
                         languages: HashMap::new(),
                         last_updated: Some("2026-02-04 00:00:00".to_string()),
                     }],
@@ -810,6 +947,7 @@ mod tests {
                     chunk_count: 100,
                     embedding_count: 100,
                     embedding_percentage: 100.0,
+                    embedding_dims: Vec::new(),
                     languages,
                     last_updated: Some("2026-02-04 00:00:00".to_string()),
                 }],

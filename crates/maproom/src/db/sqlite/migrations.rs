@@ -438,6 +438,22 @@ CREATE TABLE IF NOT EXISTS encoding_runs (
 DROP TABLE IF EXISTS encoding_runs;
                 "#,
             },
+            Migration {
+                version: 12,
+                name: "add_chunk_edges_dst_index",
+                up: r#"
+-- F84: reverse-edge index. Caller/incoming traversal (find_callers,
+-- find_importers, find_subclasses: WHERE dst_chunk_id = ? AND type = ?)
+-- had only the src-leading UNIQUE(src_chunk_id, dst_chunk_id, type) to
+-- lean on, i.e. a full scan. Column order matches Postgres
+-- migrations_pg/0003_indexes.sql (dst_chunk_id, type).
+CREATE INDEX IF NOT EXISTS idx_chunk_edges_dst ON chunk_edges(dst_chunk_id, type);
+                "#,
+                down: r#"
+-- Rollback: drop the reverse-edge index
+DROP INDEX IF EXISTS idx_chunk_edges_dst;
+                "#,
+            },
         ]
     }
 }
@@ -500,8 +516,8 @@ mod tests {
         // Apply migrations
         runner.migrate().unwrap();
 
-        // Should now be at latest version (11)
-        assert_eq!(runner.current_version().unwrap(), 11);
+        // Should now be at latest version (12)
+        assert_eq!(runner.current_version().unwrap(), 12);
         assert!(!runner.needs_migration().unwrap());
 
         // Verify core tables exist (excluding virtual tables and dropped
@@ -598,7 +614,7 @@ mod tests {
 
         // Version should be the same
         assert_eq!(version_after_first, version_after_second);
-        assert_eq!(version_after_second, 11);
+        assert_eq!(version_after_second, 12);
 
         // Check each migration was only recorded once
         let migration_count: i32 = conn
@@ -606,7 +622,7 @@ mod tests {
                 row.get(0)
             })
             .unwrap();
-        assert_eq!(migration_count, 11, "Expected 11 migrations to be recorded");
+        assert_eq!(migration_count, 12, "Expected 12 migrations to be recorded");
     }
 
     #[test]
@@ -760,6 +776,30 @@ mod tests {
             )
             .unwrap_or(false);
         assert!(blob_index_exists, "Index idx_embeddings_blob should exist");
+
+        // F84: reverse-edge index must exist after migration to v12
+        let dst_index_exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_chunk_edges_dst'",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        assert!(dst_index_exists, "Index idx_chunk_edges_dst should exist (F84)");
+
+        // F84 acceptance: the reverse-traversal shape actually USES the index.
+        let plan: String = conn
+            .query_row(
+                "EXPLAIN QUERY PLAN SELECT src_chunk_id FROM chunk_edges \
+                 WHERE dst_chunk_id = 1 AND type = 'calls'",
+                [],
+                |row| row.get::<_, String>(3),
+            )
+            .unwrap();
+        assert!(
+            plan.contains("idx_chunk_edges_dst"),
+            "reverse-edge query must use idx_chunk_edges_dst, got plan: {plan}"
+        );
 
         // Verify vec_code virtual table exists
         let vec_code_exists: bool = conn

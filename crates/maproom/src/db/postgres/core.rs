@@ -309,6 +309,23 @@ impl StoreCore for PostgresStore {
         Ok(n)
     }
 
+    async fn get_worktree_embedding_dim_breakdown(
+        &self,
+        worktree_id: i64,
+    ) -> anyhow::Result<Vec<(i32, i64)>> {
+        let rows: Vec<(i32, i64)> = sqlx::query_as(
+            "SELECT ce.embedding_dim, count(DISTINCT cw.chunk_id) FROM chunk_worktrees cw \
+             JOIN chunks c ON c.id = cw.chunk_id \
+             JOIN code_embeddings ce ON ce.blob_sha = c.blob_sha \
+             WHERE cw.worktree_id = $1 \
+             GROUP BY ce.embedding_dim ORDER BY ce.embedding_dim",
+        )
+        .bind(worktree_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
     async fn get_worktree_language_breakdown(
         &self,
         worktree_id: i64,

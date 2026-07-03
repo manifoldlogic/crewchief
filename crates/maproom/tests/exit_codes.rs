@@ -330,3 +330,60 @@ fn empty_database_url_env_exits_2() {
         .unwrap();
     assert_eq!(out.status.code(), Some(2));
 }
+
+/// F13: `context --format agent` emits ONE structured error line on stdout
+/// (classified type + suggestion), instead of leaking a raw anyhow chain.
+#[test]
+fn context_agent_error_is_structured() {
+    let db = tempfile::TempDir::new().unwrap();
+    let url = format!("sqlite://{}/f13.db", db.path().display());
+    // migrate so the failure is chunk-not-found, not schema
+    let mig = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args(["db", "migrate"])
+        .output()
+        .unwrap();
+    assert!(mig.status.success());
+
+    let out = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args(["context", "--chunk-id", "424242", "--format", "agent"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(1), "not_found class exits 1");
+    assert!(
+        stdout.contains("ERROR | type=not_found"),
+        "structured stdout line required (F13); got: {stdout}"
+    );
+    assert!(
+        stdout.contains("suggestion="),
+        "actionable suggestion required; got: {stdout}"
+    );
+}
+
+/// F15: a typo'd repo classifies as repository_not_found — not `unknown`.
+#[test]
+fn search_unknown_repo_is_repository_not_found() {
+    let db = tempfile::TempDir::new().unwrap();
+    let url = format!("sqlite://{}/f15.db", db.path().display());
+    let mig = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args(["db", "migrate"])
+        .output()
+        .unwrap();
+    assert!(mig.status.success());
+
+    let out = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args(["search", "--repo", "definitely-a-typo", "--query", "x", "--format", "agent"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        stdout.contains("type=repository_not_found"),
+        "typed classification required (F15); got: {stdout}"
+    );
+    assert!(stdout.contains("maproom status"), "suggestion names the fix: {stdout}");
+}

@@ -641,6 +641,89 @@ async fn parity_core_idempotency() {
     for_each(|_n, s| async move { check_core_idempotency(s.as_ref()).await }).await;
 }
 
+/// F34: get_chunks_by_ids is a real batched fetch on BOTH backends —
+/// found rows carry full enrichment, missing ids are simply absent.
+async fn check_get_chunks_by_ids(store: &(dyn Store + Send + Sync)) {
+    let b = unique_base();
+    let s = seed(store, "byids").await;
+    let c1 = store
+        .insert_chunk(&chunk(s.file, s.wt, &format!("BI1{b}"), "byids_one", "one", 1, 4))
+        .await
+        .unwrap();
+    let c2 = store
+        .insert_chunk(&chunk(s.file, s.wt, &format!("BI2{b}"), "byids_two", "two", 6, 9))
+        .await
+        .unwrap();
+
+    let got = store.get_chunks_by_ids(&[c1, c2, 987_654_321]).await.unwrap();
+    assert_eq!(got.len(), 2, "two found, phantom id absent: {got:?}");
+    let one = got.iter().find(|c| c.id == c1).expect("c1 present");
+    assert_eq!(one.symbol_name.as_deref(), Some("byids_one"));
+    assert!(one.file_path.contains("src/"), "relpath joined: {}", one.file_path);
+    assert!(!one.preview.is_empty());
+    assert!(store.get_chunks_by_ids(&[]).await.unwrap().is_empty());
+}
+
+/// F15: an unknown REPO is an error carrying StoreError on BOTH backends
+/// (PG used to silently return the empty set — indistinguishable from a
+/// healthy zero-hit query).
+async fn check_search_unknown_repo_errors(store: &(dyn Store + Send + Sync)) {
+    let err = store
+        .search_chunks_fts("no-such-repo-zz", None, "anything", 5, false, None, None)
+        .await
+        .expect_err("unknown repo must error, not return empty");
+    assert!(
+        err.downcast_ref::<maproom::db::StoreError>().is_some(),
+        "error must be the typed StoreError, got: {err:#}"
+    );
+    assert!(err.to_string().contains("Repository not found"), "{err}");
+
+    let verr = store
+        .search_chunks_vector("no-such-repo-zz", None, &vec![0.01f32; 768], 5, false, None, None)
+        .await
+        .expect_err("vector: unknown repo must error");
+    assert!(verr.to_string().contains("Repository not found"), "{verr}");
+}
+
+/// F76: per-dimension embedded-chunk breakdown, ordered by dim, on BOTH
+/// backends. Two chunks at 768 + one at 1024 -> [(768,2),(1024,1)].
+async fn check_embedding_dim_breakdown(store: &(dyn Store + Send + Sync)) {
+    let b = unique_base();
+    let s = seed(store, "dims").await;
+    for (i, dim) in [(0usize, 768usize), (1, 768), (2, 1024)] {
+        let blob = format!("DIM{i}{b}");
+        store
+            .insert_chunk(&chunk(s.file, s.wt, &blob, &format!("dim_fn{i}"), "d", (i as i32) * 10 + 1, (i as i32) * 10 + 5))
+            .await
+            .unwrap();
+        store.upsert_embedding(&blob, &vec![0.01f32; dim], "m").await.unwrap();
+    }
+    let breakdown = store.get_worktree_embedding_dim_breakdown(s.wt).await.unwrap();
+    assert_eq!(
+        breakdown,
+        vec![(768, 2), (1024, 1)],
+        "ordered per-dim counts"
+    );
+}
+
+#[tokio::test]
+#[ignore]
+async fn parity_embedding_dim_breakdown() {
+    for_each(|_n, s| async move { check_embedding_dim_breakdown(s.as_ref()).await }).await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn parity_search_unknown_repo_errors() {
+    for_each(|_n, s| async move { check_search_unknown_repo_errors(s.as_ref()).await }).await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn parity_get_chunks_by_ids() {
+    for_each(|_n, s| async move { check_get_chunks_by_ids(s.as_ref()).await }).await;
+}
+
 #[tokio::test]
 #[ignore]
 async fn parity_method_regression() {

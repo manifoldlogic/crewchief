@@ -30,6 +30,19 @@ fn error_details_from_anyhow(error: &anyhow::Error) -> SearchErrorDetails {
     use crate::search::errors::{ErrorType, PipelineStage};
     use std::collections::HashMap;
 
+    // F15: typed store errors first — the downcast sees through context
+    // wrapping that to_string() heuristics below cannot.
+    if let Some(store_error) = error.downcast_ref::<crate::db::StoreError>() {
+        return SearchErrorDetails {
+            error_type: ErrorType::NotFound,
+            stage: PipelineStage::SearchExecution,
+            context: HashMap::from([("error".to_string(), store_error.to_string())]),
+            suggestions: vec![
+                "Run `maproom status` to list indexed repos; check for typos".to_string(),
+            ],
+        };
+    }
+
     let error_str = error.to_string();
 
     // Check for embedding-related errors
@@ -611,10 +624,20 @@ async fn execute_search(
                             params.lang.as_deref(),
                         )
                         .await
-                        .unwrap_or_else(|_| {
-                            // Hybrid failed, will fall back to FTS below
-                            Vec::new()
-                        })
+                        .map_or_else(
+                            |e| {
+                                // F15: user-input errors (unknown/ambiguous repo)
+                                // must surface, not silently widen to empty —
+                                // only capability failures degrade.
+                                if e.downcast_ref::<crate::db::StoreError>().is_some() {
+                                    Err(e)
+                                } else {
+                                    // Hybrid failed, will fall back to FTS below
+                                    Ok(Vec::new())
+                                }
+                            },
+                            Ok,
+                        )?
                 }
                 Err(_) => {
                     // No embeddings available, use FTS directly

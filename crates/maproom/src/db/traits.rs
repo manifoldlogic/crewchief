@@ -166,6 +166,15 @@ pub trait StoreCore: Send + Sync {
     /// Get the count of chunks with embeddings in a worktree.
     async fn get_worktree_embedding_count(&self, worktree_id: i64) -> anyhow::Result<i64>;
 
+    /// F76: per-dimension embedded-chunk counts for a worktree, ordered by
+    /// dimension. More than one entry means MIXED dimensions — a provider/
+    /// model change happened mid-corpus and vector recall is silently
+    /// degraded; `status` surfaces this as an explicit warning.
+    async fn get_worktree_embedding_dim_breakdown(
+        &self,
+        worktree_id: i64,
+    ) -> anyhow::Result<Vec<(i32, i64)>>;
+
     /// Get the language breakdown for files in a worktree.
     async fn get_worktree_language_breakdown(
         &self,
@@ -282,6 +291,11 @@ pub trait StoreChunks: Send + Sync {
 
     /// Get full chunk data by ID.
     async fn get_chunk_by_id(&self, chunk_id: i64) -> anyhow::Result<Option<ChunkFull>>;
+
+    /// Batched variant of [`Self::get_chunk_by_id`] (F34 / IDXABS-2003):
+    /// one query for many ids. Missing ids are simply absent from the
+    /// result — the caller decides whether that is an error.
+    async fn get_chunks_by_ids(&self, chunk_ids: &[i64]) -> anyhow::Result<Vec<ChunkFull>>;
 
     /// Get all chunks for a file, ordered by start line.
     async fn get_file_chunks(&self, file_id: i64) -> anyhow::Result<Vec<ChunkSummary>>;

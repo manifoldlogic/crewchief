@@ -2333,14 +2333,13 @@ async fn real_main() -> anyhow::Result<()> {
             format,
             json: _,
         } => {
-            // TODO(AFM-04): Context structured error handling awaits AFM-03 --format flag.
-            // When AFM-03 lands and adds OutputFormat to Context, add structured error handling
-            // here following the pattern used in search and vector-search commands:
-            //   match db::connect().await { Ok(s) => s, Err(e) if format == Agent => handle_agent_error(...), ... }
-            //   match assembler.assemble() { Ok(ctx) => ctx, Err(e) if format == Agent => ... }
-
-            // Connect to database
-            let store = db::connect().await.context("Database connection failed")?;
+            // F13 / AFM-04: classify-before-render, same contract as search —
+            // every error goes through classify_error; Agent format gets the
+            // structured stdout line; exit code is the classified one.
+            let store = handle_agent_error!(
+                db::connect().await.context("Database connection failed"),
+                format
+            );
 
             // Create assembler (uses DefaultAssemblyStrategy which has working get_chunk_metadata)
             let assembler = DefaultAssemblyStrategy::new(store);
@@ -2357,10 +2356,13 @@ async fn real_main() -> anyhow::Result<()> {
             };
 
             // Execute context assembly
-            let bundle = assembler
-                .assemble(chunk_id, budget, options)
-                .await
-                .with_context(|| format!("Failed to assemble context for chunk {}", chunk_id))?;
+            let bundle = handle_agent_error!(
+                assembler
+                    .assemble(chunk_id, budget, options)
+                    .await
+                    .with_context(|| format!("Failed to assemble context for chunk {}", chunk_id)),
+                format
+            );
 
             // Output
             match format {
@@ -2497,6 +2499,28 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
     use maproom::search::errors::SearchErrorDetails;
     use maproom::search::pipeline::PipelineError;
 
+    // Priority 0 (F15): typed store errors — a typo'd repo is USER input,
+    // not an internal bug, and must never classify as `unknown`.
+    if let Some(store_error) = error.downcast_ref::<maproom::db::StoreError>() {
+        let (error_type, suggestion) = match store_error {
+            maproom::db::StoreError::RepositoryNotFound(_) => (
+                "repository_not_found",
+                "Run `maproom status` to list indexed repos; check for typos",
+            ),
+            maproom::db::StoreError::AmbiguousRepository { .. } => (
+                "repository_ambiguous",
+                "Qualify the repository as owner/name to disambiguate",
+            ),
+        };
+        tracing::info!(
+            error_type,
+            exit_code = 1,
+            classification_method = "downcast:StoreError",
+            "Error classified"
+        );
+        return (error_type.to_string(), suggestion.to_string(), 1);
+    }
+
     // Priority 1: Try to downcast to PipelineError (structured search errors)
     if let Some(pipeline_error) = error.downcast_ref::<PipelineError>() {
         let details = SearchErrorDetails::from_pipeline_error(pipeline_error);
@@ -2619,8 +2643,11 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
         );
     }
 
-    // Priority 3: Fallback to string-based heuristics
-    let error_str = error.to_string();
+    // Priority 3: Fallback to string-based heuristics. Use the FULL anyhow
+    // chain ({:#}) — .to_string() is the outermost context only, which hides
+    // the actual cause behind wrappers like "Failed to assemble context for
+    // chunk 5" (F13: the inner "Chunk 5 not found" is what classifies).
+    let error_str = format!("{error:#}");
     let error_lower = error_str.to_lowercase();
 
     // Warn when heuristic classification is used (downcast failed)
@@ -3822,6 +3849,33 @@ mod tests {
     // ==================== Error Classification Tests (AFM-04.2001) ====================
 
     /// Test classification of embedding config error (missing API key) -> exit code 2
+    #[test]
+    fn test_classify_repository_not_found() {
+        // F15: typed store error, even when context-wrapped, classifies as
+        // repository_not_found — not `unknown`.
+        let error: anyhow::Error = maproom::db::StoreError::RepositoryNotFound(
+            "definitely-a-typo-xyz".to_string(),
+        )
+        .into();
+        let error = error.context("FTS search execution failed");
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+        assert_eq!(error_type, "repository_not_found");
+        assert!(suggestion.contains("maproom status"), "actionable: {suggestion}");
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn test_classify_repository_ambiguous() {
+        let error: anyhow::Error = maproom::db::StoreError::AmbiguousRepository {
+            name: "api".to_string(),
+            matches: "team/Api, vendor/api".to_string(),
+        }
+        .into();
+        let (error_type, _s, exit_code) = classify_error(&error);
+        assert_eq!(error_type, "repository_ambiguous");
+        assert_eq!(exit_code, 1);
+    }
+
     #[test]
     fn test_classify_embedding_config_error() {
         use maproom::embedding::error::{ConfigError, EmbeddingError};
