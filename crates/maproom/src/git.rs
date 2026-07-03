@@ -152,6 +152,10 @@ pub struct FileChange {
 /// # Ok::<(), anyhow::Error>(())
 /// ```
 pub fn git_diff_tree(old_tree: &str, new_tree: &str, repo_path: &Path) -> Result<Vec<FileChange>> {
+    // Review H3: -z gives NUL-separated, UNQUOTED records — the old
+    // line/whitespace parsing truncated paths at the first space and received
+    // octal-quoted bytes for non-ASCII names, permanently freezing tree_sha
+    // (A/M validation failure) or leaving deleted files searchable (D missed).
     let output = Command::new("git")
         .args([
             "diff-tree",
@@ -159,6 +163,7 @@ pub fn git_diff_tree(old_tree: &str, new_tree: &str, repo_path: &Path) -> Result
             "--no-commit-id",    // Don't show commit hash
             "--name-status",     // Show status (A/M/D) and filename
             "--diff-filter=AMD", // Only Added, Modified, Deleted
+            "-z",                // NUL-separated, no quoting
             old_tree,
             new_tree,
         ])
@@ -172,32 +177,46 @@ pub fn git_diff_tree(old_tree: &str, new_tree: &str, repo_path: &Path) -> Result
         );
     }
 
-    parse_diff_tree_output(&String::from_utf8(output.stdout)?)
+    parse_diff_tree_output_z(&String::from_utf8(output.stdout)?)
 }
 
-/// Parses the output of `git diff-tree --name-status`.
+/// Parses the output of `git diff-tree --name-status -z`.
 ///
-/// Expected format: `<status><tab><filename>`
-/// Example: `M\tsrc/main.rs`
-fn parse_diff_tree_output(output: &str) -> Result<Vec<FileChange>> {
+/// Record stream: `<status>\0<path>\0` repeated (renames would carry two
+/// paths, but they are excluded by --diff-filter=AMD; a rename surfaces as
+/// A + D pairs only under -M detection, which we don't enable). Paths are
+/// raw (unquoted) and may contain spaces or any non-NUL bytes.
+fn parse_diff_tree_output_z(output: &str) -> Result<Vec<FileChange>> {
     let mut changes = Vec::new();
+    let mut fields = output.split('\0');
 
-    for line in output.lines() {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() < 2 {
+    while let Some(status_field) = fields.next() {
+        let status_field = status_field.trim_end_matches('\n');
+        if status_field.is_empty() {
             continue;
         }
-
-        let status = match parts[0] {
+        let status = match status_field {
             "A" => FileStatus::Added,
             "M" => FileStatus::Modified,
             "D" => FileStatus::Deleted,
-            _ => continue, // Skip unknown status codes
+            other => {
+                // Unknown/unsupported status (shouldn't occur under the
+                // filter). Its path field still follows — consume it so the
+                // stream stays aligned.
+                tracing::debug!("Skipping diff-tree status {:?}", other);
+                fields.next();
+                continue;
+            }
         };
-
+        let Some(path) = fields.next() else {
+            bail!("git diff-tree -z output ended mid-record (status without path)");
+        };
+        if path.is_empty() {
+            bail!("git diff-tree -z produced an empty path for status {status_field}");
+        }
         changes.push(FileChange {
             status,
-            path: PathBuf::from(parts[1]),
+            path: PathBuf::from(path),
         });
     }
 
@@ -235,10 +254,10 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_diff_tree_output() {
-        let output = "A\tsrc/new_file.rs\nM\tsrc/existing.rs\nD\tsrc/old.rs\n";
-        let result = parse_diff_tree_output(output);
-        assert!(result.is_ok(), "Should parse diff-tree output successfully");
+    fn test_parse_diff_tree_output_z() {
+        let output = "A\0src/new_file.rs\0M\0src/existing.rs\0D\0src/old.rs\0";
+        let result = parse_diff_tree_output_z(output);
+        assert!(result.is_ok(), "Should parse -z diff-tree output");
 
         let changes = result.unwrap();
         assert_eq!(changes.len(), 3, "Should parse 3 file changes");
@@ -253,10 +272,24 @@ mod tests {
         assert_eq!(changes[2].path, PathBuf::from("src/old.rs"));
     }
 
+    /// Review H3: paths with spaces and non-ASCII bytes arrive RAW under -z —
+    /// the old whitespace-split parser truncated "docs/user guide.md" to
+    /// "docs/user" (freezing tree_sha on validation) and missed quoted
+    /// non-ASCII deletions entirely (stale index forever).
+    #[test]
+    fn test_parse_diff_tree_z_spaces_and_non_ascii() {
+        let output = "M\0docs/user guide.md\0D\0notes/übersicht.md\0";
+        let changes = parse_diff_tree_output_z(output).unwrap();
+        assert_eq!(changes.len(), 2);
+        assert_eq!(changes[0].path, PathBuf::from("docs/user guide.md"));
+        assert_eq!(changes[1].status, FileStatus::Deleted);
+        assert_eq!(changes[1].path, PathBuf::from("notes/übersicht.md"));
+    }
+
     #[test]
     fn test_parse_diff_tree_empty_output() {
         let output = "";
-        let result = parse_diff_tree_output(output);
+        let result = parse_diff_tree_output_z(output);
         assert!(result.is_ok());
         assert_eq!(
             result.unwrap().len(),
@@ -267,9 +300,11 @@ mod tests {
 
     #[test]
     fn test_parse_diff_tree_unknown_status() {
-        // 'R' for renamed, 'C' for copied - should be skipped
-        let output = "R100\told.rs\tnew.rs\nM\tvalid.rs\n";
-        let result = parse_diff_tree_output(output);
+        // 'R100' (rename) should be skipped, consuming its path field so the
+        // stream stays aligned. (Renames are excluded by --diff-filter=AMD;
+        // this guards stream alignment if that ever changes.)
+        let output = "R100\0old.rs\0M\0valid.rs\0";
+        let result = parse_diff_tree_output_z(output);
         assert!(result.is_ok());
 
         let changes = result.unwrap();

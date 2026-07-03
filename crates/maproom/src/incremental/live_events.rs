@@ -117,6 +117,43 @@ pub async fn handle_file_event(
             }
         }
         EventType::Deleted => {
+            // Review H2: the git-status poller emits pseudo-Deleted events for
+            // any path that merely LEAVES `git status` output — commit, stash,
+            // restore, `checkout --`. Unmapping on those destroyed
+            // just-indexed data (e.g. `git commit -am` under watch removed the
+            // committed file from the index until a manual rescan). Gate the
+            // destructive unmap on the file actually being GONE from disk,
+            // mirroring the Modified arm's pre-validation.
+            let abs = if relpath.is_absolute() {
+                relpath.clone()
+            } else {
+                watch_root.join(&relpath)
+            };
+            if abs.exists() {
+                debug!(
+                    path = %abs.display(),
+                    "Deleted event but file exists on disk (left git-status via commit/stash/restore); re-upserting instead of unmapping"
+                );
+                if abs.is_file() {
+                    std::fs::File::open(&abs).with_context(|| {
+                        format!("file exists but is unreadable: {}", abs.display())
+                    })?;
+                    let commit = get_head_commit(watch_root)?;
+                    crate::indexer::upsert_files(
+                        store,
+                        repo,
+                        worktree,
+                        watch_root,
+                        &commit,
+                        std::slice::from_ref(&relpath),
+                    )
+                    .await
+                    .with_context(|| format!("failed to re-upsert {}", relpath_str))?;
+                    stats.files_processed = 1;
+                }
+                return Ok(stats);
+            }
+
             // R-GC-6: full unmap (junction + orphan GC + FTS + files rows) —
             // remove_worktree_from_chunks lacked files-row GC and FTS cleanup.
             let affected = store

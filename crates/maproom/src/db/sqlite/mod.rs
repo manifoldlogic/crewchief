@@ -1330,12 +1330,20 @@ impl StoreChunks for SqliteStore {
         &self,
         worktree_id: i64,
     ) -> anyhow::Result<Vec<(i64, String)>> {
+        // Review H4: JUNCTION-scoped, matching the Postgres impl. The old
+        // files.worktree_id (ownership) scoping missed chunks mapped to this
+        // worktree via chunk_worktrees whose files rows belong to another
+        // worktree (the ordinary branch-switch flow) — which made the R09
+        // deleted-file reconciliation inert for any not-first worktree on
+        // the default backend.
         self.run(move |conn| {
             let mut stmt = conn.prepare(
                 "SELECT c.id, f.relpath
                  FROM chunks c
+                 JOIN chunk_worktrees cw ON cw.chunk_id = c.id
                  JOIN files f ON c.file_id = f.id
-                 WHERE f.worktree_id = ?1",
+                 WHERE cw.worktree_id = ?1
+                 ORDER BY c.id",
             )?;
 
             let chunks = stmt

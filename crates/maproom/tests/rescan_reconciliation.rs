@@ -136,3 +136,53 @@ async fn status_language_counts_stable_across_rescans() {
     let n2 = chunk_count(db.path()).await;
     assert_eq!(n1, n2, "identical content must be chunk-count stable across force rescans");
 }
+
+// ============================================================================
+// Review H1: reconciliation must be FULL-SCOPE-ONLY (filtered/subdir scans
+// must never wipe out-of-scope index entries)
+// ============================================================================
+
+#[tokio::test]
+async fn language_filtered_rescan_does_not_wipe_other_languages() {
+    let repo = tempfile::TempDir::new().unwrap();
+    let db = tempfile::TempDir::new().unwrap();
+    setup(repo.path());
+    std::fs::write(repo.path().join("m.py"), "def python_probe_fn():\n    return 1\n").unwrap();
+    git(repo.path(), &["add", "m.py"]);
+    git(repo.path(), &["commit", "-qm", "py"]);
+    let url = format!("sqlite://{}/w.db", db.path().display());
+
+    assert!(maproom(&url, &["scan", "--repo", "fx"], Some(repo.path())).status.success());
+    let baseline = maproom(&url, &["search", "--repo", "fx", "--query", "python_probe_fn", "--format", "agent"], None);
+    assert!(String::from_utf8_lossy(&baseline.stdout).contains("python_probe_fn"), "baseline: py indexed");
+
+    // Language-scoped rescan: ts only. The H1 bug wiped everything not walked.
+    assert!(maproom(&url, &["scan", "--repo", "fx", "--force", "--languages", "ts"], Some(repo.path())).status.success());
+    let after = maproom(&url, &["search", "--repo", "fx", "--query", "python_probe_fn", "--format", "agent"], None);
+    assert!(
+        String::from_utf8_lossy(&after.stdout).contains("python_probe_fn"),
+        "filtered scan must NOT unmap out-of-scope languages (H1)"
+    );
+}
+
+#[tokio::test]
+async fn subdirectory_rescan_does_not_wipe_worktree_index() {
+    let repo = tempfile::TempDir::new().unwrap();
+    let db = tempfile::TempDir::new().unwrap();
+    setup(repo.path());
+    std::fs::create_dir(repo.path().join("sub")).unwrap();
+    std::fs::write(repo.path().join("sub/s.ts"), "export function subFn() { return 9; }\n").unwrap();
+    git(repo.path(), &["add", "sub/s.ts"]);
+    git(repo.path(), &["commit", "-qm", "sub"]);
+    let url = format!("sqlite://{}/w.db", db.path().display());
+
+    assert!(maproom(&url, &["scan", "--repo", "fx"], Some(repo.path())).status.success());
+    // Rescan from the SUBDIRECTORY (registered root is the repo root).
+    assert!(maproom(&url, &["scan", "--repo", "fx", "--force"], Some(&repo.path().join("sub"))).status.success());
+
+    let after = maproom(&url, &["search", "--repo", "fx", "--query", "alphaOne", "--format", "agent"], None);
+    assert!(
+        String::from_utf8_lossy(&after.stdout).contains("alphaOne"),
+        "subdir scan must NOT wipe the rest of the worktree's index (H1)"
+    );
+}

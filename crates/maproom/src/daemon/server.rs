@@ -58,6 +58,13 @@ pub struct ServerConfig {
     pub socket_path: PathBuf,
     pub pid_path: PathBuf,
     pub idle_timeout: Duration,
+    /// Review M11: OPTIONAL pinned database URL — None (production) keeps the
+    /// ambient `db::connect()` resolution (R-SEL-1 factory routing, F70
+    /// fail-loud included via connect_url's shared dispatch). Tests MUST pin
+    /// a per-test database here; the un-ignored socket tests briefly used
+    /// ambient resolution and mutated the developer's real DB (including a
+    /// live Postgres under MAPROOM_DATABASE_URL=postgres://...).
+    pub database_url: Option<String>,
 }
 
 impl ServerConfig {
@@ -69,6 +76,7 @@ impl ServerConfig {
             socket_path: PathBuf::from(format!("/tmp/maproom-{}.sock", uid)),
             pid_path: PathBuf::from(format!("/tmp/maproom-{}.pid", uid)),
             idle_timeout: Duration::from_secs(300), // 5 minutes
+            database_url: None,
         })
     }
 }
@@ -88,13 +96,20 @@ pub struct DaemonState {
 
 impl DaemonState {
     /// Initialize daemon state with database (embeddings init lazily).
-    pub async fn new(_config: &ServerConfig) -> Result<Self, DaemonError> {
+    pub async fn new(config: &ServerConfig) -> Result<Self, DaemonError> {
         // Route through the shared factory so the socket daemon honors the DSN
         // scheme (SQLite vs Postgres) identically to the STDIO daemon, and fails
         // loud on a postgres:// URL in a non-postgres build (F70 / R-SEL-1..4).
-        let store = connect()
-            .await
-            .context("Failed to initialize database store")?;
+        // A pinned database_url (tests) goes through the SAME dispatch/bail
+        // (connect_url) — review M11.
+        let store = match &config.database_url {
+            Some(url) => crate::db::connect_url(url)
+                .await
+                .context("Failed to initialize database store")?,
+            None => connect()
+                .await
+                .context("Failed to initialize database store")?,
+        };
 
         Ok(Self {
             store,
@@ -585,6 +600,8 @@ mod tests {
             socket_path: socket_path.clone(),
             pid_path,
             idle_timeout: Duration::from_secs(300),
+            // Review M11: pin a per-test DB — never ambient connect().
+            database_url: Some(format!("sqlite://{}/test.db", temp_dir.path().display())),
         };
 
         let server = SocketServer::new(config).await.unwrap();
@@ -674,6 +691,8 @@ mod tests {
             socket_path: socket_path.clone(),
             pid_path,
             idle_timeout: Duration::from_secs(300),
+            // Review M11: pin a per-test DB — never ambient connect().
+            database_url: Some(format!("sqlite://{}/test.db", temp_dir.path().display())),
         };
 
         let server = Arc::new(SocketServer::new(config).await.unwrap());
@@ -717,6 +736,8 @@ mod tests {
             socket_path,
             pid_path,
             idle_timeout,
+            // Review M11: pin a per-test DB — never ambient connect().
+            database_url: Some(format!("sqlite://{}/test.db", temp_dir.path().display())),
         };
 
         let server = SocketServer::new(config).await.unwrap();
@@ -751,6 +772,8 @@ mod tests {
             socket_path: socket_path.clone(),
             pid_path,
             idle_timeout: Duration::from_secs(2), // Short timeout for test
+            // Review M11: pin a per-test DB — never ambient connect().
+            database_url: Some(format!("sqlite://{}/test.db", temp_dir.path().display())),
         };
 
         let server = Arc::new(SocketServer::new(config).await.unwrap());
@@ -795,6 +818,8 @@ mod tests {
             socket_path: socket_path.clone(),
             pid_path,
             idle_timeout: Duration::from_secs(300),
+            // Review M11: pin a per-test DB — never ambient connect().
+            database_url: Some(format!("sqlite://{}/test.db", temp_dir.path().display())),
         };
 
         let server = Arc::new(SocketServer::new(config).await.unwrap());

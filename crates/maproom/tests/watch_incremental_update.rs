@@ -367,3 +367,29 @@ fn watch_binary_indexes_uncommitted_edit() {
         "uncommitted edit was not indexed by watch (R06); search output:\n{stdout}"
     );
 }
+
+/// Review H2: the git-status poller emits pseudo-Deleted events when a path
+/// merely LEAVES `git status` (commit/stash/restore). If the file still
+/// exists on disk, the Deleted arm must NOT unmap it — it re-upserts instead.
+#[tokio::test]
+async fn handle_file_event_pseudo_deleted_keeps_existing_file() {
+    let repo = tempfile::TempDir::new().unwrap();
+    let db = tempfile::TempDir::new().unwrap();
+    make_repo(repo.path());
+    let store = store_at(db.path()).await;
+    let wt = seed(&store, repo.path()).await;
+    assert!(worktree_relpaths(&store, wt).await.contains(&"a.ts".to_string()));
+
+    // Pseudo-Deleted: event says Deleted but the file is still on disk
+    // (exactly what a `git commit -am` produces via the status poller).
+    let mut ev = modified_event(repo.path().join("a.ts"));
+    ev.event_type = EventType::Deleted;
+    let stats = handle_file_event(&store, wt, "fx", "main", repo.path(), &ev)
+        .await
+        .expect("pseudo-deleted handling");
+    assert_eq!(stats.files_processed, 1, "re-upserted, not dropped");
+    assert!(
+        worktree_relpaths(&store, wt).await.contains(&"a.ts".to_string()),
+        "a file still on disk must never be unmapped by a pseudo-Deleted event (H2)"
+    );
+}

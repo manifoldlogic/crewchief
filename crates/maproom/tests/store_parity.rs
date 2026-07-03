@@ -1431,3 +1431,59 @@ async fn check_fts_hit_includes_preview(store: &(dyn Store + Send + Sync)) {
 async fn parity_fts_hit_includes_preview() {
     for_each(|_n, s| async move { check_fts_hit_includes_preview(s.as_ref()).await }).await;
 }
+
+/// Review H4: get_chunks_for_worktree is JUNCTION-scoped on BOTH backends —
+/// a chunk mapped to worktree B via chunk_worktrees is visible for B even
+/// when its files row belongs to worktree A (the branch-switch flow).
+async fn check_get_chunks_for_worktree_junction_scoped(store: &(dyn Store + Send + Sync)) {
+    let b = unique_base();
+    let s = seed(store, "junc").await;
+    let relpath = format!("src/junc_{b}.rs");
+    let wt2 = store
+        .get_or_create_worktree(s.repo, "feature", &format!("/wt/junc2-{b}"))
+        .await
+        .unwrap();
+    let file_a = store
+        .upsert_file(&FileRecord {
+            repo_id: s.repo,
+            worktree_id: s.wt, // files row OWNED by wt1
+            commit_id: s.commit,
+            relpath: relpath.clone(),
+            language: Some("rust".to_string()),
+            content_hash: format!("jc-{b}"),
+            size_bytes: 1,
+            last_modified: None,
+        })
+        .await
+        .unwrap();
+    store
+        .insert_chunk(&chunk(file_a, s.wt, &format!("J1{b}"), "junc_fn", "junc fn", 1, 3))
+        .await
+        .unwrap();
+    // Map the SAME chunk to wt2 via the junction (no wt2-owned files row).
+    store
+        .insert_chunk(&chunk(file_a, wt2, &format!("J1{b}"), "junc_fn", "junc fn", 1, 3))
+        .await
+        .unwrap();
+
+    let wt2_rels: Vec<String> = store
+        .get_chunks_for_worktree(wt2)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|(_, r)| r)
+        .filter(|r| r == &relpath)
+        .collect();
+    assert_eq!(
+        wt2_rels.len(),
+        1,
+        "junction-mapped chunk must be visible for wt2 (H4; ownership-scoping missed it)"
+    );
+}
+
+#[tokio::test]
+#[ignore]
+async fn parity_get_chunks_for_worktree_junction_scoped() {
+    for_each(|_n, s| async move { check_get_chunks_for_worktree_junction_scoped(s.as_ref()).await })
+        .await;
+}
