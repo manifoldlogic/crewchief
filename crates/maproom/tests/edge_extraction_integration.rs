@@ -7,12 +7,15 @@
 //! - Edge data is accurate and queryable
 
 use maproom::context::relationships::find_test_files;
+use maproom::context::{AssemblyStrategy, DefaultAssemblyStrategy, ContextBundle, ExpandOptions};
 use maproom::db::SqliteStore;
+use maproom::db::Store;
 use maproom::db::StoreMigration;
 use maproom::db::traits::StoreGraph;
 use maproom::db::types::ImportDirection;
 use maproom::indexer::{scan_worktree, upsert_files};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Helper to create an in-memory store with schema
@@ -792,4 +795,113 @@ async fn test_scan_derives_test_of_edges() {
         .map(|e| e.chunk_id)
         .collect();
     assert_eq!(test_of_srcs, vec![test_alpha], "only test_alpha targets alpha via test_of");
+}
+
+// ==================== Edge-depth DoD §2: tri-language E2E ====================
+
+/// Resolve a chunk id by EXACT relpath (disambiguates app.py vs test_app.py).
+async fn chunk_id_exact(store: &SqliteStore, relpath: &str, symbol: &str) -> i64 {
+    let relpath = relpath.to_string();
+    let symbol = symbol.to_string();
+    store
+        .run(move |conn| {
+            let id = conn.query_row(
+                "SELECT c.id FROM chunks c JOIN files f ON f.id = c.file_id \
+                 WHERE c.symbol_name = ?1 AND f.relpath = ?2",
+                rusqlite::params![symbol, relpath],
+                |row| row.get::<_, i64>(0),
+            )?;
+            Ok(id)
+        })
+        .await
+        .unwrap()
+}
+
+fn bundle_roles<'a>(bundle: &'a ContextBundle, role: &str) -> Vec<&'a str> {
+    bundle
+        .items
+        .iter()
+        .filter(|i| i.role == role)
+        .map(|i| i.reason.as_str())
+        .collect()
+}
+
+/// DoD §2: one worktree with rust + ts + py — cross-file calls (rust & ts & py),
+/// per-file-scoped python imports, test_of per language, and a Wave-1-default
+/// context bundle containing caller + callee + import + test items.
+#[tokio::test]
+async fn test_trilang_end_to_end() {
+    let store = setup_store().await;
+    let repo = Path::new("tests/fixtures/edge_extraction/trilang");
+
+    scan_worktree(&store, "tri_repo", "main", repo, "HEAD", 4, None, None, None)
+        .await
+        .expect("Scan should succeed");
+
+    // ---- cross-file calls edges (src.file != dst.file) per language ----
+    for (lang, sfile, src, dfile, dst) in [
+        ("rust", "caller.rs", "r_caller", "helper.rs", "r_helper"),
+        ("ts", "main.ts", "t_main", "util.ts", "t_util"),
+        ("py", "app.py", "p_caller", "pkg/mod.py", "p_helper"),
+    ] {
+        let s = chunk_id_exact(&store, sfile, src).await;
+        let d = chunk_id_exact(&store, dfile, dst).await;
+        assert!(
+            edge_exists(&store, s, d, "calls").await,
+            "{lang}: cross-file {src} -> {dst} calls edge missing"
+        );
+        assert_ne!(
+            file_of(&store, s).await,
+            file_of(&store, d).await,
+            "{lang}: {src} -> {dst} must be cross-file"
+        );
+    }
+
+    // ---- scoped python imports ----
+    let app_imports = chunk_id_exact(&store, "app.py", "__imports__").await;
+    let p_helper = chunk_id_exact(&store, "pkg/mod.py", "p_helper").await;
+    assert!(
+        edge_exists(&store, app_imports, p_helper, "imports").await,
+        "app.py must import pkg/mod.py's p_helper (scoped)"
+    );
+    let testapp_imports = chunk_id_exact(&store, "test_app.py", "__imports__").await;
+    let p_caller = chunk_id_exact(&store, "app.py", "p_caller").await;
+    assert!(
+        edge_exists(&store, testapp_imports, p_caller, "imports").await,
+        "test_app.py must import app.py's p_caller (scoped)"
+    );
+
+    // ---- test_of per language ----
+    for (lang, tfile, test, dfile, dst) in [
+        ("rust", "caller.rs", "test_r_caller", "caller.rs", "r_caller"),
+        ("ts", "main.test.ts", "test_t_main", "main.ts", "t_main"),
+        ("py", "test_app.py", "test_p_caller", "app.py", "p_caller"),
+    ] {
+        let t = chunk_id_exact(&store, tfile, test).await;
+        let d = chunk_id_exact(&store, dfile, dst).await;
+        assert!(
+            edge_exists(&store, t, d, "test_of").await,
+            "{lang}: test_of {test} -> {dst} missing"
+        );
+    }
+
+    // ---- Wave-1-default context bundle for p_caller: caller+callee+import+test ----
+    let store: Arc<dyn Store + Send + Sync> = Arc::new(store);
+    let assembler = DefaultAssemblyStrategy::new(store);
+    let bundle = assembler
+        .assemble(p_caller, 8000, ExpandOptions::default())
+        .await
+        .expect("assemble should succeed");
+
+    for role in ["primary", "caller", "callee", "import", "test"] {
+        assert!(
+            !bundle_roles(&bundle, role).is_empty(),
+            "context bundle for p_caller missing a `{role}` item; items = {:?}",
+            bundle
+                .items
+                .iter()
+                .map(|i| (&i.role, &i.reason))
+                .collect::<Vec<_>>()
+        );
+    }
 }
