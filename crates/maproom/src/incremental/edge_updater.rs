@@ -171,8 +171,19 @@ impl EdgeUpdater {
             })
             .collect();
 
-        // Extract edges
-        let edges_to_insert = edges::extract_edges(&content, &language, &chunks_with_ids)?;
+        // Extract edges. This incremental path resolves only SAME-FILE calls; the
+        // production watch path is `indexer::upsert_files`, which runs the store-backed
+        // cross-file post-pass (spec B2). Unresolved cross-file refs are dropped here
+        // (this updater is exercised only by tests).
+        let (edges_to_insert, unresolved) =
+            edges::extract_edges(&content, &language, &chunks_with_ids)?;
+        if !unresolved.is_empty() {
+            debug!(
+                file_id = file_id,
+                unresolved = unresolved.len(),
+                "EdgeUpdater drops cross-file refs; use upsert_files for cross-file resolution"
+            );
+        }
 
         // Insert edges
         for edge in edges_to_insert {
@@ -249,151 +260,9 @@ impl EdgeType {
     }
 }
 
-/// Compute edges for a set of chunks.
-#[allow(dead_code)]
-///
-/// This is a placeholder implementation that will be enhanced in future tickets.
-/// Currently implements basic heuristics:
-/// - Test files → TestOf edges to tested modules
-/// - Route files → RouteOf edges
-///
-/// # Arguments
-/// * `_store` - SqliteStore instance (unused in stub)
-/// * `_chunk_ids` - IDs of chunks to compute edges for
-///
-/// # Returns
-/// Vector of computed edges
-///
-/// # Future Enhancements
-///
-/// Full edge computation should include:
-/// - Import/export analysis via AST parsing
-/// - Function call graph via symbol resolution
-/// - Test target detection via naming conventions
-/// - Route handler detection via framework patterns
-async fn compute_edges(
-    _store: &(dyn Store + Send + Sync),
-    _chunk_ids: &[i64],
-) -> Result<Vec<Edge>> {
-    // TODO: Implement SQLite-based edge computation
-    // This will be implemented in a future ticket
-    Ok(Vec::new())
-}
-
-/// Check if a chunk represents a test.
-#[allow(dead_code)]
-///
-/// # Heuristics
-/// - Kind contains "test"
-/// - Symbol name starts with "test_" or "it" or "describe"
-fn is_test_chunk(kind: &str, symbol_name: Option<&str>) -> bool {
-    if kind.contains("test") {
-        return true;
-    }
-
-    if let Some(name) = symbol_name {
-        let lower = name.to_lowercase();
-        if lower.starts_with("test_") || lower.starts_with("it ") || lower.starts_with("describe ")
-        {
-            return true;
-        }
-    }
-
-    false
-}
-
-/// Check if a chunk represents a route handler.
-#[allow(dead_code)]
-///
-/// # Heuristics
-/// - Symbol name contains "route" or "handler"
-/// - Kind is "func" and file is in routes/ directory
-fn is_route_chunk(kind: &str, symbol_name: Option<&str>) -> bool {
-    if kind == "func" {
-        if let Some(name) = symbol_name {
-            let lower = name.to_lowercase();
-            if lower.contains("route") || lower.contains("handler") {
-                return true;
-            }
-        }
-    }
-
-    false
-}
-
-/// Find test target chunks for a given test chunk.
-#[allow(dead_code)]
-///
-/// # Strategy
-/// - Extract target name from test symbol name
-/// - Search for chunks with matching symbol names
-/// - Create TestOf edges
-///
-/// # Arguments
-/// * `_store` - SqliteStore instance (unused in stub)
-/// * `_test_chunk_id` - ID of the test chunk
-/// * `_test_symbol_name` - Name of the test symbol (optional)
-///
-/// # Returns
-/// Vector of TestOf edges
-async fn find_test_targets(
-    _store: &(dyn Store + Send + Sync),
-    _test_chunk_id: i64,
-    _test_symbol_name: Option<&str>,
-) -> Result<Vec<Edge>> {
-    // TODO: Implement SQLite-based test target finding
-    // This will be implemented in a future ticket
-    Ok(Vec::new())
-}
-
-/// Insert edges into the database in batch.
-#[allow(dead_code)]
-///
-/// # Arguments
-/// * `store` - SqliteStore instance
-/// * `edges` - Edges to insert
-///
-/// # Returns
-/// Number of edges inserted
-async fn insert_edges(store: &(dyn Store + Send + Sync), edges: &[Edge]) -> Result<u64> {
-    if edges.is_empty() {
-        return Ok(0);
-    }
-    let mut count = 0u64;
-    for edge in edges {
-        store
-            .insert_chunk_edge(
-                edge.src_chunk_id,
-                edge.dst_chunk_id,
-                edge.edge_type.as_str(),
-            )
-            .await?;
-        count += 1;
-    }
-    Ok(count)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_is_test_chunk() {
-        assert!(is_test_chunk("test", None));
-        assert!(is_test_chunk("func", Some("test_myfunction")));
-        assert!(is_test_chunk("func", Some("it should work")));
-        assert!(is_test_chunk("func", Some("describe the feature")));
-        assert!(!is_test_chunk("func", Some("myFunction")));
-        assert!(!is_test_chunk("class", Some("MyClass")));
-    }
-
-    #[test]
-    fn test_is_route_chunk() {
-        assert!(is_route_chunk("func", Some("handleRoute")));
-        assert!(is_route_chunk("func", Some("userRouter")));
-        assert!(!is_route_chunk("func", Some("myFunction")));
-        assert!(!is_route_chunk("class", Some("RouteHandler")));
-    }
 
     #[test]
     fn test_edge_type_as_str() {

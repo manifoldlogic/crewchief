@@ -26,7 +26,7 @@
 //!     }
 //! ];
 //!
-//! let edges = extract_edges(source, "typescript", &chunks)?;
+//! let (edges, _unresolved) = extract_edges(source, "typescript", &chunks)?;
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 
@@ -57,6 +57,21 @@ pub struct ChunkWithId {
     pub end_line: i32,
     /// Database file ID (for Phase 2 cross-file resolution)
     pub file_id: i64,
+}
+
+/// A call whose callee was NOT found among the same file's chunks (spec B1).
+///
+/// Instead of silently dropping it at the extractor's `trace!` miss site, the
+/// extractor returns it so the worktree post-pass can resolve it cross-file under
+/// the precision-first ambiguity policy (spec B3). The caller (`src_chunk_id`) is
+/// always in the file being extracted, so its relpath/language come from the loop
+/// context — this struct only needs the callee name.
+#[derive(Debug, Clone)]
+pub struct UnresolvedRef {
+    /// Chunk id of the calling function/method (in the current file).
+    pub src_chunk_id: i64,
+    /// The unqualified callee name that did not resolve locally.
+    pub callee_name: String,
 }
 
 /// Extract edges from source code.
@@ -97,16 +112,20 @@ pub struct ChunkWithId {
 ///     }
 /// ];
 ///
-/// let edges = extract_edges(source, "typescript", &chunks)?;
+/// let (edges, _unresolved) = extract_edges(source, "typescript", &chunks)?;
 /// # Ok::<(), anyhow::Error>(())
 /// ```
-pub fn extract_edges(source: &str, language: &str, chunks: &[ChunkWithId]) -> Result<Vec<Edge>> {
+pub fn extract_edges(
+    source: &str,
+    language: &str,
+    chunks: &[ChunkWithId],
+) -> Result<(Vec<Edge>, Vec<UnresolvedRef>)> {
     match language {
         "ts" | "tsx" | "js" | "jsx" => typescript::extract_calls(source, language, chunks),
         "rs" => rust::extract_calls(source, chunks),
         _ => {
             // No edge extraction for unsupported languages
-            Ok(Vec::new())
+            Ok((Vec::new(), Vec::new()))
         }
     }
 }

@@ -152,10 +152,13 @@ async fn test_accuracy_simple_repo() {
     .await
     .unwrap();
 
-    // Ground truth from README.md (same-file edges only)
+    // Ground truth from README.md. Same-file edges plus the Phase-2/F-B cross-file
+    // edge main -> calculate (main.ts calls calculate() defined in utils.ts), now
+    // that cross-file resolution is enabled (spec B10).
     let mut expected_edges = HashSet::new();
     expected_edges.insert(EdgePair::new("calculate", "add"));
     expected_edges.insert(EdgePair::new("calculate", "multiply"));
+    expected_edges.insert(EdgePair::new("main", "calculate"));
 
     // Get actual edges
     let actual_edges = get_actual_edges(&store).await;
@@ -334,9 +337,10 @@ async fn test_overall_accuracy_across_fixtures() {
     // Combined ground truth from all fixtures (excluding top-level calls)
     let mut expected_edges = HashSet::new();
 
-    // typescript_simple
+    // typescript_simple (incl. the F-B cross-file edge main -> calculate)
     expected_edges.insert(EdgePair::new("calculate", "add"));
     expected_edges.insert(EdgePair::new("calculate", "multiply"));
+    expected_edges.insert(EdgePair::new("main", "calculate"));
 
     // typescript_methods
     expected_edges.insert(EdgePair::new("multiply", "add"));

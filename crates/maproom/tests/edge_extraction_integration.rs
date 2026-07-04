@@ -8,8 +8,9 @@
 
 use maproom::db::SqliteStore;
 use maproom::db::StoreMigration;
-use maproom::indexer::scan_worktree;
-use std::path::Path;
+use maproom::db::traits::StoreGraph;
+use maproom::indexer::{scan_worktree, upsert_files};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Helper to create an in-memory store with schema
@@ -547,4 +548,185 @@ async fn test_scan_scopes_python_imports() {
         "rescan must not duplicate __imports__ chunks"
     );
     assert_eq!(edges, edges_again, "rescan must leave import edges unchanged");
+}
+
+// ==================== Edge-depth spec F-B: cross-file call resolution ====================
+
+/// Resolve a chunk id by symbol name and a relpath suffix (e.g. "helper.rs").
+async fn chunk_id_by(store: &SqliteStore, relpath_suffix: &str, symbol: &str) -> i64 {
+    let like = format!("%{relpath_suffix}");
+    let symbol = symbol.to_string();
+    store
+        .run(move |conn| {
+            let id = conn.query_row(
+                "SELECT c.id FROM chunks c JOIN files f ON f.id = c.file_id \
+                 WHERE c.symbol_name = ?1 AND f.relpath LIKE ?2",
+                rusqlite::params![symbol, like],
+                |row| row.get::<_, i64>(0),
+            )?;
+            Ok(id)
+        })
+        .await
+        .unwrap()
+}
+
+/// Does an edge (src_id, dst_id, type) exist?
+async fn edge_exists(store: &SqliteStore, src_id: i64, dst_id: i64, etype: &str) -> bool {
+    let etype = etype.to_string();
+    store
+        .run(move |conn| {
+            let n: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM chunk_edges WHERE src_chunk_id=?1 AND dst_chunk_id=?2 AND type=?3",
+                rusqlite::params![src_id, dst_id, etype],
+                |row| row.get(0),
+            )?;
+            Ok(n > 0)
+        })
+        .await
+        .unwrap()
+}
+
+/// The file_id of a chunk.
+async fn file_of(store: &SqliteStore, chunk_id: i64) -> i64 {
+    store
+        .run(move |conn| {
+            let id = conn.query_row(
+                "SELECT file_id FROM chunks WHERE id=?1",
+                rusqlite::params![chunk_id],
+                |row| row.get::<_, i64>(0),
+            )?;
+            Ok(id)
+        })
+        .await
+        .unwrap()
+}
+
+/// Spec §5 Gherkin: cross-file rust caller appears; `find_callers` resolves it.
+#[tokio::test]
+async fn test_scan_creates_crossfile_rust_calls() {
+    let store = setup_store().await;
+    let repo = Path::new("tests/fixtures/edge_extraction/rust_crossfile");
+
+    scan_worktree(&store, "xf_repo", "main", repo, "HEAD", 4, None, None, None)
+        .await
+        .expect("Scan should succeed");
+
+    let caller_a = chunk_id_by(&store, "caller.rs", "caller_a").await;
+    let helper_b = chunk_id_by(&store, "helper.rs", "helper_b").await;
+
+    assert!(
+        edge_exists(&store, caller_a, helper_b, "calls").await,
+        "cross-file calls edge caller_a -> helper_b must exist"
+    );
+    // Gherkin: src.file != dst.file.
+    assert_ne!(
+        file_of(&store, caller_a).await,
+        file_of(&store, helper_b).await,
+        "the edge must be genuinely cross-file"
+    );
+    // find_callers(helper_b) returns caller_a's chunk.
+    let callers = store.find_callers(helper_b, Some(1)).await.unwrap();
+    assert!(
+        callers.iter().any(|g| g.chunk_id == caller_a),
+        "find_callers(helper_b) must include caller_a, got {callers:?}"
+    );
+}
+
+/// Spec §5 Gherkin: cross-file TS caller (main.ts -> utils.ts calculate).
+#[tokio::test]
+async fn test_scan_creates_crossfile_ts_calls() {
+    let store = setup_store().await;
+    let repo = Path::new("tests/fixtures/edge_extraction/typescript_simple");
+
+    scan_worktree(&store, "ts_xf", "main", repo, "HEAD", 4, None, None, None)
+        .await
+        .expect("Scan should succeed");
+
+    let main = chunk_id_by(&store, "main.ts", "main").await;
+    let calculate = chunk_id_by(&store, "utils.ts", "calculate").await;
+    assert!(
+        edge_exists(&store, main, calculate, "calls").await,
+        "cross-file calls edge main -> calculate must exist"
+    );
+    assert_ne!(
+        file_of(&store, main).await,
+        file_of(&store, calculate).await,
+        "the edge must be genuinely cross-file"
+    );
+}
+
+/// Spec §5 Gherkin: ambiguity never guesses — two `multiply` defs, zero edges.
+#[tokio::test]
+async fn test_crossfile_ambiguity_never_guesses() {
+    let store = setup_store().await;
+    let repo = Path::new("tests/fixtures/edge_extraction/rust_ambiguous");
+
+    scan_worktree(&store, "amb_repo", "main", repo, "HEAD", 4, None, None, None)
+        .await
+        .expect("Scan should succeed");
+
+    let run = chunk_id_by(&store, "caller.rs", "run").await;
+    // No calls edge may originate from `run` (both `multiply` targets are ambiguous).
+    let outgoing = store
+        .run(move |conn| {
+            let n: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM chunk_edges WHERE src_chunk_id=?1 AND type='calls'",
+                rusqlite::params![run],
+                |row| row.get(0),
+            )?;
+            Ok(n)
+        })
+        .await
+        .unwrap();
+    assert_eq!(outgoing, 0, "ambiguous multiply() call must produce zero edges");
+}
+
+/// Spec B5 pin: inbound cross-file edge goes stale on single-file upsert and a full
+/// rescan restores it (documented v1 policy — deliberate, not accidental).
+#[tokio::test]
+async fn test_inbound_edge_staleness_is_deliberate() {
+    let store = setup_store().await;
+    let repo = Path::new("tests/fixtures/edge_extraction/rust_crossfile");
+
+    scan_worktree(&store, "stale_repo", "main", repo, "HEAD", 4, None, None, None)
+        .await
+        .expect("Scan should succeed");
+
+    let caller_a = chunk_id_by(&store, "caller.rs", "caller_a").await;
+    let helper_b = chunk_id_by(&store, "helper.rs", "helper_b").await;
+    assert!(
+        edge_exists(&store, caller_a, helper_b, "calls").await,
+        "precondition: caller_a -> helper_b exists after scan"
+    );
+
+    // Re-index ONLY helper.rs: deletes its edges (src OR dst), so the inbound
+    // caller_a -> helper_b edge is removed and NOT recomputed (caller.rs untouched).
+    upsert_files(
+        &store,
+        "stale_repo",
+        "main",
+        repo,
+        "HEAD",
+        &[PathBuf::from("src/helper.rs")],
+    )
+    .await
+    .expect("upsert should succeed");
+    // chunk ids are stable (content-addressed upsert), so the same ids still name them.
+    let caller_a2 = chunk_id_by(&store, "caller.rs", "caller_a").await;
+    let helper_b2 = chunk_id_by(&store, "helper.rs", "helper_b").await;
+    assert!(
+        !edge_exists(&store, caller_a2, helper_b2, "calls").await,
+        "inbound edge must be absent after single-file upsert (v1 staleness)"
+    );
+
+    // A full rescan restores it.
+    scan_worktree(&store, "stale_repo", "main", repo, "HEAD", 4, None, None, None)
+        .await
+        .expect("Rescan should succeed");
+    let caller_a3 = chunk_id_by(&store, "caller.rs", "caller_a").await;
+    let helper_b3 = chunk_id_by(&store, "helper.rs", "helper_b").await;
+    assert!(
+        edge_exists(&store, caller_a3, helper_b3, "calls").await,
+        "full rescan must restore the inbound edge"
+    );
 }

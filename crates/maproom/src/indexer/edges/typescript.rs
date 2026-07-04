@@ -10,7 +10,7 @@ use tracing::{debug, trace, warn};
 use tree_sitter::{Node, Parser};
 
 use super::common::{build_symbol_table, find_enclosing_chunk};
-use super::{ChunkWithId, Edge, EdgeType};
+use super::{ChunkWithId, Edge, EdgeType, UnresolvedRef};
 
 /// Extract call edges from TypeScript/JavaScript source.
 ///
@@ -54,10 +54,14 @@ use super::{ChunkWithId, Edge, EdgeType};
 ///     }
 /// ];
 ///
-/// let edges = extract_calls(source, "ts", &chunks)?;
+/// let (edges, _unresolved) = extract_calls(source, "ts", &chunks)?;
 /// # Ok::<(), anyhow::Error>(())
 /// ```
-pub fn extract_calls(source: &str, language: &str, chunks: &[ChunkWithId]) -> Result<Vec<Edge>> {
+pub fn extract_calls(
+    source: &str,
+    language: &str,
+    chunks: &[ChunkWithId],
+) -> Result<(Vec<Edge>, Vec<UnresolvedRef>)> {
     // Parse source with tree-sitter, selecting the grammar PER DIALECT
     // (spec A4) exactly like the chunk parser: edge extraction previously
     // used the plain TypeScript grammar for tsx/jsx too, mis-parsing JSX.
@@ -75,7 +79,7 @@ pub fn extract_calls(source: &str, language: &str, chunks: &[ChunkWithId]) -> Re
         Some(t) => t,
         None => {
             warn!("Failed to parse TypeScript file for edge extraction");
-            return Ok(Vec::new());
+            return Ok((Vec::new(), Vec::new()));
         }
     };
 
@@ -84,12 +88,17 @@ pub fn extract_calls(source: &str, language: &str, chunks: &[ChunkWithId]) -> Re
 
     // Find all call expressions
     let mut edges = Vec::new();
+    let mut unresolved = Vec::new();
     let root = tree.root_node();
 
-    find_call_expressions(&root, source, chunks, &symbol_table, &mut edges);
+    find_call_expressions(&root, source, chunks, &symbol_table, &mut edges, &mut unresolved);
 
-    debug!("Extracted {} call edges from TypeScript file", edges.len());
-    Ok(edges)
+    debug!(
+        "Extracted {} same-file call edges, {} unresolved refs from TypeScript file",
+        edges.len(),
+        unresolved.len()
+    );
+    Ok((edges, unresolved))
 }
 
 /// Recursively find call expressions in AST.
@@ -102,15 +111,16 @@ fn find_call_expressions(
     chunks: &[ChunkWithId],
     symbol_table: &HashMap<String, i64>,
     edges: &mut Vec<Edge>,
+    unresolved: &mut Vec<UnresolvedRef>,
 ) {
     if node.kind() == "call_expression" {
-        process_call_expression(node, source, chunks, symbol_table, edges);
+        process_call_expression(node, source, chunks, symbol_table, edges, unresolved);
     }
 
     // Recursively traverse children
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        find_call_expressions(&child, source, chunks, symbol_table, edges);
+        find_call_expressions(&child, source, chunks, symbol_table, edges, unresolved);
     }
 }
 
@@ -125,6 +135,7 @@ fn process_call_expression(
     chunks: &[ChunkWithId],
     symbol_table: &HashMap<String, i64>,
     edges: &mut Vec<Edge>,
+    unresolved: &mut Vec<UnresolvedRef>,
 ) {
     // Extract function identifier
     let callee_name = match extract_function_identifier(node, source) {
@@ -138,24 +149,29 @@ fn process_call_expression(
         }
     };
 
-    // Resolve callee in symbol table
-    let callee_id = match symbol_table.get(&callee_name) {
-        Some(&id) => id,
-        None => {
-            trace!(
-                "Unresolved call: {} (may be cross-file or built-in)",
-                callee_name
-            );
-            return;
-        }
-    };
-
-    // Find caller chunk (chunk containing this call)
+    // Find caller chunk FIRST — an unresolved ref must be attributed to its caller.
     let call_line = node.start_position().row as i32 + 1; // tree-sitter is 0-indexed
     let caller_chunk = match find_enclosing_chunk(chunks, call_line) {
         Some(chunk) => chunk,
         None => {
             trace!("Call at line {} not in any chunk", call_line);
+            return;
+        }
+    };
+
+    // Resolve callee in the same-file symbol table.
+    let callee_id = match symbol_table.get(&callee_name) {
+        Some(&id) => id,
+        None => {
+            // Spec B1: not silently dropped — handed to the cross-file post-pass.
+            trace!(
+                "Unresolved local call: {} (cross-file candidate)",
+                callee_name
+            );
+            unresolved.push(UnresolvedRef {
+                src_chunk_id: caller_chunk.id,
+                callee_name: callee_name.clone(),
+            });
             return;
         }
     };
@@ -249,7 +265,7 @@ export function Badge(props: { name: string }) {
                 file_id: 100,
             },
         ];
-        let edges = extract_calls(source, "tsx", &chunks).unwrap();
+        let (edges, _unresolved) = extract_calls(source, "tsx", &chunks).unwrap();
         assert!(
             edges
                 .iter()
@@ -287,7 +303,7 @@ export function Badge(props: { name: string }) {
             },
         ];
 
-        let edges = extract_calls(source, "ts", &chunks).unwrap();
+        let (edges, _unresolved) = extract_calls(source, "ts", &chunks).unwrap();
 
         assert_eq!(edges.len(), 1, "Should find one call edge");
         assert_eq!(edges[0].src_chunk_id, 2, "Caller should be bar");
@@ -325,7 +341,7 @@ export function Badge(props: { name: string }) {
             },
         ];
 
-        let edges = extract_calls(source, "ts", &chunks).unwrap();
+        let (edges, _unresolved) = extract_calls(source, "ts", &chunks).unwrap();
 
         // Should find multiply → add call
         assert!(edges.len() >= 1, "Should find at least one method call");
@@ -350,7 +366,7 @@ export function Badge(props: { name: string }) {
             file_id: 100,
         }];
 
-        let edges = extract_calls(source, "ts", &chunks).unwrap();
+        let (edges, _unresolved) = extract_calls(source, "ts", &chunks).unwrap();
 
         // console.log should be skipped (not in symbol table)
         assert_eq!(edges.len(), 0, "Should skip unresolved calls");
@@ -364,7 +380,9 @@ export function Badge(props: { name: string }) {
         let result = extract_calls(invalid_source, "ts", &chunks);
 
         assert!(result.is_ok(), "Should not fail on parse error");
-        assert_eq!(result.unwrap().len(), 0, "Should return empty vec");
+        let (edges, unresolved) = result.unwrap();
+        assert_eq!(edges.len(), 0, "Should return empty edges");
+        assert_eq!(unresolved.len(), 0, "Should return empty unresolved refs");
     }
 
     #[test]
@@ -406,7 +424,7 @@ export function Badge(props: { name: string }) {
             },
         ];
 
-        let edges = extract_calls(source, "ts", &chunks).unwrap();
+        let (edges, _unresolved) = extract_calls(source, "ts", &chunks).unwrap();
 
         assert_eq!(edges.len(), 2, "Should find two calls");
         assert!(edges.iter().any(|e| e.dst_chunk_id == 1), "Should call add");

@@ -127,6 +127,46 @@ impl StoreChunks for PostgresStore {
         Ok(res.rows_affected())
     }
 
+    async fn insert_chunk_edges_batch(&self, edges: &[(i64, i64, String)]) -> anyhow::Result<()> {
+        if edges.is_empty() {
+            return Ok(());
+        }
+        // Spec B4: one transaction for the whole batch (mirrors insert_chunk_edge).
+        let mut tx = self.pool.begin().await?;
+        for (src, dst, edge_type) in edges {
+            sqlx::query(
+                "INSERT INTO chunk_edges (src_chunk_id, dst_chunk_id, type) VALUES ($1,$2,$3) \
+                 ON CONFLICT DO NOTHING",
+            )
+            .bind(src)
+            .bind(dst)
+            .bind(edge_type)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn list_symbols_for_worktree(
+        &self,
+        worktree_id: i64,
+    ) -> anyhow::Result<Vec<(i64, String, String, String)>> {
+        // Scope by worktree via the chunk_worktrees junction (content-addressed
+        // chunks are shared across worktrees). Named symbols only.
+        let rows: Vec<(i64, String, String, String)> = sqlx::query_as(
+            "SELECT c.id, c.symbol_name, f.relpath, c.kind \
+             FROM chunks c \
+             JOIN chunk_worktrees cw ON cw.chunk_id = c.id \
+             JOIN files f ON f.id = c.file_id \
+             WHERE cw.worktree_id = $1 AND c.symbol_name IS NOT NULL",
+        )
+        .bind(worktree_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
     async fn remove_worktree_from_chunks(
         &self,
         worktree_id: i64,
