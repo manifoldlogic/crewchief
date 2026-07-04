@@ -711,9 +711,15 @@ enum Commands {
         #[arg(long, default_value_t = 300)]
         idle_timeout: u64,
 
+        /// F69: daemon search-cache TTL in seconds (default 60). The TTL is
+        /// the staleness bound: scan/watch run in other processes and cannot
+        /// invalidate the daemon cache. Raise it deliberately when warming.
+        #[arg(long, default_value_t = 60)]
+        cache_ttl_secs: u64,
+
         /// F69: warm the daemon search cache at startup from a file of
         /// queries (one per line). Requires --warm-repo. Stdio mode only.
-        #[arg(long, requires = "warm_repo")]
+        #[arg(long, requires = "warm_repo", conflicts_with = "socket")]
         warm_queries: Option<PathBuf>,
 
         /// Repository name the warm queries run against.
@@ -1932,6 +1938,16 @@ async fn real_main() -> anyhow::Result<()> {
                 hits
             };
 
+            // F01: vector/hybrid have no corpus-total statistic — their
+            // pre-dedup fetch count (k*3 over-fetch) would masquerade as
+            // one. Report the post-dedup result count instead; FTS keeps
+            // its real corpus estimate.
+            let total_count = if effective_mode == SearchMode::Fts {
+                total_count
+            } else {
+                hits.len()
+            };
+
             // Post-process preview field
             let hits: Vec<_> = hits
                 .into_iter()
@@ -2398,6 +2414,7 @@ async fn real_main() -> anyhow::Result<()> {
         Commands::Serve {
             socket,
             socket_path,
+            cache_ttl_secs,
             warm_queries,
             warm_repo,
             warm_worktree,
@@ -2460,7 +2477,7 @@ async fn real_main() -> anyhow::Result<()> {
                     }
                     _ => None,
                 };
-                daemon::run(warmup).await?;
+                daemon::run(warmup, cache_ttl_secs).await?;
             }
         }
 
@@ -2491,14 +2508,20 @@ async fn real_main() -> anyhow::Result<()> {
             format,
             json: _,
         } => {
-            // F81: relationship expansion defaults ON; --no-* opts out. The
-            // positive flags remain accepted (now redundant) for backward
-            // compatibility with existing scripts.
-            let _ = (callers, callees, tests, imports);
-            let callers = !no_callers;
-            let callees = !no_callees;
-            let tests = !no_tests;
-            let imports = !no_imports;
+            // F81 flag semantics, backward compatible:
+            //   no flags            -> everything ON (the new default)
+            //   any positive flag   -> EXACTLY the named segments (old
+            //                          behavior: `--callers` meant "callers
+            //                          only", and scripts relying on that
+            //                          must not silently start getting all
+            //                          four segments)
+            //   --no-X              -> default-on minus X
+            let any_positive = callers || callees || tests || imports;
+            let (callers, callees, tests, imports) = if any_positive {
+                (callers, callees, tests, imports)
+            } else {
+                (!no_callers, !no_callees, !no_tests, !no_imports)
+            };
             // F13 / AFM-04: classify-before-render, same contract as search —
             // every error goes through classify_error; Agent format gets the
             // structured stdout line; exit code is the classified one.
@@ -2511,6 +2534,15 @@ async fn real_main() -> anyhow::Result<()> {
             let assembler = DefaultAssemblyStrategy::new(store);
 
             // Build expand options from CLI args
+            if docs {
+                // Visible regardless of RUST_LOG (the strategy's tracing
+                // warn! is filtered out of a default CLI run).
+                eprintln!(
+                    "Note: --docs is accepted for forward compatibility but documentation \
+                     expansion is not implemented yet; it currently adds nothing."
+                );
+            }
+
             let options = ExpandOptions {
                 callers,
                 callees,

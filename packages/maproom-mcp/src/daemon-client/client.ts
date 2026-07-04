@@ -75,6 +75,7 @@ export interface ContextParams {
     callers?: boolean;
     callees?: boolean;
     tests?: boolean;
+    imports?: boolean;
     docs?: boolean;
     config?: boolean;
     max_depth?: number;

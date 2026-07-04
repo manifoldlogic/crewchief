@@ -93,13 +93,18 @@ pub async fn get_status(
                 (embedding_count as f64 / chunk_count as f64) * 100.0
             };
 
-            // F76: per-dimension breakdown (mixed dims -> visible warning)
-            let embedding_dims: Vec<EmbeddingDimCount> = store
-                .get_worktree_embedding_dim_breakdown(worktree.id)
-                .await?
-                .into_iter()
-                .map(|(dim, count)| EmbeddingDimCount { dim, count })
-                .collect();
+            // F76: per-dimension breakdown (mixed dims -> visible warning).
+            // Skip the query when there are no embeddings at all.
+            let embedding_dims: Vec<EmbeddingDimCount> = if embedding_count == 0 {
+                Vec::new()
+            } else {
+                store
+                    .get_worktree_embedding_dim_breakdown(worktree.id)
+                    .await?
+                    .into_iter()
+                    .map(|(dim, count)| EmbeddingDimCount { dim, count })
+                    .collect()
+            };
 
             // Get language breakdown for this worktree
             let language_breakdown = store.get_worktree_language_breakdown(worktree.id).await?;
@@ -206,8 +211,11 @@ pub fn format_text(status: &StatusResponse, verbose: bool) -> String {
                             .iter()
                             .map(|d| d.dim.to_string())
                             .collect();
+                        // No prescribed remedy: the content-addressed
+                        // embedding pool is never pruned by re-scanning, so
+                        // "re-run scan" cannot clear old-dimension entries.
                         output.push_str(&format!(
-                            "    WARNING: mixed embedding dimensions ({}) — vector search recall is degraded; re-run `maproom scan --generate-embeddings --force` with a single embedding model\n",
+                            "    WARNING: mixed embedding dimensions ({}) — vector search recall is degraded; embeddings from a previous model remain in the pool\n",
                             dims_only.join(", ")
                         ));
                     }

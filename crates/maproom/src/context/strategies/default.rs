@@ -166,6 +166,7 @@ impl DefaultAssemblyStrategy {
         bundle: &mut ContextBundle,
         chunk_id: i64,
         budget: usize,
+        seen: &mut std::collections::HashSet<i64>,
     ) -> Result<()> {
         let test_budget = (budget as f64 * 0.2) as usize; // 20% of total budget
 
@@ -183,7 +184,19 @@ impl DefaultAssemblyStrategy {
                 break;
             }
 
-            let metadata = self.get_chunk_metadata(test.id).await?;
+            if !seen.insert(test.id) {
+                continue; // already in the bundle via another segment
+            }
+
+            // Warn-and-continue: one unreadable related chunk must not kill
+            // the whole bundle (densification amplifies the blast radius).
+            let metadata = match self.get_chunk_metadata(test.id).await {
+                Ok(m) => m,
+                Err(e) => {
+                    warn!("Failed to load test chunk {}: {}", test.id, e);
+                    continue;
+                }
+            };
 
             let reason = format!(
                 "Test: {} (tests primary chunk)",
@@ -217,6 +230,7 @@ impl DefaultAssemblyStrategy {
         chunk_id: i64,
         budget: usize,
         max_depth: i32,
+        seen: &mut std::collections::HashSet<i64>,
     ) -> Result<()> {
         let caller_budget = (budget as f64 * 0.15) as usize; // 15% of total budget
 
@@ -238,7 +252,17 @@ impl DefaultAssemblyStrategy {
                 break;
             }
 
-            let metadata = self.get_chunk_metadata(caller.id).await?;
+            if !seen.insert(caller.id) {
+                continue;
+            }
+
+            let metadata = match self.get_chunk_metadata(caller.id).await {
+                Ok(m) => m,
+                Err(e) => {
+                    warn!("Failed to load caller chunk {}: {}", caller.id, e);
+                    continue;
+                }
+            };
 
             let reason = format!(
                 "Caller: {} (calls primary chunk, depth {})",
@@ -269,6 +293,7 @@ impl DefaultAssemblyStrategy {
         chunk_id: i64,
         budget: usize,
         max_depth: i32,
+        seen: &mut std::collections::HashSet<i64>,
     ) -> Result<()> {
         let callee_budget = (budget as f64 * 0.15) as usize; // 15% of total budget
 
@@ -290,7 +315,17 @@ impl DefaultAssemblyStrategy {
                 break;
             }
 
-            let metadata = self.get_chunk_metadata(callee.id).await?;
+            if !seen.insert(callee.id) {
+                continue;
+            }
+
+            let metadata = match self.get_chunk_metadata(callee.id).await {
+                Ok(m) => m,
+                Err(e) => {
+                    warn!("Failed to load callee chunk {}: {}", callee.id, e);
+                    continue;
+                }
+            };
 
             let reason = format!(
                 "Callee: {} (called by primary chunk, depth {})",
@@ -323,6 +358,7 @@ impl DefaultAssemblyStrategy {
         chunk_id: i64,
         budget: usize,
         max_depth: i32,
+        seen: &mut std::collections::HashSet<i64>,
     ) -> Result<()> {
         use crate::db::ImportDirection;
         let import_budget = (budget as f64 * 0.10) as usize; // 10% of total budget
@@ -353,6 +389,9 @@ impl DefaultAssemblyStrategy {
             let remaining = budget.saturating_sub(bundle.total_tokens);
             if remaining < import_budget / 10 {
                 break;
+            }
+            if !seen.insert(rel.chunk_id) {
+                continue;
             }
             let metadata = match self.get_chunk_metadata(rel.chunk_id).await {
                 Ok(m) => m,
@@ -470,28 +509,37 @@ impl AssemblyStrategy for DefaultAssemblyStrategy {
         // helpers hard-coded depth 1).
         let depth = options.max_depth.max(1);
 
+        // Densified segments need cross-segment dedup: a chunk that is both
+        // a caller and a callee (recursion, mutual calls) must appear once,
+        // and the primary chunk must never re-appear as its own relative.
+        let mut seen: std::collections::HashSet<i64> = std::collections::HashSet::new();
+        seen.insert(chunk_id);
+
         // 1. Add primary chunk (40% of budget)
         self.add_primary_chunk(&mut bundle, chunk_id, budget)
             .await?;
 
         // 2. Add tests if requested (20% of budget)
         if options.tests {
-            self.add_tests(&mut bundle, chunk_id, budget).await?;
+            self.add_tests(&mut bundle, chunk_id, budget, &mut seen).await?;
         }
 
         // 3. Add callers if requested (15% of budget)
         if options.callers {
-            self.add_callers(&mut bundle, chunk_id, budget, depth).await?;
+            self.add_callers(&mut bundle, chunk_id, budget, depth, &mut seen)
+                .await?;
         }
 
         // 4. Add callees if requested (15% of budget)
         if options.callees {
-            self.add_callees(&mut bundle, chunk_id, budget, depth).await?;
+            self.add_callees(&mut bundle, chunk_id, budget, depth, &mut seen)
+                .await?;
         }
 
         // 5. Add import/export relations if requested (10% of budget, F82)
         if options.imports {
-            self.add_imports(&mut bundle, chunk_id, budget, depth).await?;
+            self.add_imports(&mut bundle, chunk_id, budget, depth, &mut seen)
+                .await?;
         }
 
         // 6. Honesty over silence (F81): docs has NO engine yet — say so

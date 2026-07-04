@@ -13,9 +13,12 @@ import { z } from 'zod'
  */
 export const ExpandOptionsSchema = z
   .object({
-    callers: z.boolean().default(false).describe('Include chunks that call this function'),
-    callees: z.boolean().default(false).describe('Include chunks called by this function'),
-    tests: z.boolean().default(false).describe('Include test chunks for this code'),
+    // F81: relationship expansion defaults ON (mirrors the daemon's
+    // ExpandConfig defaults — sending explicit false remains the opt-out).
+    callers: z.boolean().default(true).describe('Include chunks that call this function'),
+    callees: z.boolean().default(true).describe('Include chunks called by this function'),
+    tests: z.boolean().default(true).describe('Include test chunks for this code'),
+    imports: z.boolean().default(true).describe('Include import/export relationships'),
     docs: z.boolean().default(false).describe('Include documentation chunks'),
     config: z.boolean().default(false).describe('Include related configuration files'),
     max_depth: z
@@ -33,9 +36,10 @@ export const ExpandOptionsSchema = z
   })
   .optional()
   .default({
-    callers: false,
-    callees: false,
-    tests: false,
+    callers: true,
+    callees: true,
+    tests: true,
+    imports: true,
     docs: false,
     config: false,
     max_depth: 2,

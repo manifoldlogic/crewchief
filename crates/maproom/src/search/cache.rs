@@ -113,7 +113,9 @@ impl<V> CacheEntry<V> {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        now - self.created_at >= ttl_seconds
+        // saturating: a backwards wall-clock step (NTP) must not panic the
+        // debug-profile daemon; it just reads as "not expired yet".
+        now.saturating_sub(self.created_at) >= ttl_seconds
     }
 }
 
@@ -265,6 +267,16 @@ where
                 None
             }
         }
+    }
+
+    /// Stats-NEUTRAL presence probe: true if the key is resident and
+    /// unexpired, without touching hit/miss counters or LRU order. Warm
+    /// paths use this so `cache.stats` keeps meaning real request traffic.
+    pub fn peek(&self, key: &K) -> bool {
+        let cache = self.cache.read().unwrap();
+        cache
+            .peek(key)
+            .is_some_and(|entry| !entry.is_expired(self.ttl_seconds))
     }
 
     /// Put a result into the cache.
