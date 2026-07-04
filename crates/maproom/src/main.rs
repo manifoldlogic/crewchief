@@ -273,6 +273,18 @@ struct Cli {
     database_url: Option<String>,
 }
 
+/// F01: search mode for the `search` command. The engines all pre-exist
+/// (store trait + both backends + daemon); this only exposes them on the CLI.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, clap::ValueEnum)]
+enum SearchMode {
+    /// Full-text search (default; no embedding provider needed)
+    Fts,
+    /// Vector similarity search (requires an embedding provider)
+    Vector,
+    /// FTS + vector fusion; degrades to FTS with a notice when no provider
+    Hybrid,
+}
+
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// Run database migrations
@@ -501,6 +513,12 @@ enum Commands {
         /// Filter by file language (comma-separated: py,ts,rs). Case-sensitive. Use file extensions.
         #[arg(long, value_delimiter = ',')]
         lang: Option<Vec<String>>,
+        /// Search mode: fts (default), vector, or hybrid (F01).
+        /// vector/hybrid build a query embedding via the configured provider;
+        /// hybrid degrades gracefully to fts (with a stderr notice) when the
+        /// provider is unavailable, vector errors instead.
+        #[arg(long, value_enum, default_value_t = SearchMode::Fts)]
+        mode: SearchMode,
         /// Include content preview in search results
         #[arg(long, default_value_t = false)]
         preview: bool,
@@ -1790,6 +1808,7 @@ async fn real_main() -> anyhow::Result<()> {
             deduplicate,
             kind,
             lang,
+            mode,
             preview,
             preview_length,
             format,
@@ -1806,20 +1825,92 @@ async fn real_main() -> anyhow::Result<()> {
             let store = handle_agent_error!(db::connect().await, format);
             // Fetch extra results if deduplication is enabled
             let fetch_k = if deduplicate { k * 3 } else { k };
-            let (hits, total_count) = handle_agent_error!(
-                store
-                    .search_chunks_fts(
-                        &repo,
-                        worktree.as_deref(),
-                        &query,
-                        fetch_k,
-                        debug,
-                        kind.as_deref(),
-                        lang.as_deref(),
-                    )
-                    .await,
-                format
-            );
+
+            // F01: mode routing. vector/hybrid need a query embedding; a
+            // provider failure degrades hybrid to fts (stderr notice, honest
+            // effective-mode metadata) and hard-errors vector — the user
+            // asked for semantics only vectors can deliver.
+            let mut effective_mode = mode;
+            let query_embedding: Option<Vec<f32>> = match mode {
+                SearchMode::Fts => None,
+                SearchMode::Vector | SearchMode::Hybrid => {
+                    use maproom::embedding::EmbeddingService;
+                    let embed_result = match EmbeddingService::from_env().await {
+                        Ok(svc) => svc.embed_text(&query).await.map_err(|e| {
+                            anyhow::Error::from(e).context("Failed to generate query embedding")
+                        }),
+                        Err(e) => Err(anyhow::Error::from(e)
+                            .context("Failed to create embedding service")),
+                    };
+                    match embed_result {
+                        Ok(embedding) => Some(embedding),
+                        Err(e) if mode == SearchMode::Hybrid => {
+                            eprintln!(
+                                "Note: embedding provider unavailable; hybrid degraded to FTS ({e:#})"
+                            );
+                            effective_mode = SearchMode::Fts;
+                            None
+                        }
+                        Err(e) => {
+                            Some(handle_agent_error!(Err::<Vec<f32>, anyhow::Error>(e), format))
+                        }
+                    }
+                }
+            };
+
+            let (hits, total_count) = match (effective_mode, query_embedding) {
+                (SearchMode::Hybrid, Some(embedding)) => {
+                    let hits = handle_agent_error!(
+                        store
+                            .search_chunks_hybrid(
+                                &repo,
+                                worktree.as_deref(),
+                                &query,
+                                &embedding,
+                                fetch_k,
+                                debug,
+                                kind.as_deref(),
+                                lang.as_deref(),
+                            )
+                            .await,
+                        format
+                    );
+                    let total = hits.len();
+                    (hits, total)
+                }
+                (SearchMode::Vector, Some(embedding)) => {
+                    let hits = handle_agent_error!(
+                        store
+                            .search_chunks_vector(
+                                &repo,
+                                worktree.as_deref(),
+                                &embedding,
+                                fetch_k,
+                                debug,
+                                kind.as_deref(),
+                                lang.as_deref(),
+                            )
+                            .await,
+                        format
+                    );
+                    let total = hits.len();
+                    (hits, total)
+                }
+                _ => handle_agent_error!(
+                    store
+                        .search_chunks_fts(
+                            &repo,
+                            worktree.as_deref(),
+                            &query,
+                            fetch_k,
+                            debug,
+                            kind.as_deref(),
+                            lang.as_deref(),
+                        )
+                        .await,
+                    format
+                ),
+            };
 
             // Apply deduplication if enabled
             let hits = if deduplicate {
@@ -1848,7 +1939,13 @@ async fn real_main() -> anyhow::Result<()> {
             // MRIMP-5: Route output through format module
             let meta = SearchMetadata {
                 query: query.clone(),
-                mode: "fts".to_string(),
+                // F01: report the EFFECTIVE mode (hybrid may have degraded)
+                mode: match effective_mode {
+                    SearchMode::Fts => "fts",
+                    SearchMode::Vector => "vector",
+                    SearchMode::Hybrid => "hybrid",
+                }
+                .to_string(),
                 hits: hits.len(),
                 total_estimate: total_count,
             };

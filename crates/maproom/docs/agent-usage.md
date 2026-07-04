@@ -212,8 +212,10 @@ useful supplement but not load-bearing.
 Hybrid mode (`--mode hybrid`) combines FTS and vector scores using Reciprocal
 Rank Fusion (RRF). It is useful when neither FTS nor vector search alone
 produces sufficient coverage -- for example, when a query mixes known
-identifiers with conceptual terms. Hybrid mode requires an embedding provider
-to be configured (same as vector search).
+identifiers with conceptual terms. Hybrid uses the configured embedding
+provider when available and degrades gracefully to FTS (with a stderr notice
+and `mode: "fts"` in the metadata) when it is not; `--mode vector` instead
+errors (exit 2) without a provider.
 
 ```bash
 maproom search \

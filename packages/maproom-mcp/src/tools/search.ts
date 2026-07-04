@@ -297,15 +297,6 @@ export async function handleSearchTool(
     );
   }
 
-  // Note: Rust binary only supports FTS mode currently
-  // Vector and hybrid modes are handled by TypeScript SQL in index.ts
-  if (!["fts", "vector"].includes(mode)) {
-    throw new ValidationError(
-      `Search mode "${mode}" not supported. Use mode="fts" or mode="vector".`,
-      "UNSUPPORTED_MODE",
-    );
-  }
-
   // ============================================================================
   // MIGRATION NOTE (DAEMIGR-2001):
   // Replaced process spawning with daemon client for 20-50x performance improvement.
@@ -328,8 +319,9 @@ export async function handleSearchTool(
       repo,
       worktree,
       limit,
-      // Note: mode parameter not yet supported by daemon (Phase 2 enhancement)
-      // Daemon uses hybrid search by default
+      // F02: the daemon dispatches fts/vector/hybrid natively; pass the
+      // requested mode through instead of silently dropping it.
+      mode,
       debug,
       deduplicate,
       include_confidence: include_confidence ?? false,
@@ -543,9 +535,7 @@ export function formatSearchError(error: unknown): any {
                   ? "Use the status tool to see available repositories, or use scan tool to index a new repository."
                   : error.code === "MISSING_REPO"
                     ? 'The repo parameter is required. Example: {repo: "crewchief", query: "search"}'
-                    : error.code === "UNSUPPORTED_MODE"
-                      ? 'Use mode="fts" for keyword search or mode="vector" for semantic search.'
-                      : "Check your parameters and try again.",
+                    : "Check your parameters and try again.",
             },
             null,
             2,

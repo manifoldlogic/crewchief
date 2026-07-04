@@ -20,6 +20,12 @@ export interface SearchParams {
   worktree?: string;
   limit?: number;
   threshold?: number;
+  /**
+   * Search mode: "fts", "vector", or "hybrid" (F02). Omitted -> the
+   * daemon's default ("hybrid", with graceful FTS fallback when no
+   * embedding provider is available).
+   */
+  mode?: 'fts' | 'vector' | 'hybrid';
   debug?: boolean;
   /** Deduplicate results across worktrees (default: true) */
   deduplicate?: boolean;
