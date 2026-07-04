@@ -165,8 +165,12 @@ fn serve_warm_queries_flag_populates_cache() {
     // Startup warming is async: poll cache.stats interleaved (write one
     // request, read its one reply) until size >= 1 or a REAL deadline —
     // never a fixed sleep window (the exact flake class F81's [39] fixed).
+    // Deterministically provider-LESS (broken google, no auto-detect): the
+    // warm query degrades hybrid->FTS and must STILL be cached — the cache
+    // must not be inert in provider-less deployments.
     let mut child = Command::new(binary_path())
-        .env_remove("MAPROOM_EMBEDDING_PROVIDER")
+        .env("MAPROOM_EMBEDDING_PROVIDER", "google")
+        .env("GOOGLE_APPLICATION_CREDENTIALS", "/nonexistent")
         .env_remove("OLLAMA_URL")
         .env_remove("OLLAMA_HOST")
         .env_remove("MAPROOM_OLLAMA_URL")

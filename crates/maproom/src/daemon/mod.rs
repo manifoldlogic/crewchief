@@ -718,9 +718,12 @@ async fn warm_queries(
                 if state.search_cache.peek(&key) {
                     out.warmed += 1;
                 } else {
+                    // Defensive: cached_search puts every successful
+                    // response; absence here would indicate an eviction
+                    // race, not a policy skip.
                     out.failed.push(serde_json::json!({
                         "query": query,
-                        "error": "response was degraded (e.g. hybrid without a provider) and was not cached",
+                        "error": "response executed but is not resident (evicted?)",
                     }));
                 }
             }
@@ -767,20 +770,15 @@ async fn cached_search(
     if let Some(cached) = state.search_cache.get(&key) {
         return Ok(cached);
     }
-    let requested_mode = params.mode.as_deref().unwrap_or("hybrid").to_string();
     let result = execute_search(state.clone(), params).await?;
-    // A DEGRADED response (hybrid that fell back to FTS because the
-    // embedding provider was down) must NOT be cached: it would pin the
-    // degraded result for the full TTL after the provider recovers, and a
-    // warm-at-startup race with lazy provider init would poison the cache.
-    let effective_mode = result.get("mode").and_then(|m| m.as_str()).unwrap_or("");
-    if effective_mode == requested_mode {
-        state.search_cache.put(key, result.clone());
-    } else {
-        tracing::debug!(
-            "not caching degraded response (requested {requested_mode}, effective {effective_mode})"
-        );
-    }
+    // Degraded responses (hybrid that fell back to FTS) ARE cached: refusing
+    // to cache them makes the whole cache inert in provider-less
+    // deployments, where EVERY default-mode request degrades. The cost is
+    // bounded and symmetric with all other cache staleness — a degraded
+    // entry can outlive provider recovery by at most one TTL — and the
+    // payload carries both `mode` (effective) and `requested_mode`, so
+    // clients can always see the degradation.
+    state.search_cache.put(key, result.clone());
     Ok(result)
 }
 
