@@ -464,12 +464,17 @@ async fn fts_live() {
         .unwrap();
     assert!(none_hits.is_empty() && none_total == 0);
 
-    // Unknown repo/worktree -> empty.
-    let (nr, _) = store
+    // F15: unknown repo -> typed ERROR (parity with SQLite); a typo must be
+    // distinguishable from a healthy zero-hit query. (Unknown WORKTREE on a
+    // known repo still yields the empty set — R18 semantics.)
+    let nr_err = store
         .search_chunks_fts("nope", None, "authentication", 10, false, None, None)
         .await
-        .unwrap();
-    assert!(nr.is_empty());
+        .expect_err("unknown repo must error");
+    assert!(
+        nr_err.to_string().contains("Repository not found"),
+        "{nr_err}"
+    );
 
     // search_fts_by_id stores exact_mult=3.0 when symbol normalizes to the query
     // (separate-pass model, R-SEARCH-9 — not folded into score).

@@ -40,7 +40,7 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     let cache = SearchCache::new(1000);
+//!     let cache: SearchCache = SearchCache::new(1000);
 //!
 //!     let key = CacheKey::new("authenticate", 1, None, 10);
 //!
@@ -123,6 +123,7 @@ impl<V> CacheEntry<V> {
 /// - Multiple readers can access cache simultaneously
 /// - Writers (put operations) require exclusive lock
 /// - Atomic counters track hits/misses without locking
+///
 /// F69: generic over key and value with defaults preserving the original
 /// pipeline-facing shape (`SearchCache` == `SearchCache<CacheKey,
 /// FinalSearchResults>`). The daemon instantiates
@@ -182,7 +183,7 @@ where
     /// ```
     /// use maproom::search::cache::SearchCache;
     ///
-    /// let cache = SearchCache::with_ttl(1000, 3600); // 1000 entries, 1 hour TTL
+    /// let cache: SearchCache = SearchCache::with_ttl(1000, 3600); // 1000 entries, 1 hour TTL
     /// ```
     pub fn with_ttl(capacity: usize, ttl_seconds: u64) -> Self {
         info!(
@@ -213,7 +214,7 @@ where
     /// ```
     /// use maproom::search::cache::SearchCache;
     ///
-    /// let cache = SearchCache::new(1000);
+    /// let cache: SearchCache = SearchCache::new(1000);
     /// ```
     pub fn new(capacity: usize) -> Self {
         Self::with_ttl(capacity, DEFAULT_TTL_SECONDS)
@@ -233,7 +234,7 @@ where
     /// ```no_run
     /// use maproom::search::cache::{SearchCache, CacheKey};
     ///
-    /// let cache = SearchCache::new(1000);
+    /// let cache: SearchCache = SearchCache::new(1000);
     /// let key = CacheKey::new("auth", 1, None, 10);
     ///
     /// if let Some(results) = cache.get(&key) {
@@ -281,7 +282,7 @@ where
     /// use maproom::search::cache::{SearchCache, CacheKey};
     /// use maproom::search::FinalSearchResults;
     ///
-    /// let cache = SearchCache::new(1000);
+    /// let cache: SearchCache = SearchCache::new(1000);
     /// let key = CacheKey::new("auth", 1, None, 10);
     /// // let results = ...; // Create actual results
     ///
@@ -310,7 +311,7 @@ where
     /// ```
     /// use maproom::search::cache::SearchCache;
     ///
-    /// let cache = SearchCache::new(1000);
+    /// let cache: SearchCache = SearchCache::new(1000);
     /// let stats = cache.stats();
     ///
     /// println!("Hit rate: {:.1}%", stats.hit_rate() * 100.0);
