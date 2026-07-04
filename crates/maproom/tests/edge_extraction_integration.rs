@@ -6,9 +6,11 @@
 //! - Parse errors don't fail the scan
 //! - Edge data is accurate and queryable
 
+use maproom::context::relationships::find_test_files;
 use maproom::db::SqliteStore;
 use maproom::db::StoreMigration;
 use maproom::db::traits::StoreGraph;
+use maproom::db::types::ImportDirection;
 use maproom::indexer::{scan_worktree, upsert_files};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -729,4 +731,65 @@ async fn test_inbound_edge_staleness_is_deliberate() {
         edge_exists(&store, caller_a3, helper_b3, "calls").await,
         "full rescan must restore the inbound edge"
     );
+}
+
+// ==================== Edge-depth spec F-B: test_of derivation ====================
+
+/// Spec §5 Gherkin: test_of ⊆ calls-from-tests. `test_alpha` (a test) calling
+/// `alpha` yields a test_of edge; `beta` (not a test) calling `alpha` does not.
+/// find_test_files resolves the test; find_callers stays pure (calls-only).
+#[tokio::test]
+async fn test_scan_derives_test_of_edges() {
+    let store = setup_store().await;
+    let repo = Path::new("tests/fixtures/edge_extraction/rust_test_of");
+
+    scan_worktree(&store, "to_repo", "main", repo, "HEAD", 4, None, None, None)
+        .await
+        .expect("Scan should succeed");
+
+    let alpha = chunk_id_by(&store, "lib.rs", "alpha").await;
+    let test_alpha = chunk_id_by(&store, "lib.rs", "test_alpha").await;
+    let beta = chunk_id_by(&store, "lib.rs", "beta").await;
+
+    // Both callers produce a `calls` edge.
+    assert!(edge_exists(&store, test_alpha, alpha, "calls").await, "test_alpha -> alpha calls");
+    assert!(edge_exists(&store, beta, alpha, "calls").await, "beta -> alpha calls");
+
+    // Only the test caller produces a `test_of` edge (B7/B8).
+    assert!(
+        edge_exists(&store, test_alpha, alpha, "test_of").await,
+        "test_alpha -> alpha test_of must exist"
+    );
+    assert!(
+        !edge_exists(&store, beta, alpha, "test_of").await,
+        "beta is not a test — no test_of edge may exist"
+    );
+
+    // Consumer: find_test_files(alpha) returns test_alpha (and not beta).
+    let tests = find_test_files(&store, alpha).await.unwrap();
+    let test_ids: Vec<i64> = tests.iter().map(|t| t.id).collect();
+    assert!(test_ids.contains(&test_alpha), "find_test_files must return test_alpha, got {test_ids:?}");
+    assert!(!test_ids.contains(&beta), "find_test_files must not return the non-test beta");
+
+    // Purity: find_callers(alpha) returns both callers via `calls` ONLY — test_of
+    // must not leak in.
+    let callers = store.find_callers(alpha, Some(2)).await.unwrap();
+    let caller_ids: Vec<i64> = callers.iter().map(|g| g.chunk_id).collect();
+    assert!(caller_ids.contains(&test_alpha) && caller_ids.contains(&beta));
+    assert!(
+        callers.iter().all(|g| g.edge_type == "calls"),
+        "find_callers must never surface test_of edges, got {callers:?}"
+    );
+
+    // The B9 consumer path (get_direct_edges incoming, filtered to test_of) sees it.
+    let incoming = store
+        .get_direct_edges(alpha, ImportDirection::Incoming)
+        .await
+        .unwrap();
+    let test_of_srcs: Vec<i64> = incoming
+        .iter()
+        .filter(|e| e.edge_type == "test_of")
+        .map(|e| e.chunk_id)
+        .collect();
+    assert_eq!(test_of_srcs, vec![test_alpha], "only test_alpha targets alpha via test_of");
 }

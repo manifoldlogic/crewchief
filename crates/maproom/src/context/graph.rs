@@ -331,14 +331,16 @@ pub async fn load_relationships_parallel(
             }
         },
         async {
-            // Find test relationships - tests that target this chunk
-            // Using imports with test_of edge type filter
+            // Find test relationships: chunks linked to this one by an INCOMING
+            // test_of edge (a test that targets it). B9 fix: use get_direct_edges
+            // (all edge types) — the old find_imports call only ever traversed
+            // `imports` edges, so filtering it for `test_of` could never match.
+            // test_of is inherently depth-1, so the depth param is not needed here.
             match store
-                .find_imports(chunk_id, ImportDirection::Incoming, depth)
+                .get_direct_edges(chunk_id, ImportDirection::Incoming)
                 .await
             {
                 Ok(results) => {
-                    // Filter for test_of edge type
                     let test_results: Vec<_> = results
                         .into_iter()
                         .filter(|r| r.edge_type == "test_of")

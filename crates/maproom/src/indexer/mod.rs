@@ -344,8 +344,11 @@ fn relpath_dir(relpath: &str) -> String {
 
 /// Index a file's callable chunks into the worktree symbol index (spec B2/B3): only
 /// callable kinds become call targets, so `use`/import/struct/module chunks never do.
+/// Also records `chunk_id -> (relpath, symbol)` in `chunk_meta` for test_of
+/// classification (spec B7/B8).
 fn index_callable_symbols(
     symbol_index: &mut HashMap<String, Vec<SymbolCandidate>>,
+    chunk_meta: &mut HashMap<i64, (String, String)>,
     chunks_with_ids: &[edges::ChunkWithId],
     relpath: &str,
     lang: &'static str,
@@ -363,8 +366,42 @@ fn index_callable_symbols(
                     relpath: relpath.to_string(),
                     lang,
                 });
+            chunk_meta.insert(c.id, (relpath.to_string(), name.clone()));
         }
     }
+}
+
+/// Classify a chunk as a test using the EXISTING heuristics (spec B8): the shared
+/// `HeuristicScorer::is_test_file` relpath conventions (`*.test.*`, `*.spec.*`,
+/// `/tests/`, `/__tests__/`, `*_test.*`) plus the `test_` symbol prefix (which also
+/// covers conventionally-named Rust `#[cfg(test)]` functions).
+fn is_test_chunk(
+    scorer: &crate::context::heuristics::HeuristicScorer,
+    chunk_meta: &HashMap<i64, (String, String)>,
+    chunk_id: i64,
+) -> bool {
+    match chunk_meta.get(&chunk_id) {
+        Some((relpath, symbol)) => scorer.is_test_file(relpath) || symbol.starts_with("test_"),
+        None => false,
+    }
+}
+
+/// Derive test_of edges from resolved calls (spec B7): test_of ⊆ calls-from-tests —
+/// for a resolved `calls` edge whose SRC chunk is a test and DST is not, emit
+/// test_of(src, dst). Filename pairing is deliberately NOT used (no honest
+/// chunk-granular target).
+fn derive_test_of_edges(
+    calls: &[(i64, i64)],
+    chunk_meta: &HashMap<i64, (String, String)>,
+) -> Vec<(i64, i64)> {
+    let scorer = crate::context::heuristics::HeuristicScorer::new();
+    calls
+        .iter()
+        .filter(|&&(src, dst)| {
+            is_test_chunk(&scorer, chunk_meta, src) && !is_test_chunk(&scorer, chunk_meta, dst)
+        })
+        .copied()
+        .collect()
 }
 
 /// Resolve pending cross-file calls against the worktree symbol index using the
@@ -414,18 +451,18 @@ fn resolve_cross_file_calls(
     (resolved, dropped)
 }
 
-/// Batch-insert `calls` edges from `(src, dst)` pairs in one transaction (spec B4).
-async fn insert_calls_batch(
+/// Batch-insert `calls` and derived `test_of` edges in ONE transaction (spec B4/B7).
+async fn insert_call_and_test_edges(
     store: &(dyn Store + Send + Sync),
     calls: &[(i64, i64)],
+    test_of: &[(i64, i64)],
 ) -> Result<()> {
-    if calls.is_empty() {
+    if calls.is_empty() && test_of.is_empty() {
         return Ok(());
     }
-    let batch: Vec<(i64, i64, String)> = calls
-        .iter()
-        .map(|&(src, dst)| (src, dst, "calls".to_string()))
-        .collect();
+    let mut batch: Vec<(i64, i64, String)> = Vec::with_capacity(calls.len() + test_of.len());
+    batch.extend(calls.iter().map(|&(s, d)| (s, d, "calls".to_string())));
+    batch.extend(test_of.iter().map(|&(s, d)| (s, d, "test_of".to_string())));
     store.insert_chunk_edges_batch(&batch).await?;
     Ok(())
 }
@@ -617,6 +654,7 @@ pub async fn scan_worktree(
     // callable chunks, same-file edges, and unresolved refs — all resolved and
     // batch-inserted in ONE post-pass after the loop (no per-call DB lookups).
     let mut symbol_index: HashMap<String, Vec<SymbolCandidate>> = HashMap::new();
+    let mut chunk_meta: HashMap<i64, (String, String)> = HashMap::new();
     let mut same_file_calls: Vec<(i64, i64)> = Vec::new();
     let mut pending_calls: Vec<PendingCall> = Vec::new();
 
@@ -748,7 +786,13 @@ pub async fn scan_worktree(
             let relpath_str = relpath.to_string_lossy().to_string();
 
             // F-B: index this file's callable chunks for cross-file resolution.
-            index_callable_symbols(&mut symbol_index, &chunks_with_ids, &relpath_str, language);
+            index_callable_symbols(
+                &mut symbol_index,
+                &mut chunk_meta,
+                &chunks_with_ids,
+                &relpath_str,
+                language,
+            );
 
             // Edge lifecycle (B5/B11): clear this file's stale edges before the
             // post-passes reinsert. On a full scan every file's outgoing edges are
@@ -811,19 +855,22 @@ pub async fn scan_worktree(
         warn!("Failed to resolve Python imports: {}", e);
     }
 
-    // F-B post-pass: resolve cross-file calls against the in-memory symbol index and
-    // batch-insert same-file + cross-file `calls` edges in one transaction (B2/B4).
+    // F-B post-pass: resolve cross-file calls against the in-memory symbol index,
+    // derive test_of edges from the resolved calls (B7), and batch-insert both the
+    // `calls` and `test_of` edges in one transaction (B2/B4).
     let (cross_file, dropped) = resolve_cross_file_calls(&symbol_index, &pending_calls);
     let mut all_calls = same_file_calls;
     all_calls.extend(cross_file.iter().copied());
+    let test_of = derive_test_of_edges(&all_calls, &chunk_meta);
     debug!(
         same_file = all_calls.len() - cross_file.len(),
         cross_file = cross_file.len(),
+        test_of = test_of.len(),
         dropped,
-        "cross-file call resolution complete"
+        "cross-file call + test_of resolution complete"
     );
-    if let Err(e) = insert_calls_batch(store, &all_calls).await {
-        warn!("Failed to batch-insert call edges: {}", e);
+    if let Err(e) = insert_call_and_test_edges(store, &all_calls, &test_of).await {
+        warn!("Failed to batch-insert call/test edges: {}", e);
     }
 
     // R09 / R-GC-5: deleted-file reconciliation. Any relpath present in the
@@ -1143,6 +1190,7 @@ pub async fn upsert_files(
     // is partial) and resolve cross-file calls, then batch-insert (spec B2/B4).
     if !pending_calls.is_empty() || !same_file_calls.is_empty() {
         let mut symbol_index: HashMap<String, Vec<SymbolCandidate>> = HashMap::new();
+        let mut chunk_meta: HashMap<i64, (String, String)> = HashMap::new();
         match store.list_symbols_for_worktree(worktree_id).await {
             Ok(rows) => {
                 for (chunk_id, symbol_name, relpath, kind) in rows {
@@ -1152,6 +1200,7 @@ pub async fn upsert_files(
                     let Some(lang) = detect_language_from_path(Path::new(&relpath)) else {
                         continue;
                     };
+                    chunk_meta.insert(chunk_id, (relpath.clone(), symbol_name.clone()));
                     symbol_index
                         .entry(symbol_name)
                         .or_default()
@@ -1167,12 +1216,15 @@ pub async fn upsert_files(
         let (cross_file, dropped) = resolve_cross_file_calls(&symbol_index, &pending_calls);
         let mut all_calls = same_file_calls;
         all_calls.extend(cross_file.iter().copied());
+        let test_of = derive_test_of_edges(&all_calls, &chunk_meta);
         debug!(
             cross_file = cross_file.len(),
-            dropped, "upsert cross-file call resolution complete"
+            test_of = test_of.len(),
+            dropped,
+            "upsert cross-file call + test_of resolution complete"
         );
-        if let Err(e) = insert_calls_batch(store, &all_calls).await {
-            warn!("Failed to batch-insert call edges: {}", e);
+        if let Err(e) = insert_call_and_test_edges(store, &all_calls, &test_of).await {
+            warn!("Failed to batch-insert call/test edges: {}", e);
         }
     }
 
