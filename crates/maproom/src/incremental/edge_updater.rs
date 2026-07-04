@@ -130,9 +130,10 @@ impl EdgeUpdater {
             }
         };
 
-        // Check if this is a TypeScript/JavaScript file
+        // Spec A1: single shared language gate (kept as a gate so we never
+        // read unsupported files from disk on incremental events).
         let language = match language {
-            Some(lang) if matches!(lang.as_str(), "ts" | "tsx" | "js" | "jsx") => lang,
+            Some(lang) if crate::indexer::edges::supports_call_extraction(lang.as_str()) => lang,
             _ => {
                 // No edge extraction for this language
                 debug!(

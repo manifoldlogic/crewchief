@@ -54,16 +54,22 @@ use super::{ChunkWithId, Edge, EdgeType};
 ///     }
 /// ];
 ///
-/// let edges = extract_calls(source, &chunks)?;
+/// let edges = extract_calls(source, "ts", &chunks)?;
 /// # Ok::<(), anyhow::Error>(())
 /// ```
-pub fn extract_calls(source: &str, chunks: &[ChunkWithId]) -> Result<Vec<Edge>> {
-    // Parse source with tree-sitter
+pub fn extract_calls(source: &str, language: &str, chunks: &[ChunkWithId]) -> Result<Vec<Edge>> {
+    // Parse source with tree-sitter, selecting the grammar PER DIALECT
+    // (spec A4) exactly like the chunk parser: edge extraction previously
+    // used the plain TypeScript grammar for tsx/jsx too, mis-parsing JSX.
     let mut parser = Parser::new();
-    let language = tree_sitter_typescript::language_typescript();
+    let grammar = match language {
+        "tsx" => tree_sitter_typescript::language_tsx(),
+        "js" | "jsx" => tree_sitter_javascript::language(),
+        _ => tree_sitter_typescript::language_typescript(),
+    };
     parser
-        .set_language(&language)
-        .context("Failed to set TypeScript language")?;
+        .set_language(&grammar)
+        .context("Failed to set TypeScript/JavaScript language")?;
 
     let tree = match parser.parse(source, None) {
         Some(t) => t,
@@ -212,6 +218,46 @@ fn extract_function_identifier(node: &Node, source: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    /// Spec A4: tsx files parse with the TSX grammar — call sites inside
+    /// JSX elements were mis-parsed by the plain TS grammar before.
+    #[test]
+    fn test_tsx_calls_inside_jsx_extracted() {
+        let source = r#"
+function formatName(n: string): string {
+    return n.trim();
+}
+
+export function Badge(props: { name: string }) {
+    return <span className="badge">{formatName(props.name)}</span>;
+}
+"#;
+        let chunks = vec![
+            ChunkWithId {
+                id: 1,
+                symbol_name: Some("formatName".to_string()),
+                kind: "func".to_string(),
+                start_line: 2,
+                end_line: 4,
+                file_id: 100,
+            },
+            ChunkWithId {
+                id: 2,
+                symbol_name: Some("Badge".to_string()),
+                kind: "func".to_string(),
+                start_line: 6,
+                end_line: 8,
+                file_id: 100,
+            },
+        ];
+        let edges = extract_calls(source, "tsx", &chunks).unwrap();
+        assert!(
+            edges
+                .iter()
+                .any(|e| e.src_chunk_id == 2 && e.dst_chunk_id == 1),
+            "Badge -> formatName call inside JSX must be extracted: {edges:?}"
+        );
+    }
+
     #[test]
     fn test_extract_simple_call() {
         let source = r#"
@@ -241,7 +287,7 @@ mod tests {
             },
         ];
 
-        let edges = extract_calls(source, &chunks).unwrap();
+        let edges = extract_calls(source, "ts", &chunks).unwrap();
 
         assert_eq!(edges.len(), 1, "Should find one call edge");
         assert_eq!(edges[0].src_chunk_id, 2, "Caller should be bar");
@@ -279,7 +325,7 @@ mod tests {
             },
         ];
 
-        let edges = extract_calls(source, &chunks).unwrap();
+        let edges = extract_calls(source, "ts", &chunks).unwrap();
 
         // Should find multiply → add call
         assert!(edges.len() >= 1, "Should find at least one method call");
@@ -304,7 +350,7 @@ mod tests {
             file_id: 100,
         }];
 
-        let edges = extract_calls(source, &chunks).unwrap();
+        let edges = extract_calls(source, "ts", &chunks).unwrap();
 
         // console.log should be skipped (not in symbol table)
         assert_eq!(edges.len(), 0, "Should skip unresolved calls");
@@ -315,7 +361,7 @@ mod tests {
         let invalid_source = "function foo(";
         let chunks = vec![];
 
-        let result = extract_calls(invalid_source, &chunks);
+        let result = extract_calls(invalid_source, "ts", &chunks);
 
         assert!(result.is_ok(), "Should not fail on parse error");
         assert_eq!(result.unwrap().len(), 0, "Should return empty vec");
@@ -360,7 +406,7 @@ mod tests {
             },
         ];
 
-        let edges = extract_calls(source, &chunks).unwrap();
+        let edges = extract_calls(source, "ts", &chunks).unwrap();
 
         assert_eq!(edges.len(), 2, "Should find two calls");
         assert!(edges.iter().any(|e| e.dst_chunk_id == 1), "Should call add");

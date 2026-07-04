@@ -397,3 +397,53 @@ async fn test_edges_queryable_by_type() {
         "Should be able to query edges with symbol names"
     );
 }
+
+// ==================== Edge-depth spec F-A: Rust enablement ====================
+
+/// Spec A1/A2: the single shared language gate includes rs.
+#[test]
+fn test_supports_call_extraction_predicate() {
+    use maproom::indexer::edges::supports_call_extraction;
+    for lang in ["ts", "tsx", "js", "jsx", "rs"] {
+        assert!(supports_call_extraction(lang), "{lang} must be supported");
+    }
+    // py flips only when the F-D extractor lands (spec A2)
+    for lang in ["py", "go", "rb", "java", "md", "json"] {
+        assert!(!supports_call_extraction(lang), "{lang} must not be enabled yet");
+    }
+}
+
+/// F-A end-to-end: scanning a Rust fixture produces calls edges, with
+/// method-body calls attributed to the METHOD chunk (spec A3), and a
+/// rescan is idempotent.
+#[tokio::test]
+async fn test_scan_creates_rust_edges() {
+    let store = setup_store().await;
+    let test_repo = Path::new("tests/fixtures/edge_extraction/rust_simple");
+
+    scan_worktree(&store, "rust_repo", "main", test_repo, "HEAD", 4, None, None, None)
+        .await
+        .expect("Scan should succeed");
+
+    assert!(has_edge(&store, "alpha", "beta", "calls").await, "alpha -> beta");
+    assert!(
+        has_edge(&store, "multiply", "add", "calls").await,
+        "multiply -> add must exist with the METHOD as src (A3)"
+    );
+    assert!(
+        has_edge(&store, "test_alpha", "alpha", "calls").await,
+        "cfg(test) fn call must be extracted"
+    );
+    // The impl container must NOT be a call source for add (A3 innermost).
+    assert!(
+        !has_edge(&store, "Calculator", "add", "calls").await,
+        "container chunk must not own method-body calls"
+    );
+
+    // Idempotence: rescan changes nothing (UNIQUE + OR IGNORE, asserted).
+    let before = get_edge_count(&store).await;
+    scan_worktree(&store, "rust_repo", "main", test_repo, "HEAD", 4, None, None, None)
+        .await
+        .expect("Rescan should succeed");
+    assert_eq!(before, get_edge_count(&store).await, "rescan must be idempotent");
+}

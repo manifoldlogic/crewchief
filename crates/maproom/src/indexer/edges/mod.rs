@@ -102,12 +102,26 @@ pub struct ChunkWithId {
 /// ```
 pub fn extract_edges(source: &str, language: &str, chunks: &[ChunkWithId]) -> Result<Vec<Edge>> {
     match language {
-        "ts" | "tsx" | "js" | "jsx" => typescript::extract_calls(source, chunks),
+        "ts" | "tsx" | "js" | "jsx" => typescript::extract_calls(source, language, chunks),
         "rs" => rust::extract_calls(source, chunks),
-        // Python will be added in Phase 2/3
         _ => {
             // No edge extraction for unsupported languages
             Ok(Vec::new())
         }
     }
+}
+
+/// Spec A1/A2: THE single language gate for call-edge extraction. Every
+/// production site (scan, upsert/watch, incremental updater) MUST use this
+/// predicate — three hand-rolled `matches!` gates previously drifted and
+/// left the `rs` dispatcher arm dead in production.
+pub fn supports_call_extraction(language: &str) -> bool {
+    matches!(language, "ts" | "tsx" | "js" | "jsx" | "rs")
+}
+
+/// Spec A6/B3: chunk kinds that can be a call TARGET. `use`/import/module/
+/// struct-name chunks share symbol names with real functions and are the
+/// primary false-positive source when they enter a symbol table.
+pub fn is_callable_kind(kind: &str) -> bool {
+    matches!(kind, "func" | "function" | "method")
 }
