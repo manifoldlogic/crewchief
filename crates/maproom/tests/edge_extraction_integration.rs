@@ -407,12 +407,12 @@ async fn test_edges_queryable_by_type() {
 #[test]
 fn test_supports_call_extraction_predicate() {
     use maproom::indexer::edges::supports_call_extraction;
-    for lang in ["ts", "tsx", "js", "jsx", "rs"] {
+    // py is enabled once the F-D extractor lands and meets its accuracy gate (A2).
+    for lang in ["ts", "tsx", "js", "jsx", "rs", "py"] {
         assert!(supports_call_extraction(lang), "{lang} must be supported");
     }
-    // py flips only when the F-D extractor lands (spec A2)
-    for lang in ["py", "go", "rb", "java", "md", "json"] {
-        assert!(!supports_call_extraction(lang), "{lang} must not be enabled yet");
+    for lang in ["go", "rb", "java", "md", "json"] {
+        assert!(!supports_call_extraction(lang), "{lang} must not be enabled");
     }
 }
 

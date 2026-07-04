@@ -36,6 +36,7 @@ use anyhow::Result;
 pub use crate::incremental::edge_updater::{Edge, EdgeType};
 
 pub mod common;
+pub mod python;
 pub mod rust;
 pub mod typescript;
 
@@ -123,6 +124,7 @@ pub fn extract_edges(
     match language {
         "ts" | "tsx" | "js" | "jsx" => typescript::extract_calls(source, language, chunks),
         "rs" => rust::extract_calls(source, chunks),
+        "py" => python::extract_calls(source, chunks),
         _ => {
             // No edge extraction for unsupported languages
             Ok((Vec::new(), Vec::new()))
@@ -135,7 +137,7 @@ pub fn extract_edges(
 /// predicate — three hand-rolled `matches!` gates previously drifted and
 /// left the `rs` dispatcher arm dead in production.
 pub fn supports_call_extraction(language: &str) -> bool {
-    matches!(language, "ts" | "tsx" | "js" | "jsx" | "rs")
+    matches!(language, "ts" | "tsx" | "js" | "jsx" | "rs" | "py")
 }
 
 /// Spec A6/B3: chunk kinds that can be a call TARGET. `use`/import/module/
