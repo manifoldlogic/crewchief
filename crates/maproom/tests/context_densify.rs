@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use maproom::context::{AssemblyStrategy, DefaultAssemblyStrategy, ExpandOptions};
 use maproom::db::sqlite::SqliteStore;
-use maproom::db::traits::{StoreChunks, StoreCore, StoreGraph, StoreMigration};
+use maproom::db::traits::{StoreChunks, StoreCore, StoreMigration};
 use maproom::db::{ChunkRecord, FileRecord, Store};
 
 /// Build a real on-disk worktree + store with a call graph around a primary
