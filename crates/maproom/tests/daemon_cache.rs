@@ -162,13 +162,9 @@ fn serve_warm_queries_flag_populates_cache() {
     let qfile = db.path().join("warm.txt");
     std::fs::write(&qfile, "warmStartProbe\n").unwrap();
 
-    // Startup warming is async; poll cache.stats until size >= 1 by sending
-    // repeated stats requests in one session (the daemon processes lines in
-    // order, so by the last request the spawned warm task has had time).
-    let mut lines: Vec<String> = Vec::new();
-    for i in 1..=20 {
-        lines.push(format!(r#"{{"jsonrpc":"2.0","method":"cache.stats","id":{i}}}"#));
-    }
+    // Startup warming is async: poll cache.stats interleaved (write one
+    // request, read its one reply) until size >= 1 or a REAL deadline —
+    // never a fixed sleep window (the exact flake class F81's [39] fixed).
     let mut child = Command::new(binary_path())
         .env_remove("MAPROOM_EMBEDDING_PROVIDER")
         .env_remove("OLLAMA_URL")
@@ -183,23 +179,36 @@ fn serve_warm_queries_flag_populates_cache() {
         .stderr(Stdio::piped())
         .spawn()
         .expect("spawn serve");
-    {
+
+    let mut stdin = child.stdin.take().unwrap();
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = std::io::BufReader::new(stdout);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    let mut warmed = false;
+    let mut last = String::new();
+    let mut id: u64 = 0;
+    while std::time::Instant::now() < deadline {
+        use std::io::BufRead as _;
         use std::io::Write as _;
-        let stdin = child.stdin.as_mut().unwrap();
-        for l in &lines {
-            writeln!(stdin, "{l}").unwrap();
-            std::thread::sleep(std::time::Duration::from_millis(100));
+        id += 1;
+        writeln!(stdin, r#"{{"jsonrpc":"2.0","method":"cache.stats","id":{id}}}"#).unwrap();
+        stdin.flush().unwrap();
+        last.clear();
+        if reader.read_line(&mut last).unwrap() == 0 {
+            panic!("daemon exited early");
         }
+        let v: serde_json::Value = serde_json::from_str(&last).expect("stats reply");
+        if v["result"]["size"].as_u64().unwrap_or(0) >= 1 {
+            warmed = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
     }
-    let out = child.wait_with_output().expect("wait serve");
-    assert_eq!(out.status.code(), Some(0));
-    let by_id = responses_by_id(&String::from_utf8_lossy(&out.stdout));
-    let warmed = by_id
-        .values()
-        .any(|v| v["result"]["size"].as_u64().unwrap_or(0) >= 1);
+    drop(stdin); // EOF -> daemon exits
+    let status = child.wait().expect("wait serve");
+    assert!(status.success());
     assert!(
         warmed,
-        "startup warming must populate the cache within ~2s; last stats: {:?}",
-        by_id.get(&20).map(|v| &v["result"])
+        "startup warming must populate the cache within the 60s deadline; last stats: {last}"
     );
 }
