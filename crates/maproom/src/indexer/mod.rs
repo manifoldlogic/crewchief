@@ -125,52 +125,188 @@ pub struct BranchSwitchEvent {
     pub worktree_created: bool,
 }
 
-/// Process Python imports from chunk metadata and create import edges in chunk_edges table
-async fn process_python_imports(
+/// Map a Python import (`module` + `relative_depth`) to candidate relpaths within
+/// the worktree, resolved against the importing file's directory.
+///
+/// - Absolute `a.b` -> `["a/b.py", "a/b/__init__.py"]` (relative to worktree root).
+/// - Relative imports resolve `module` against the importing file's package: one
+///   leading dot = the importing file's own directory, each extra dot pops one more
+///   level (`from ..pkg import x` in `a/b/c.py` -> base `a`, module `pkg`).
+///
+/// Candidate strings are built with `PathBuf` so they byte-match `FileRecord.relpath`
+/// (which is `strip_prefix(root).to_string_lossy()`). Returns an empty vec when there
+/// is nothing to resolve against (e.g. `from . import submod`, whose target is a
+/// submodule file rather than a symbol — v1 emits no edge for that form).
+fn python_module_candidate_relpaths(
+    importing_relpath: &Path,
+    module: &str,
+    relative_depth: Option<usize>,
+) -> Vec<String> {
+    // No module component (`from . import submod`) targets a submodule file rather
+    // than a symbol inside a module file — not resolvable by symbol lookup. v1 emits
+    // no edge for that form (documented in C4).
+    if module.is_empty() {
+        return Vec::new();
+    }
+
+    // Base directory the module path is resolved against.
+    let mut base: PathBuf = match relative_depth {
+        Some(depth) => {
+            // One dot targets the importing file's own package (its directory);
+            // each additional dot climbs one more level.
+            let mut dir = importing_relpath
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or_default();
+            for _ in 1..depth {
+                dir = dir.parent().map(Path::to_path_buf).unwrap_or_default();
+            }
+            dir
+        }
+        // Absolute import: resolve from the worktree root.
+        None => PathBuf::new(),
+    };
+
+    for part in module.split('.') {
+        base.push(part);
+    }
+
+    // `a/b` -> module file `a/b.py` and package `a/b/__init__.py`. Module path
+    // components are plain identifiers, so `set_extension` only appends the suffix.
+    let mut as_module = base.clone();
+    as_module.set_extension("py");
+    let as_package = base.join("__init__.py");
+
+    vec![
+        as_module.to_string_lossy().to_string(),
+        as_package.to_string_lossy().to_string(),
+    ]
+}
+
+/// A file's python imports, captured during indexing and resolved in a post-pass.
+///
+/// Resolution is deferred until every file is indexed because a `from pkg.utils
+/// import helper` in `a.py` targets a chunk in `pkg/utils.py`, which the file walk
+/// may reach AFTER `a.py`. Resolving inline (as the pre-F-C code did) silently
+/// dropped every forward cross-file import.
+struct PendingPyImports {
+    /// Relpath of the importing file (base for relative-import resolution).
+    relpath: PathBuf,
+    /// Chunk id of this file's `__imports__` chunk (the edge source).
+    src_chunk_id: i64,
+    /// The raw `imports` metadata array for this file.
+    imports: Vec<serde_json::Value>,
+}
+
+/// Capture a python file's imports for later resolution (spec §6 C1).
+///
+/// The source `__imports__` chunk id is taken from THIS file's in-memory chunk ids
+/// (`chunks_with_ids`), never a worktree-global symbol lookup that collapsed every
+/// file's imports onto one arbitrary chunk. Pure — no store access — so it is safe to
+/// call inside the indexing loop. Returns `None` when the file has no imports chunk.
+fn collect_python_imports(
+    relpath: &Path,
+    chunks: &[SymbolChunk],
+    chunks_with_ids: &[edges::ChunkWithId],
+) -> Option<PendingPyImports> {
+    // C1: source chunk id from this file's in-memory chunks (kind match).
+    let src_chunk_id = chunks_with_ids.iter().find(|c| c.kind == "imports").map(|c| c.id)?;
+
+    // The import list lives in the SymbolChunk metadata (ChunkWithId carries none);
+    // chunks and chunks_with_ids are index-parallel.
+    let imports = chunks
+        .iter()
+        .find(|c| c.kind == "imports")
+        .and_then(|c| c.metadata.as_ref())
+        .and_then(|m| m.get("imports"))
+        .and_then(|v| v.as_array())
+        .cloned()?;
+
+    Some(PendingPyImports {
+        relpath: relpath.to_path_buf(),
+        src_chunk_id,
+        imports,
+    })
+}
+
+/// Resolve captured python imports into scoped `imports` edges (spec §6 C2-C5).
+///
+/// Runs after all files are indexed so cross-file targets exist. Each imported name
+/// is resolved module-path-scoped against the target file's relpath — there is no
+/// bare-name worktree-wide fallback, so external modules (`os`, `numpy`) and same-name
+/// decoys in other files produce no edge.
+async fn resolve_python_imports(
     store: &(dyn Store + Send + Sync),
     repo_id: i64,
     worktree_id: i64,
-    _file_id: i64,
-    chunks: &[SymbolChunk],
+    pending: &[PendingPyImports],
 ) -> anyhow::Result<()> {
-    // Find the imports chunk if it exists
-    let imports_chunk = chunks
-        .iter()
-        .find(|c| c.kind == "imports" && c.metadata.is_some());
+    for file in pending {
+        for import_obj in &file.imports {
+            // C4: wildcard/dynamic imports remain no-ops.
+            if import_obj
+                .get("is_wildcard")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                continue;
+            }
+            if import_obj.get("import_type").and_then(|v| v.as_str()) == Some("dynamic") {
+                continue;
+            }
 
-    if let Some(imports) = imports_chunk {
-        if let Some(metadata) = &imports.metadata {
-            if let Some(imports_array) = metadata.get("imports").and_then(|v| v.as_array()) {
-                // Get the chunk_id for the imports chunk itself
-                let imports_chunk_id = store
-                    .find_chunk_by_symbol(repo_id, Some(worktree_id), "__imports__", None)
-                    .await?;
+            // Names are present for `from`/relative imports; empty for `import foo`
+            // (standard-import module linking is an optional C4 form we don't emit).
+            let names: Vec<&str> = import_obj
+                .get("names")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+                .unwrap_or_default();
+            if names.is_empty() {
+                continue;
+            }
 
-                if let Some(src_chunk_id) = imports_chunk_id {
-                    // Process each import
-                    for import_obj in imports_array {
-                        // Extract symbol names from the import
-                        let names = import_obj
-                            .get("names")
-                            .and_then(|v| v.as_array())
-                            .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>())
-                            .unwrap_or_default();
+            let module = import_obj
+                .get("module")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let relative_depth = import_obj
+                .get("relative_depth")
+                .and_then(|v| v.as_u64())
+                .map(|d| d as usize);
 
-                        // For each imported name, try to find the target chunk
-                        for name in names {
-                            if let Ok(Some(dst_chunk_id)) = store
-                                .find_chunk_by_symbol(repo_id, Some(worktree_id), name, None)
-                                .await
-                            {
-                                // Create the import edge
-                                if let Err(e) = store
-                                    .insert_chunk_edge(src_chunk_id, dst_chunk_id, "imports")
-                                    .await
-                                {
-                                    warn!("Failed to create import edge for {}: {}", name, e);
-                                }
-                            }
-                        }
+            // C2/C3: module-path-scoped candidate relpaths; no global fallback.
+            let candidates =
+                python_module_candidate_relpaths(&file.relpath, module, relative_depth);
+            if candidates.is_empty() {
+                continue;
+            }
+
+            for name in &names {
+                // Aliases resolve by ORIGINAL name (already stored in `names`). Try
+                // each candidate relpath in order; the first that resolves wins.
+                // External modules resolve to none -> no edge (C3).
+                let mut dst_chunk_id: Option<i64> = None;
+                for candidate in &candidates {
+                    if let Ok(Some(id)) = store
+                        .find_chunk_by_symbol(repo_id, Some(worktree_id), name, Some(candidate))
+                        .await
+                    {
+                        dst_chunk_id = Some(id);
+                        break;
+                    }
+                }
+
+                if let Some(dst_chunk_id) = dst_chunk_id {
+                    if dst_chunk_id == file.src_chunk_id {
+                        continue; // never a self-edge
+                    }
+                    // C5: per-name warn-and-continue error handling preserved.
+                    if let Err(e) = store
+                        .insert_chunk_edge(file.src_chunk_id, dst_chunk_id, "imports")
+                        .await
+                    {
+                        warn!("Failed to create import edge for {}: {}", name, e);
                     }
                 }
             }
@@ -374,6 +510,9 @@ pub async fn scan_worktree(
         p.set_totals(file_paths.len(), None);
     }
 
+    // Python imports are resolved after all files are indexed (F-C post-pass).
+    let mut pending_py_imports: Vec<PendingPyImports> = Vec::new();
+
     for (idx, path) in file_paths.iter().enumerate() {
         let relpath = path.strip_prefix(&root_abs).unwrap_or(path);
         let language = detect_language_from_path(path).unwrap(); // Already filtered
@@ -499,16 +638,13 @@ pub async fn scan_worktree(
                 });
             }
 
-            // Process Python imports and create edges
+            // Capture Python imports; resolved in a post-pass once every file is
+            // indexed (cross-file targets may be walked after the importer).
             if language == "py" {
-                if let Err(e) =
-                    process_python_imports(store, repo_id, worktree_id, file_id, &chunks).await
+                if let Some(pending) =
+                    collect_python_imports(relpath, &chunks, &chunks_with_ids)
                 {
-                    warn!(
-                        "Failed to process Python imports for {}: {}",
-                        relpath.display(),
-                        e
-                    );
+                    pending_py_imports.push(pending);
                 }
             }
 
@@ -546,6 +682,12 @@ pub async fn scan_worktree(
                 p.print_progress();
             }
         }
+    }
+
+    // F-C post-pass: resolve captured python imports now that every target chunk
+    // exists (see collect_python_imports / PendingPyImports).
+    if let Err(e) = resolve_python_imports(store, repo_id, worktree_id, &pending_py_imports).await {
+        warn!("Failed to resolve Python imports: {}", e);
     }
 
     // R09 / R-GC-5: deleted-file reconciliation. Any relpath present in the
@@ -678,6 +820,9 @@ pub async fn upsert_files(
         .await?;
     let commit_id = store.get_or_create_commit(repo_id, commit, None).await?;
 
+    // Python imports are resolved after all files are indexed (F-C post-pass).
+    let mut pending_py_imports: Vec<PendingPyImports> = Vec::new();
+
     for path in paths {
         let abs = if path.is_absolute() {
             path.clone()
@@ -796,16 +941,13 @@ pub async fn upsert_files(
                 });
             }
 
-            // Process Python imports and create edges
+            // Capture Python imports; resolved in a post-pass once every file is
+            // indexed (cross-file targets may be walked after the importer).
             if language.unwrap() == "py" {
-                if let Err(e) =
-                    process_python_imports(store, repo_id, worktree_id, file_id, &chunks).await
+                if let Some(pending) =
+                    collect_python_imports(&relpath, &chunks, &chunks_with_ids)
                 {
-                    warn!(
-                        "Failed to process Python imports for {}: {}",
-                        relpath.display(),
-                        e
-                    );
+                    pending_py_imports.push(pending);
                 }
             }
 
@@ -832,6 +974,13 @@ pub async fn upsert_files(
                 }
             }
         }
+    }
+
+    // F-C post-pass: resolve captured python imports now that every target chunk
+    // exists. In the watch/upsert path most targets already live in the DB from a
+    // prior scan; deferring also handles a batch that adds importer + target together.
+    if let Err(e) = resolve_python_imports(store, repo_id, worktree_id, &pending_py_imports).await {
+        warn!("Failed to resolve Python imports: {}", e);
     }
 
     info!(?repo, ?worktree, ?commit, updated_files=?paths.len(), "upsert selective complete");
@@ -939,6 +1088,40 @@ mod tests {
     use crate::db::traits::StoreMigration;
     use std::io::Write;
     use tempfile::NamedTempFile;
+
+    /// F-C (spec §6 C2): module + relative_depth map to worktree-scoped candidate
+    /// relpaths that byte-match `FileRecord.relpath`.
+    #[test]
+    fn test_python_module_candidate_relpaths() {
+        let importing = Path::new("app/service.py");
+
+        // Absolute `from pkg.utils import x` -> pkg/utils.{py,__init__}.
+        assert_eq!(
+            python_module_candidate_relpaths(importing, "pkg.utils", None),
+            vec!["pkg/utils.py".to_string(), "pkg/utils/__init__.py".to_string()],
+        );
+
+        // Absolute single-component module.
+        assert_eq!(
+            python_module_candidate_relpaths(importing, "utils", None),
+            vec!["utils.py".to_string(), "utils/__init__.py".to_string()],
+        );
+
+        // `from . import ...` in app/service.py: one dot = app package.
+        assert_eq!(
+            python_module_candidate_relpaths(importing, "helpers", Some(1)),
+            vec!["app/helpers.py".to_string(), "app/helpers/__init__.py".to_string()],
+        );
+
+        // `from ..pkg import ...` in app/sub/mod.py: two dots climb to app.
+        assert_eq!(
+            python_module_candidate_relpaths(Path::new("app/sub/mod.py"), "pkg", Some(2)),
+            vec!["app/pkg.py".to_string(), "app/pkg/__init__.py".to_string()],
+        );
+
+        // `from . import submod` (no module component) is not symbol-resolvable.
+        assert!(python_module_candidate_relpaths(importing, "", Some(1)).is_empty());
+    }
 
     /// Test that setup_head_watcher creates a working channel bridge from sync to async
     ///

@@ -447,3 +447,104 @@ async fn test_scan_creates_rust_edges() {
         .expect("Rescan should succeed");
     assert_eq!(before, get_edge_count(&store).await, "rescan must be idempotent");
 }
+
+// ==================== Edge-depth spec F-C: Python import scoping ====================
+
+/// Rows describing each `imports` edge: (src_relpath, dst_relpath, dst_symbol).
+async fn import_edges(store: &SqliteStore) -> Vec<(String, String, Option<String>)> {
+    store
+        .run(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT sf.relpath, df.relpath, dst.symbol_name
+                 FROM chunk_edges e
+                 JOIN chunks src ON e.src_chunk_id = src.id
+                 JOIN files  sf  ON src.file_id = sf.id
+                 JOIN chunks dst ON e.dst_chunk_id = dst.id
+                 JOIN files  df  ON dst.file_id = df.id
+                 WHERE e.type = 'imports'
+                 ORDER BY sf.relpath",
+            )?;
+            let rows: Result<Vec<_>, _> = stmt
+                .query_map([], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                    ))
+                })?
+                .collect();
+            Ok(rows?)
+        })
+        .await
+        .unwrap()
+}
+
+/// Count chunks named `__imports__` (one per file that has imports).
+async fn imports_chunk_count(store: &SqliteStore) -> i64 {
+    store
+        .run(|conn| {
+            let n = conn.query_row(
+                "SELECT COUNT(*) FROM chunks WHERE symbol_name = '__imports__'",
+                [],
+                |row| row.get(0),
+            )?;
+            Ok(n)
+        })
+        .await
+        .unwrap()
+}
+
+/// Spec §6 (F-C): two files import the same symbol from a shared module; the
+/// `imports` edges must be per-file-scoped, decoy-proof, external-proof, and
+/// idempotent across rescans.
+#[tokio::test]
+async fn test_scan_scopes_python_imports() {
+    let store = setup_store().await;
+    let test_repo = Path::new("tests/fixtures/edge_extraction/python_imports");
+
+    scan_worktree(&store, "py_repo", "main", test_repo, "HEAD", 4, None, None, None)
+        .await
+        .expect("Scan should succeed");
+
+    // Exactly two __imports__ chunks (a.py and b.py; pkg/utils.py has no imports).
+    assert_eq!(
+        imports_chunk_count(&store).await,
+        2,
+        "exactly two __imports__ chunks (a.py, b.py)"
+    );
+
+    let edges = import_edges(&store).await;
+    assert_eq!(
+        edges.len(),
+        2,
+        "exactly two imports edges (os/some_external_lib must not resolve), got {edges:?}"
+    );
+
+    // Distinct src chunks — a.py's and b.py's — never collapsed onto one.
+    let distinct_src: std::collections::HashSet<&str> =
+        edges.iter().map(|(s, _, _)| s.as_str()).collect();
+    assert_eq!(distinct_src.len(), 2, "src chunks must be distinct, got {edges:?}");
+    assert!(distinct_src.contains("a.py") && distinct_src.contains("b.py"));
+
+    // Both dst == pkg/utils.py's `helper`, never b.py's local decoy or any external.
+    for (src, dst_relpath, dst_symbol) in &edges {
+        assert_eq!(
+            dst_relpath, "pkg/utils.py",
+            "{src}'s import must resolve to pkg/utils.py, not {dst_relpath} (decoy/external leak)"
+        );
+        assert_eq!(dst_symbol.as_deref(), Some("helper"), "dst must be `helper`");
+    }
+
+    // Idempotence: a second scan changes none of the above (spec §6 Gherkin).
+    scan_worktree(&store, "py_repo", "main", test_repo, "HEAD", 4, None, None, None)
+        .await
+        .expect("Rescan should succeed");
+    let edges_again = import_edges(&store).await;
+    assert_eq!(edges_again.len(), 2, "rescan must not add/duplicate import edges");
+    assert_eq!(
+        imports_chunk_count(&store).await,
+        2,
+        "rescan must not duplicate __imports__ chunks"
+    );
+    assert_eq!(edges, edges_again, "rescan must leave import edges unchanged");
+}
