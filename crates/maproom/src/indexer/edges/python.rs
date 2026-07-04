@@ -261,6 +261,35 @@ def build():
         );
     }
 
+    /// Review fix: async defs (chunker kind async_func/async_method) are ordinary
+    /// call targets and must resolve, not be dropped as non-callable.
+    #[test]
+    fn test_async_def_is_a_callable_target() {
+        let source = "\
+async def fetch():
+    return 1
+
+
+async def run():
+    return await fetch()
+";
+        let chunks = real_chunks(source);
+        // Sanity: the chunker really tags these async.
+        assert!(
+            chunks.iter().any(|c| c.kind == "async_func"),
+            "fixture must exercise async_func kind: {chunks:?}"
+        );
+        let (edges, _unresolved) = extract_calls(source, &chunks).unwrap();
+        let fetch = chunk_by_symbol(&chunks, "fetch");
+        let run = chunk_by_symbol(&chunks, "run");
+        assert!(
+            edges
+                .iter()
+                .any(|e| e.src_chunk_id == run.id && e.dst_chunk_id == fetch.id),
+            "run -> fetch edge required (async target), got {edges:?}"
+        );
+    }
+
     #[test]
     fn test_parse_error_returns_empty() {
         let (edges, unresolved) = extract_calls("def foo(", &[]).unwrap();

@@ -142,7 +142,54 @@ pub fn supports_call_extraction(language: &str) -> bool {
 
 /// Spec A6/B3: chunk kinds that can be a call TARGET. `use`/import/module/
 /// struct-name chunks share symbol names with real functions and are the
-/// primary false-positive source when they enter a symbol table.
+/// primary false-positive source when they enter a symbol table. Includes the
+/// Python chunker's `async_func`/`async_method` — async defs are ordinary call
+/// targets and were otherwise invisible to resolution.
 pub fn is_callable_kind(kind: &str) -> bool {
-    matches!(kind, "func" | "function" | "method")
+    matches!(
+        kind,
+        "func" | "function" | "method" | "async_func" | "async_method"
+    )
+}
+
+/// Normalize a language to its cross-file RESOLUTION family (spec B3 candidate
+/// scoping): the TypeScript/JavaScript dialects freely call across `.ts`/`.tsx`/
+/// `.js`/`.jsx`, so they resolve as one family; Rust and Python are their own.
+/// Cross-language edges remain impossible (different families never match).
+pub fn resolution_family(language: &str) -> &'static str {
+    match language {
+        "ts" | "tsx" | "js" | "jsx" => "ts",
+        "rs" => "rs",
+        "py" => "py",
+        _ => "other",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_callable_kind_includes_async() {
+        for k in ["func", "function", "method", "async_func", "async_method"] {
+            assert!(is_callable_kind(k), "{k} must be callable");
+        }
+        for k in ["class", "struct", "enum", "trait", "impl", "module", "use", "imports"] {
+            assert!(!is_callable_kind(k), "{k} must not be callable");
+        }
+    }
+
+    #[test]
+    fn test_resolution_family_groups_ts_dialects() {
+        // TS/JS dialects share one resolution family (cross-dialect calls resolve).
+        for l in ["ts", "tsx", "js", "jsx"] {
+            assert_eq!(resolution_family(l), "ts", "{l} must be in the ts family");
+        }
+        assert_eq!(resolution_family("rs"), "rs");
+        assert_eq!(resolution_family("py"), "py");
+        // Different families never match -> no cross-language edges.
+        assert_ne!(resolution_family("rs"), resolution_family("py"));
+        assert_ne!(resolution_family("ts"), resolution_family("py"));
+        assert_ne!(resolution_family("go"), resolution_family("rs"));
+    }
 }

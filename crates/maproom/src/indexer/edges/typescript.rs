@@ -83,8 +83,16 @@ pub fn extract_calls(
         }
     };
 
-    // Build symbol table for same-file resolution
-    let symbol_table = build_symbol_table(chunks);
+    // Build symbol table for same-file resolution, restricted to CALLABLE kinds
+    // (spec A6, matching the Rust/Python extractors): a same-file `class`/type
+    // chunk sharing a callee's name must not become a call target — and keeping it
+    // out also lets a real cross-file function of that name resolve in the post-pass.
+    let callable: Vec<ChunkWithId> = chunks
+        .iter()
+        .filter(|c| super::is_callable_kind(&c.kind))
+        .cloned()
+        .collect();
+    let symbol_table = build_symbol_table(&callable);
 
     // Find all call expressions
     let mut edges = Vec::new();
@@ -175,6 +183,12 @@ fn process_call_expression(
             return;
         }
     };
+
+    // Spec A6: no self-edges (recursion is not a relationship worth a row) —
+    // matching the Rust/Python extractors.
+    if caller_chunk.id == callee_id {
+        return;
+    }
 
     // Create edge
     edges.push(Edge {
@@ -272,6 +286,30 @@ export function Badge(props: { name: string }) {
                 .any(|e| e.src_chunk_id == 2 && e.dst_chunk_id == 1),
             "Badge -> formatName call inside JSX must be extracted: {edges:?}"
         );
+    }
+
+    /// Spec A6 (review fix): a recursive call produces no self-edge, and a same-file
+    /// `class` sharing a callee name is not a call target (kept out of the symbol
+    /// table so the call instead becomes a cross-file candidate).
+    #[test]
+    fn test_no_self_edge_and_class_not_a_target() {
+        let source = r#"
+            class Widget {}
+            function fib(n: number): number { return fib(n - 1) + fib(n - 2); }
+            function build() { return Widget(); }
+        "#;
+        let chunks = vec![
+            ChunkWithId { id: 1, symbol_name: Some("Widget".to_string()), kind: "class".to_string(), start_line: 2, end_line: 2, file_id: 100 },
+            ChunkWithId { id: 2, symbol_name: Some("fib".to_string()), kind: "func".to_string(), start_line: 3, end_line: 3, file_id: 100 },
+            ChunkWithId { id: 3, symbol_name: Some("build".to_string()), kind: "func".to_string(), start_line: 4, end_line: 4, file_id: 100 },
+        ];
+        let (edges, unresolved) = extract_calls(source, "ts", &chunks).unwrap();
+        // No self-edge for the recursive fib.
+        assert!(!edges.iter().any(|e| e.src_chunk_id == e.dst_chunk_id), "self-edge leaked: {edges:?}");
+        // No edge targeting the class chunk.
+        assert!(!edges.iter().any(|e| e.dst_chunk_id == 1), "class became a call target: {edges:?}");
+        // Widget() is instead handed to the cross-file post-pass.
+        assert!(unresolved.iter().any(|u| u.callee_name == "Widget"), "Widget() must be an unresolved ref: {unresolved:?}");
     }
 
     #[test]

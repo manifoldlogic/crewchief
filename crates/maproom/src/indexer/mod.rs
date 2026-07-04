@@ -153,13 +153,18 @@ fn python_module_candidate_relpaths(
     let mut base: PathBuf = match relative_depth {
         Some(depth) => {
             // One dot targets the importing file's own package (its directory);
-            // each additional dot climbs one more level.
-            let mut dir = importing_relpath
-                .parent()
-                .map(Path::to_path_buf)
-                .unwrap_or_default();
+            // each additional dot climbs one more level. Climbing above the worktree
+            // root is an invalid (over-deep) relative import — yield no candidate
+            // rather than silently clamping to the root.
+            let mut dir = match importing_relpath.parent() {
+                Some(p) => p.to_path_buf(),
+                None => return Vec::new(),
+            };
             for _ in 1..depth {
-                dir = dir.parent().map(Path::to_path_buf).unwrap_or_default();
+                match dir.parent() {
+                    Some(p) => dir = p.to_path_buf(),
+                    None => return Vec::new(),
+                }
             }
             dir
         }
@@ -420,12 +425,14 @@ fn resolve_cross_file_calls(
             dropped += 1;
             continue;
         };
-        // Callable-kind is already enforced by the index; exclude cross-language,
-        // the caller's own file, and self.
+        // Callable-kind is already enforced by the index; exclude cross-language
+        // (by resolution FAMILY, so .ts/.tsx/.js/.jsx resolve across dialects), the
+        // caller's own file, and self.
+        let src_family = edges::resolution_family(pc.src_lang);
         let viable: Vec<&SymbolCandidate> = candidates
             .iter()
             .filter(|c| {
-                c.lang == pc.src_lang
+                edges::resolution_family(c.lang) == src_family
                     && c.relpath != pc.src_relpath
                     && c.chunk_id != pc.src_chunk_id
             })
@@ -798,7 +805,9 @@ pub async fn scan_worktree(
             // post-passes reinsert. On a full scan every file's outgoing edges are
             // refreshed this way; the post-passes insert nothing until after the loop,
             // so no just-built cross-file edge is deleted.
-            if language == "py" || edges::supports_call_extraction(language) {
+            // supports_call_extraction now includes py, which also produces the
+            // `imports` edges cleared here.
+            if edges::supports_call_extraction(language) {
                 if let Err(e) = store.delete_edges_for_file(file_id).await {
                     warn!("Failed to clear stale edges for {}: {}", relpath.display(), e);
                 }
@@ -861,9 +870,13 @@ pub async fn scan_worktree(
     let (cross_file, dropped) = resolve_cross_file_calls(&symbol_index, &pending_calls);
     let mut all_calls = same_file_calls;
     all_calls.extend(cross_file.iter().copied());
+    // Repeated identical calls yield duplicate (src,dst) pairs; dedup so test_of
+    // derivation and the batch don't do redundant work (the DB also OR-IGNOREs).
+    all_calls.sort_unstable();
+    all_calls.dedup();
     let test_of = derive_test_of_edges(&all_calls, &chunk_meta);
     debug!(
-        same_file = all_calls.len() - cross_file.len(),
+        calls = all_calls.len(),
         cross_file = cross_file.len(),
         test_of = test_of.len(),
         dropped,
@@ -1137,7 +1150,9 @@ pub async fn upsert_files(
             // reinserting its outgoing edges. On the upsert path this is what makes
             // inbound A->B edges deliberately go stale when B is re-indexed alone —
             // they regenerate on the next scan of A or a full rescan (documented v1).
-            if language == "py" || edges::supports_call_extraction(language) {
+            // supports_call_extraction now includes py, which also produces the
+            // `imports` edges cleared here.
+            if edges::supports_call_extraction(language) {
                 if let Err(e) = store.delete_edges_for_file(file_id).await {
                     warn!("Failed to clear stale edges for {}: {}", relpath.display(), e);
                 }
@@ -1216,8 +1231,11 @@ pub async fn upsert_files(
         let (cross_file, dropped) = resolve_cross_file_calls(&symbol_index, &pending_calls);
         let mut all_calls = same_file_calls;
         all_calls.extend(cross_file.iter().copied());
+        all_calls.sort_unstable();
+        all_calls.dedup();
         let test_of = derive_test_of_edges(&all_calls, &chunk_meta);
         debug!(
+            calls = all_calls.len(),
             cross_file = cross_file.len(),
             test_of = test_of.len(),
             dropped,
@@ -1366,6 +1384,17 @@ mod tests {
 
         // `from . import submod` (no module component) is not symbol-resolvable.
         assert!(python_module_candidate_relpaths(importing, "", Some(1)).is_empty());
+
+        // Over-deep relative import (climbs above the worktree root) -> no candidate,
+        // NOT a silent clamp to the root (review fix).
+        assert!(
+            python_module_candidate_relpaths(Path::new("app.py"), "pkg", Some(2)).is_empty(),
+            "`from ..pkg` in a root-level file must yield no candidate"
+        );
+        assert!(
+            python_module_candidate_relpaths(Path::new("a/b.py"), "pkg", Some(3)).is_empty(),
+            "`from ...pkg` in a depth-1 file must yield no candidate"
+        );
     }
 
     /// Test that setup_head_watcher creates a working channel bridge from sync to async
