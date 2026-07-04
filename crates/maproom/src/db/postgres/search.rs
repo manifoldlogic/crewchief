@@ -241,8 +241,10 @@ impl StoreSearch for PostgresStore {
         if tsq.is_empty() {
             return Ok((Vec::new(), 0));
         }
+        // F15: an unknown repo is an ERROR (parity with SQLite), not a silent
+        // empty set — a typo'd --repo must be distinguishable from zero hits.
         let Some(repo_id) = resolve_repo_id(&self.pool, repo).await? else {
-            return Ok((Vec::new(), 0));
+            return Err(crate::db::StoreError::RepositoryNotFound(repo.to_string()).into());
         };
         let wt_id = match worktree {
             Some(w) => match resolve_worktree_id(&self.pool, repo_id, w).await? {
@@ -364,8 +366,9 @@ impl StoreSearch for PostgresStore {
         // pgvector IS present: reject unsupported dims and non-finite values (the
         // SQLite vector path errors on a bad dim once the extension is active).
         super::embeddings::validate_embedding(embedding)?;
+        // F15: unknown repo errors (see search_chunks_fts above).
         let Some(repo_id) = resolve_repo_id(&self.pool, repo).await? else {
-            return Ok(Vec::new());
+            return Err(crate::db::StoreError::RepositoryNotFound(repo.to_string()).into());
         };
         let wt_id = match worktree {
             Some(w) => match resolve_worktree_id(&self.pool, repo_id, w).await? {

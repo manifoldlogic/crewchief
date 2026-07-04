@@ -28,6 +28,8 @@ export interface SearchParams {
   worktree?: string;
   limit?: number;
   threshold?: number;
+  /** Search mode: "fts", "vector", or "hybrid" (F02). Omitted -> daemon default (hybrid). */
+  mode?: 'fts' | 'vector' | 'hybrid';
   debug?: boolean;
   /** Deduplicate results across worktrees (default: true) */
   deduplicate?: boolean;
@@ -73,6 +75,7 @@ export interface ContextParams {
     callers?: boolean;
     callees?: boolean;
     tests?: boolean;
+    imports?: boolean;
     docs?: boolean;
     config?: boolean;
     max_depth?: number;

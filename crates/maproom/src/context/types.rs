@@ -94,6 +94,9 @@ pub struct ExpandOptions {
     pub tests: bool,
     /// Include documentation chunks
     pub docs: bool,
+    /// Include import/export relationships (F82: the symmetric engine
+    /// traverses these too; previously context never surfaced them)
+    pub imports: bool,
     /// Include configuration files
     pub config: bool,
     /// Maximum depth for relationship traversal
@@ -109,14 +112,19 @@ pub struct ExpandOptions {
 }
 
 impl Default for ExpandOptions {
+    /// F81: relationship expansion is ON by default — the flagship `context`
+    /// command returning the bare primary chunk unless flags were passed was
+    /// the single most-reported UX defect ("I see one edge type at most").
+    /// `docs`/`config`/React options stay opt-in.
     fn default() -> Self {
         Self {
-            callers: false,
-            callees: false,
-            tests: false,
+            callers: true,
+            callees: true,
+            tests: true,
             docs: false,
+            imports: true,
             config: false,
-            max_depth: 1,
+            max_depth: 2,
             routes: false,
             hooks: false,
             jsx_parents: false,
@@ -128,7 +136,20 @@ impl Default for ExpandOptions {
 impl ExpandOptions {
     /// Create options with all expansions disabled (primary chunk only).
     pub fn primary_only() -> Self {
-        Self::default()
+        // Explicit all-off (Default now enables relationship expansion, F81).
+        Self {
+            callers: false,
+            callees: false,
+            tests: false,
+            docs: false,
+            imports: false,
+            config: false,
+            max_depth: 1,
+            routes: false,
+            hooks: false,
+            jsx_parents: false,
+            jsx_children: false,
+        }
     }
 
     /// Create options with common expansions enabled (tests, one caller, one callee).
@@ -138,6 +159,7 @@ impl ExpandOptions {
             callees: true,
             tests: true,
             docs: false,
+            imports: false,
             config: false,
             max_depth: 1,
             routes: false,
@@ -154,6 +176,7 @@ impl ExpandOptions {
             callees: true,
             tests: true,
             docs: true,
+            imports: true,
             config: true,
             max_depth: 2,
             routes: true,
@@ -170,6 +193,7 @@ impl ExpandOptions {
             callees: false,
             tests: true,
             docs: false,
+            imports: false,
             config: false,
             max_depth: 1,
             routes: true,

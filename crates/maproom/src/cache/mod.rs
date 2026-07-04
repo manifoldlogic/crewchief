@@ -68,7 +68,6 @@ pub mod invalidation;
 pub mod maintenance;
 pub mod stats;
 pub mod system;
-pub mod warming;
 
 pub use entry::CacheEntry;
 pub use eviction::{EvictionPolicy, EvictionStats, EvictionStrategy};
@@ -76,4 +75,3 @@ pub use invalidation::{CacheInvalidator, CacheLayer, InvalidationStats, Invalida
 pub use maintenance::{CacheMaintenance, MaintenanceConfig};
 pub use stats::{CacheStats, CacheStatsSnapshot, MultiLayerStats};
 pub use system::{CacheConfig, CacheSystem, LayerConfig};
-pub use warming::{CacheWarmer, WarmingStats, WarmingStrategy};

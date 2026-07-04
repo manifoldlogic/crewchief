@@ -590,16 +590,38 @@ impl SearchPipeline {
         &self,
         chunk_ids: &[i64],
     ) -> Result<HashMap<i64, ChunkDetails>, PipelineError> {
-        // TODO(IDXABS-2003): This needs to be implemented via the Store trait.
-        // The store trait doesn't have a bulk chunk details fetch method yet.
-        // This should query the chunks and files tables to get the needed fields.
-        // See ticket IDXABS-4001 for search functionality updates.
-
+        // F34 / IDXABS-2003: single batched fetch through the Store trait.
+        if chunk_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let chunks = self
+            .executors
+            .store()
+            .get_chunks_by_ids(chunk_ids)
+            .await
+            .map_err(|e| PipelineError::Database(e.to_string()))?;
         debug!(
-            "fetch_chunk_details called for {} chunk IDs (not yet implemented)",
-            chunk_ids.len()
+            "fetch_chunk_details: {} requested, {} found",
+            chunk_ids.len(),
+            chunks.len()
         );
-        Ok(HashMap::new())
+        Ok(chunks
+            .into_iter()
+            .map(|c| {
+                (
+                    c.id,
+                    ChunkDetails {
+                        file_id: c.file_id,
+                        relpath: c.file_path,
+                        symbol_name: c.symbol_name,
+                        kind: c.kind,
+                        start_line: c.start_line,
+                        end_line: c.end_line,
+                        preview: c.preview,
+                    },
+                )
+            })
+            .collect())
     }
 
     /// Build search metadata from pipeline execution details.
@@ -716,6 +738,108 @@ mod tests {
 
     // Note: Full integration tests are in tests/search_pipeline_integration_test.rs
     // These are unit tests for helper functions
+
+    // ===== F34 / IDXABS-2003: fetch_chunk_details is a REAL batched fetch =====
+
+    struct MockEmbedProvider;
+
+    #[async_trait::async_trait]
+    impl crate::embedding::EmbeddingProvider for MockEmbedProvider {
+        async fn embed(
+            &self,
+            _text: String,
+        ) -> Result<Vec<f32>, crate::embedding::EmbeddingError> {
+            Ok(vec![0.0; 768])
+        }
+        async fn embed_batch(
+            &self,
+            texts: Vec<String>,
+        ) -> Result<Vec<Vec<f32>>, crate::embedding::EmbeddingError> {
+            Ok(vec![vec![0.0; 768]; texts.len()])
+        }
+        fn dimension(&self) -> usize {
+            768
+        }
+        fn provider_name(&self) -> &'static str {
+            "mock"
+        }
+    }
+
+    async fn seeded_pipeline_with_two_chunks() -> (SearchPipeline, i64, i64) {
+        use crate::db::traits::{StoreChunks, StoreCore, StoreMigration};
+        let store = crate::db::sqlite::SqliteStore::connect(":memory:").await.unwrap();
+        store.migrate().await.unwrap();
+        let repo = store.get_or_create_repo("acme/f34", "/src/f34").await.unwrap();
+        let wt = store.get_or_create_worktree(repo, "main", "/wt/f34").await.unwrap();
+        let commit = store.get_or_create_commit(repo, "sha-f34", None).await.unwrap();
+        let file = store
+            .upsert_file(&crate::db::FileRecord {
+                repo_id: repo,
+                worktree_id: wt,
+                commit_id: commit,
+                relpath: "src/f34.rs".to_string(),
+                language: Some("rust".to_string()),
+                content_hash: "h-f34".to_string(),
+                size_bytes: 1,
+                last_modified: None,
+            })
+            .await
+            .unwrap();
+        let mk = |sym: &str, s: i32| crate::db::ChunkRecord {
+            file_id: file,
+            blob_sha: format!("B{sym}"),
+            symbol_name: Some(sym.to_string()),
+            kind: "function".to_string(),
+            signature: None,
+            docstring: None,
+            start_line: s,
+            end_line: s + 4,
+            preview: format!("fn {sym}() {{}}"),
+            ts_doc_text: sym.to_string(),
+            recency_score: 1.0,
+            churn_score: 0.0,
+            metadata: None,
+            worktree_id: wt,
+        };
+        let c1 = store.insert_chunk(&mk("alpha_f34", 1)).await.unwrap();
+        let c2 = store.insert_chunk(&mk("beta_f34", 10)).await.unwrap();
+
+        let store: Arc<dyn crate::db::Store + Send + Sync> = Arc::new(store);
+        let cache = crate::embedding::EmbeddingCache::new(
+            crate::embedding::config::CacheConfig {
+                max_entries: 16,
+                ttl_seconds: 60,
+                enable_metrics: false,
+            },
+        )
+        .unwrap();
+        let service =
+            crate::embedding::EmbeddingService::new(Box::new(MockEmbedProvider), Arc::new(cache));
+        let processor = Arc::new(crate::search::query_processor::QueryProcessor::new(
+            Arc::new(service),
+        ));
+        let executors = SearchExecutors::new(store);
+        (SearchPipeline::new(processor, executors), c1, c2)
+    }
+
+    #[tokio::test]
+    async fn fetch_chunk_details_returns_enriched_rows() {
+        let (pipeline, c1, c2) = seeded_pipeline_with_two_chunks().await;
+        let details = pipeline.fetch_chunk_details(&[c1, c2, 999_999]).await.unwrap();
+        assert_eq!(details.len(), 2, "both real ids found, missing id absent");
+        let d1 = &details[&c1];
+        assert_eq!(d1.relpath, "src/f34.rs");
+        assert_eq!(d1.symbol_name.as_deref(), Some("alpha_f34"));
+        assert_eq!(d1.kind, "function");
+        assert!(!d1.preview.is_empty(), "preview must be enriched");
+        assert_eq!(details[&c2].symbol_name.as_deref(), Some("beta_f34"));
+    }
+
+    #[tokio::test]
+    async fn fetch_chunk_details_empty_input_is_empty_not_stubbed() {
+        let (pipeline, _, _) = seeded_pipeline_with_two_chunks().await;
+        assert!(pipeline.fetch_chunk_details(&[]).await.unwrap().is_empty());
+    }
 
     #[test]
     fn test_chunk_details_structure() {

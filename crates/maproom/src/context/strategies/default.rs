@@ -151,19 +151,29 @@ impl DefaultAssemblyStrategy {
         Ok(())
     }
 
+    /// F81: budget-derived item cap for a relationship segment — replaces
+    /// the hard-coded `.take(1)` ("one caller + one callee max"). ~400
+    /// tokens is the working per-item estimate (mirrors the parallel
+    /// assembler's allocation/400); the floor keeps small budgets useful,
+    /// and the real token-budget guards still bound the total.
+    fn segment_item_cap(segment_budget: usize, floor: usize) -> usize {
+        (segment_budget / 400).max(floor)
+    }
+
     /// Add test chunks to the bundle.
     async fn add_tests(
         &self,
         bundle: &mut ContextBundle,
         chunk_id: i64,
         budget: usize,
+        seen: &mut std::collections::HashSet<i64>,
     ) -> Result<()> {
-        let test_budget = (budget as f64 * 0.3) as usize; // 30% of total budget
+        let test_budget = (budget as f64 * 0.2) as usize; // 20% of total budget
 
         let tests = find_test_files(self.store.as_ref(), chunk_id).await?;
 
-        for test in tests.into_iter().take(1) {
-            // Only include the nearest test
+        let cap = Self::segment_item_cap(test_budget, 3);
+        for test in tests.into_iter().take(cap) {
             if bundle.total_tokens >= budget {
                 break;
             }
@@ -174,7 +184,19 @@ impl DefaultAssemblyStrategy {
                 break;
             }
 
-            let metadata = self.get_chunk_metadata(test.id).await?;
+            if !seen.insert(test.id) {
+                continue; // already in the bundle via another segment
+            }
+
+            // Warn-and-continue: one unreadable related chunk must not kill
+            // the whole bundle (densification amplifies the blast radius).
+            let metadata = match self.get_chunk_metadata(test.id).await {
+                Ok(m) => m,
+                Err(e) => {
+                    warn!("Failed to load test chunk {}: {}", test.id, e);
+                    continue;
+                }
+            };
 
             let reason = format!(
                 "Test: {} (tests primary chunk)",
@@ -198,18 +220,29 @@ impl DefaultAssemblyStrategy {
     }
 
     /// Add caller chunks to the bundle.
+    ///
+    /// F81: honors `max_depth` (was hard-coded 1) and a budget-derived item
+    /// cap (was `.take(1)`); results are relevance-ordered so direct callers
+    /// come before transitive ones.
     async fn add_callers(
         &self,
         bundle: &mut ContextBundle,
         chunk_id: i64,
         budget: usize,
+        max_depth: i32,
+        seen: &mut std::collections::HashSet<i64>,
     ) -> Result<()> {
         let caller_budget = (budget as f64 * 0.15) as usize; // 15% of total budget
 
-        let callers = find_callers(self.store.as_ref(), chunk_id, 1).await?; // Depth 1 only
+        let mut callers = find_callers(self.store.as_ref(), chunk_id, max_depth).await?;
+        callers.sort_by(|a, b| {
+            b.relevance
+                .partial_cmp(&a.relevance)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
-        for caller in callers.into_iter().take(1) {
-            // Only include top caller
+        let cap = Self::segment_item_cap(caller_budget, 5);
+        for caller in callers.into_iter().take(cap) {
             if bundle.total_tokens >= budget {
                 break;
             }
@@ -219,11 +252,22 @@ impl DefaultAssemblyStrategy {
                 break;
             }
 
-            let metadata = self.get_chunk_metadata(caller.id).await?;
+            if !seen.insert(caller.id) {
+                continue;
+            }
+
+            let metadata = match self.get_chunk_metadata(caller.id).await {
+                Ok(m) => m,
+                Err(e) => {
+                    warn!("Failed to load caller chunk {}: {}", caller.id, e);
+                    continue;
+                }
+            };
 
             let reason = format!(
-                "Caller: {} (calls primary chunk)",
-                caller.symbol_name.unwrap_or_else(|| "caller".to_string())
+                "Caller: {} (calls primary chunk, depth {})",
+                caller.symbol_name.unwrap_or_else(|| "caller".to_string()),
+                caller.depth
             );
 
             match self.create_context_item(metadata, "caller", &reason).await {
@@ -242,19 +286,26 @@ impl DefaultAssemblyStrategy {
         Ok(())
     }
 
-    /// Add callee chunks to the bundle.
+    /// Add callee chunks to the bundle (F81: depth + cap, see add_callers).
     async fn add_callees(
         &self,
         bundle: &mut ContextBundle,
         chunk_id: i64,
         budget: usize,
+        max_depth: i32,
+        seen: &mut std::collections::HashSet<i64>,
     ) -> Result<()> {
         let callee_budget = (budget as f64 * 0.15) as usize; // 15% of total budget
 
-        let callees = find_callees(self.store.as_ref(), chunk_id, 1).await?; // Depth 1 only
+        let mut callees = find_callees(self.store.as_ref(), chunk_id, max_depth).await?;
+        callees.sort_by(|a, b| {
+            b.relevance
+                .partial_cmp(&a.relevance)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
-        for callee in callees.into_iter().take(1) {
-            // Only include top callee
+        let cap = Self::segment_item_cap(callee_budget, 5);
+        for callee in callees.into_iter().take(cap) {
             if bundle.total_tokens >= budget {
                 break;
             }
@@ -264,11 +315,22 @@ impl DefaultAssemblyStrategy {
                 break;
             }
 
-            let metadata = self.get_chunk_metadata(callee.id).await?;
+            if !seen.insert(callee.id) {
+                continue;
+            }
+
+            let metadata = match self.get_chunk_metadata(callee.id).await {
+                Ok(m) => m,
+                Err(e) => {
+                    warn!("Failed to load callee chunk {}: {}", callee.id, e);
+                    continue;
+                }
+            };
 
             let reason = format!(
-                "Callee: {} (called by primary chunk)",
-                callee.symbol_name.unwrap_or_else(|| "callee".to_string())
+                "Callee: {} (called by primary chunk, depth {})",
+                callee.symbol_name.unwrap_or_else(|| "callee".to_string()),
+                callee.depth
             );
 
             match self.create_context_item(metadata, "callee", &reason).await {
@@ -284,6 +346,80 @@ impl DefaultAssemblyStrategy {
             }
         }
 
+        Ok(())
+    }
+
+    /// Add import/export relationships (F82: the symmetric engine surfaces
+    /// these on the search path; context never did). Both directions, each
+    /// labeled — "Imports" (outgoing) and "Imported by" (incoming).
+    async fn add_imports(
+        &self,
+        bundle: &mut ContextBundle,
+        chunk_id: i64,
+        budget: usize,
+        max_depth: i32,
+        seen: &mut std::collections::HashSet<i64>,
+    ) -> Result<()> {
+        use crate::db::ImportDirection;
+        let import_budget = (budget as f64 * 0.10) as usize; // 10% of total budget
+        let depth = Some(max_depth.max(1) as usize);
+
+        let mut labeled: Vec<(crate::db::GraphResult, &'static str)> = Vec::new();
+        for r in self
+            .store
+            .find_imports(chunk_id, ImportDirection::Outgoing, depth)
+            .await?
+        {
+            labeled.push((r, "Imports"));
+        }
+        for r in self
+            .store
+            .find_imports(chunk_id, ImportDirection::Incoming, depth)
+            .await?
+        {
+            labeled.push((r, "Imported by"));
+        }
+        labeled.sort_by_key(|(r, _)| r.depth);
+
+        let cap = Self::segment_item_cap(import_budget, 4);
+        for (rel, label) in labeled.into_iter().take(cap) {
+            if bundle.total_tokens >= budget {
+                break;
+            }
+            let remaining = budget.saturating_sub(bundle.total_tokens);
+            if remaining < import_budget / 10 {
+                break;
+            }
+            if !seen.insert(rel.chunk_id) {
+                continue;
+            }
+            let metadata = match self.get_chunk_metadata(rel.chunk_id).await {
+                Ok(m) => m,
+                Err(e) => {
+                    warn!("Failed to load import-related chunk {}: {}", rel.chunk_id, e);
+                    continue;
+                }
+            };
+            let reason = format!(
+                "{label}: {} (depth {})",
+                metadata
+                    .symbol_name
+                    .clone()
+                    .unwrap_or_else(|| "module".to_string()),
+                rel.depth
+            );
+            match self.create_context_item(metadata, "import", &reason).await {
+                Ok(item) => {
+                    if !bundle.would_exceed_budget(item.tokens, budget) {
+                        debug!("Adding import relation: {} tokens", item.tokens);
+                        bundle.add_item(item);
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to create import context item: {}", e);
+                }
+            }
+        }
         Ok(())
     }
 
@@ -369,26 +505,53 @@ impl AssemblyStrategy for DefaultAssemblyStrategy {
 
         let mut bundle = ContextBundle::new();
 
+        // F81: max_depth is honored end-to-end (it was silently discarded —
+        // helpers hard-coded depth 1).
+        let depth = options.max_depth.max(1);
+
+        // Densified segments need cross-segment dedup: a chunk that is both
+        // a caller and a callee (recursion, mutual calls) must appear once,
+        // and the primary chunk must never re-appear as its own relative.
+        let mut seen: std::collections::HashSet<i64> = std::collections::HashSet::new();
+        seen.insert(chunk_id);
+
         // 1. Add primary chunk (40% of budget)
         self.add_primary_chunk(&mut bundle, chunk_id, budget)
             .await?;
 
-        // 2. Add tests if requested (30% of budget)
+        // 2. Add tests if requested (20% of budget)
         if options.tests {
-            self.add_tests(&mut bundle, chunk_id, budget).await?;
+            self.add_tests(&mut bundle, chunk_id, budget, &mut seen).await?;
         }
 
-        // 3. Add top caller if requested (15% of budget)
+        // 3. Add callers if requested (15% of budget)
         if options.callers {
-            self.add_callers(&mut bundle, chunk_id, budget).await?;
+            self.add_callers(&mut bundle, chunk_id, budget, depth, &mut seen)
+                .await?;
         }
 
-        // 4. Add top callee if requested (15% of budget)
+        // 4. Add callees if requested (15% of budget)
         if options.callees {
-            self.add_callees(&mut bundle, chunk_id, budget).await?;
+            self.add_callees(&mut bundle, chunk_id, budget, depth, &mut seen)
+                .await?;
         }
 
-        // 5. Add config file if requested and space remains
+        // 5. Add import/export relations if requested (10% of budget, F82)
+        if options.imports {
+            self.add_imports(&mut bundle, chunk_id, budget, depth, &mut seen)
+                .await?;
+        }
+
+        // 6. Honesty over silence (F81): docs has NO engine yet — say so
+        //    instead of silently ignoring the flag.
+        if options.docs {
+            warn!(
+                "--docs requested but documentation expansion is not implemented yet; \
+                 the flag is accepted for forward compatibility and currently adds nothing"
+            );
+        }
+
+        // 7. Add config file if requested and space remains
         if options.config {
             let metadata = self.get_chunk_metadata(chunk_id).await?;
             self.add_config_files(&mut bundle, &metadata, budget)
@@ -409,18 +572,24 @@ impl AssemblyStrategy for DefaultAssemblyStrategy {
 mod tests {
     #[test]
     fn test_default_strategy_budget_allocation() {
-        // Test that budget percentages are correct
+        // F81/F82 split: primary 40, tests 20, callers 15, callees 15,
+        // imports 10 — sums to 100%.
         let budget = 1000;
         let primary = (budget as f64 * 0.4) as usize;
-        let tests = (budget as f64 * 0.3) as usize;
+        let tests = (budget as f64 * 0.2) as usize;
         let callers = (budget as f64 * 0.15) as usize;
         let callees = (budget as f64 * 0.15) as usize;
+        let imports = (budget as f64 * 0.10) as usize;
 
-        assert_eq!(primary, 400);
-        assert_eq!(tests, 300);
-        assert_eq!(callers, 150);
-        assert_eq!(callees, 150);
-        assert_eq!(primary + tests + callers + callees, 1000);
+        assert_eq!(primary + tests + callers + callees + imports, 1000);
+    }
+
+    #[test]
+    fn test_segment_item_cap() {
+        use super::DefaultAssemblyStrategy;
+        // floor wins for small budgets; scales with tokens for big ones
+        assert_eq!(DefaultAssemblyStrategy::segment_item_cap(150, 5), 5);
+        assert_eq!(DefaultAssemblyStrategy::segment_item_cap(4000, 5), 10);
     }
 
     // Integration tests with database are in tests/ directory

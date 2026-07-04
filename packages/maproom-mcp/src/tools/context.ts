@@ -133,6 +133,7 @@ export async function handleContextTool(
         callers: expand.callers,
         callees: expand.callees,
         tests: expand.tests,
+        imports: expand.imports,
         docs: expand.docs,
         config: expand.config,
         max_depth: expand.max_depth,

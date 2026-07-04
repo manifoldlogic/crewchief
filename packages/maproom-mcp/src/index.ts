@@ -465,7 +465,7 @@ export async function handleSearch(params: any): Promise<any> {
     query,
     k = 10,
     filter = 'all',
-    mode = 'fts', // Changed default to 'fts' to use Rust binary
+    mode = 'hybrid', // F02: match the daemon default (fts/vector/hybrid all dispatch natively)
     filters = {},
     debug = false
   } = params
@@ -473,14 +473,8 @@ export async function handleSearch(params: any): Promise<any> {
   // All search modes use the daemon-based search via Rust binary
   const { handleSearchTool } = await import('./tools/search.js')
 
-  // For hybrid mode, fall back to FTS (hybrid fusion handled by daemon in future)
-  const effectiveMode = mode === 'hybrid' ? 'fts' : mode
-  if (mode === 'hybrid') {
-    log.warn('Hybrid mode not yet supported, falling back to FTS')
-  }
-
   const result = await handleSearchTool(
-    { query, repo, worktree, limit: k, mode: effectiveMode, debug },
+    { query, repo, worktree, limit: k, mode, debug },
     null as any // Client not used by daemon-based search
   )
   // Transform SearchBundle to old format for backward compatibility

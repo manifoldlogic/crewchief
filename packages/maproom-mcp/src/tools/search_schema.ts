@@ -65,9 +65,9 @@ export const SearchParamsSchema = z.object({
         message: "Invalid search mode. Use 'fts', 'vector', or 'hybrid'.",
       }),
     })
-    .default("fts")
+    .default("hybrid")
     .describe(
-      'Search mode: "fts" for full-text, "vector" for semantic, "hybrid" for combined (default: fts)',
+      'Search mode: "fts" for full-text, "vector" for semantic, "hybrid" for combined (default: hybrid, with graceful FTS fallback when no embedding provider is configured)',
     ),
   filter: z
     .enum(["all", "code", "docs", "config", "tests"])

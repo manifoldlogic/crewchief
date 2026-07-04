@@ -178,6 +178,36 @@ impl StoreChunks for PostgresStore {
         }))
     }
 
+    async fn get_chunks_by_ids(&self, chunk_ids: &[i64]) -> anyhow::Result<Vec<ChunkFull>> {
+        if chunk_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let rows = sqlx::query(
+            "SELECT c.id, c.file_id, c.blob_sha, c.symbol_name, c.kind, c.signature, \
+                    c.docstring, c.start_line, c.end_line, c.preview, f.relpath AS file_path \
+             FROM chunks c JOIN files f ON f.id = c.file_id WHERE c.id = ANY($1)",
+        )
+        .bind(chunk_ids)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| ChunkFull {
+                id: r.get("id"),
+                file_id: r.get("file_id"),
+                blob_sha: r.get("blob_sha"),
+                symbol_name: r.get("symbol_name"),
+                kind: r.get("kind"),
+                signature: r.get("signature"),
+                docstring: r.get("docstring"),
+                start_line: r.get("start_line"),
+                end_line: r.get("end_line"),
+                preview: r.get("preview"),
+                file_path: r.get("file_path"),
+            })
+            .collect())
+    }
+
     async fn get_file_chunks(&self, file_id: i64) -> anyhow::Result<Vec<ChunkSummary>> {
         let rows = sqlx::query(
             "SELECT c.id, c.symbol_name, c.kind, c.start_line, c.end_line, f.relpath AS file_path \

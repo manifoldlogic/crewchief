@@ -40,7 +40,7 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     let cache = SearchCache::new(1000);
+//!     let cache: SearchCache = SearchCache::new(1000);
 //!
 //!     let key = CacheKey::new("authenticate", 1, None, 10);
 //!
@@ -85,15 +85,15 @@ const DEFAULT_TTL_SECONDS: u64 = 3600;
 
 /// Cache entry with TTL support.
 #[derive(Debug, Clone)]
-struct CacheEntry {
+struct CacheEntry<V> {
     /// The cached search results
-    results: FinalSearchResults,
+    results: V,
     /// Timestamp when the entry was created (Unix timestamp)
     created_at: u64,
 }
 
-impl CacheEntry {
-    fn new(results: FinalSearchResults) -> Self {
+impl<V> CacheEntry<V> {
+    fn new(results: V) -> Self {
         let created_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -113,7 +113,9 @@ impl CacheEntry {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        now - self.created_at >= ttl_seconds
+        // saturating: a backwards wall-clock step (NTP) must not panic the
+        // debug-profile daemon; it just reads as "not expired yet".
+        now.saturating_sub(self.created_at) >= ttl_seconds
     }
 }
 
@@ -123,9 +125,19 @@ impl CacheEntry {
 /// - Multiple readers can access cache simultaneously
 /// - Writers (put operations) require exclusive lock
 /// - Atomic counters track hits/misses without locking
-pub struct SearchCache {
+///
+/// F69: generic over key and value with defaults preserving the original
+/// pipeline-facing shape (`SearchCache` == `SearchCache<CacheKey,
+/// FinalSearchResults>`). The daemon instantiates
+/// `SearchCache<String, serde_json::Value>` to cache full search responses
+/// keyed by the canonicalized request.
+pub struct SearchCache<K = CacheKey, V = FinalSearchResults>
+where
+    K: std::hash::Hash + Eq + Clone,
+    V: Clone,
+{
     /// LRU cache storage
-    cache: Arc<RwLock<LruCache<CacheKey, CacheEntry>>>,
+    cache: Arc<RwLock<LruCache<K, CacheEntry<V>>>>,
 
     /// Time-to-live for cache entries (seconds, 0 = never expire)
     ttl_seconds: u64,
@@ -143,7 +155,11 @@ pub struct SearchCache {
     expirations: Arc<AtomicU64>,
 }
 
-impl Default for SearchCache {
+impl<K, V> Default for SearchCache<K, V>
+where
+    K: std::hash::Hash + Eq + Clone + std::fmt::Debug,
+    V: Clone,
+{
     /// Create a new SearchCache with default capacity and TTL.
     ///
     /// Uses DEFAULT_CACHE_SIZE (1000 entries) and DEFAULT_TTL_SECONDS (3600s).
@@ -152,7 +168,11 @@ impl Default for SearchCache {
     }
 }
 
-impl SearchCache {
+impl<K, V> SearchCache<K, V>
+where
+    K: std::hash::Hash + Eq + Clone + std::fmt::Debug,
+    V: Clone,
+{
     /// Create a new SearchCache with specified capacity and TTL.
     ///
     /// # Arguments
@@ -165,7 +185,7 @@ impl SearchCache {
     /// ```
     /// use maproom::search::cache::SearchCache;
     ///
-    /// let cache = SearchCache::with_ttl(1000, 3600); // 1000 entries, 1 hour TTL
+    /// let cache: SearchCache = SearchCache::with_ttl(1000, 3600); // 1000 entries, 1 hour TTL
     /// ```
     pub fn with_ttl(capacity: usize, ttl_seconds: u64) -> Self {
         info!(
@@ -196,7 +216,7 @@ impl SearchCache {
     /// ```
     /// use maproom::search::cache::SearchCache;
     ///
-    /// let cache = SearchCache::new(1000);
+    /// let cache: SearchCache = SearchCache::new(1000);
     /// ```
     pub fn new(capacity: usize) -> Self {
         Self::with_ttl(capacity, DEFAULT_TTL_SECONDS)
@@ -216,14 +236,14 @@ impl SearchCache {
     /// ```no_run
     /// use maproom::search::cache::{SearchCache, CacheKey};
     ///
-    /// let cache = SearchCache::new(1000);
+    /// let cache: SearchCache = SearchCache::new(1000);
     /// let key = CacheKey::new("auth", 1, None, 10);
     ///
     /// if let Some(results) = cache.get(&key) {
     ///     println!("Found {} results in cache", results.results.len());
     /// }
     /// ```
-    pub fn get(&self, key: &CacheKey) -> Option<FinalSearchResults> {
+    pub fn get(&self, key: &K) -> Option<V> {
         let mut cache = self.cache.write().unwrap();
 
         match cache.get(key) {
@@ -249,6 +269,16 @@ impl SearchCache {
         }
     }
 
+    /// Stats-NEUTRAL presence probe: true if the key is resident and
+    /// unexpired, without touching hit/miss counters or LRU order. Warm
+    /// paths use this so `cache.stats` keeps meaning real request traffic.
+    pub fn peek(&self, key: &K) -> bool {
+        let cache = self.cache.read().unwrap();
+        cache
+            .peek(key)
+            .is_some_and(|entry| !entry.is_expired(self.ttl_seconds))
+    }
+
     /// Put a result into the cache.
     ///
     /// If cache is full, evicts least recently used entry.
@@ -264,13 +294,13 @@ impl SearchCache {
     /// use maproom::search::cache::{SearchCache, CacheKey};
     /// use maproom::search::FinalSearchResults;
     ///
-    /// let cache = SearchCache::new(1000);
+    /// let cache: SearchCache = SearchCache::new(1000);
     /// let key = CacheKey::new("auth", 1, None, 10);
     /// // let results = ...; // Create actual results
     ///
     /// // cache.put(key, results);
     /// ```
-    pub fn put(&self, key: CacheKey, results: FinalSearchResults) {
+    pub fn put(&self, key: K, results: V) {
         let mut cache = self.cache.write().unwrap();
 
         // Check if we're about to evict
@@ -293,7 +323,7 @@ impl SearchCache {
     /// ```
     /// use maproom::search::cache::SearchCache;
     ///
-    /// let cache = SearchCache::new(1000);
+    /// let cache: SearchCache = SearchCache::new(1000);
     /// let stats = cache.stats();
     ///
     /// println!("Hit rate: {:.1}%", stats.hit_rate() * 100.0);
@@ -361,6 +391,10 @@ impl SearchCache {
         count
     }
 
+}
+
+/// CacheKey-specific invalidation (needs the key's repo/worktree fields).
+impl<V: Clone> SearchCache<CacheKey, V> {
     /// Invalidate cache entries by repository ID.
     ///
     /// Used when files are updated in a repository.
@@ -422,7 +456,11 @@ impl SearchCache {
     }
 }
 
-impl Clone for SearchCache {
+impl<K, V> Clone for SearchCache<K, V>
+where
+    K: std::hash::Hash + Eq + Clone,
+    V: Clone,
+{
     fn clone(&self) -> Self {
         Self {
             cache: Arc::clone(&self.cache),

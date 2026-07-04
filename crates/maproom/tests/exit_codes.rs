@@ -330,3 +330,136 @@ fn empty_database_url_env_exits_2() {
         .unwrap();
     assert_eq!(out.status.code(), Some(2));
 }
+
+/// F13: `context --format agent` emits ONE structured error line on stdout
+/// (classified type + suggestion), instead of leaking a raw anyhow chain.
+#[test]
+fn context_agent_error_is_structured() {
+    let db = tempfile::TempDir::new().unwrap();
+    let url = format!("sqlite://{}/f13.db", db.path().display());
+    // migrate so the failure is chunk-not-found, not schema
+    let mig = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args(["db", "migrate"])
+        .output()
+        .unwrap();
+    assert!(mig.status.success());
+
+    let out = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args(["context", "--chunk-id", "424242", "--format", "agent"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(1), "not_found class exits 1");
+    assert!(
+        stdout.contains("ERROR | type=not_found"),
+        "structured stdout line required (F13); got: {stdout}"
+    );
+    assert!(
+        stdout.contains("suggestion="),
+        "actionable suggestion required; got: {stdout}"
+    );
+}
+
+/// F15: a typo'd repo classifies as repository_not_found — not `unknown`.
+#[test]
+fn search_unknown_repo_is_repository_not_found() {
+    let db = tempfile::TempDir::new().unwrap();
+    let url = format!("sqlite://{}/f15.db", db.path().display());
+    let mig = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args(["db", "migrate"])
+        .output()
+        .unwrap();
+    assert!(mig.status.success());
+
+    let out = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args(["search", "--repo", "definitely-a-typo", "--query", "x", "--format", "agent"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        stdout.contains("type=repository_not_found"),
+        "typed classification required (F15); got: {stdout}"
+    );
+    assert!(stdout.contains("maproom status"), "suggestion names the fix: {stdout}");
+}
+
+/// F01: `search --mode hybrid` degrades to FTS (exit 0, honest mode
+/// metadata, stderr notice) when the provider is deterministically broken.
+#[test]
+fn search_hybrid_degrades_without_provider() {
+    let repo = tempfile::TempDir::new().unwrap();
+    let db = tempfile::TempDir::new().unwrap();
+    let git = |args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(repo.path())
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@t")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@t")
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+    };
+    git(&["init", "-q", "-b", "main"]);
+    std::fs::write(repo.path().join("a.ts"), "export function hybridProbe() { return 1; }\n")
+        .unwrap();
+    git(&["add", "a.ts"]);
+    git(&["commit", "-qm", "i"]);
+    let url = format!("sqlite://{}/f01.db", db.path().display());
+
+    let scan = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args(["scan", "--repo", "fx", "--path"])
+        .arg(repo.path())
+        .output()
+        .unwrap();
+    assert!(scan.status.success());
+
+    // Broken-google env: provider construction fails deterministically
+    // (auto-detect is NOT consulted when a provider is explicitly set).
+    let out = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .env("MAPROOM_EMBEDDING_PROVIDER", "google")
+        .env("GOOGLE_APPLICATION_CREDENTIALS", "/nonexistent")
+        .args(["search", "--repo", "fx", "--query", "hybridProbe", "--mode", "hybrid", "--format", "json"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "hybrid must degrade, not die; stderr: {stderr}");
+    assert!(stdout.contains("hybridProbe"), "FTS results served: {stdout}");
+    assert!(stdout.contains("\"mode\": \"fts\"") || stdout.contains("\"mode\":\"fts\""),
+        "metadata reports the EFFECTIVE mode: {stdout}");
+    assert!(stderr.contains("degraded to FTS"), "notice required: {stderr}");
+}
+
+/// F01: `--mode vector` with a broken provider is a hard config error
+/// (exit 2) — the user asked for semantics only vectors deliver.
+#[test]
+fn search_vector_broken_provider_exits_2() {
+    let db = tempfile::TempDir::new().unwrap();
+    let url = format!("sqlite://{}/f01v.db", db.path().display());
+    let mig = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args(["db", "migrate"])
+        .output()
+        .unwrap();
+    assert!(mig.status.success());
+
+    let out = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .env("MAPROOM_EMBEDDING_PROVIDER", "google")
+        .env("GOOGLE_APPLICATION_CREDENTIALS", "/nonexistent")
+        .args(["search", "--repo", "fx", "--query", "x", "--mode", "vector", "--format", "agent"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("type=embedding_provider"), "{stdout}");
+}

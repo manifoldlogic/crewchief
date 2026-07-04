@@ -9,8 +9,8 @@
 //! - Cache effectiveness monitoring
 
 use maproom::cache::{
-    CacheConfig, CacheInvalidator, CacheLayer, CacheSystem, CacheWarmer, EvictionPolicy,
-    EvictionStrategy, LayerConfig, MaintenanceConfig, WarmingStrategy,
+    CacheConfig, CacheInvalidator, CacheLayer, CacheSystem, EvictionPolicy, EvictionStrategy,
+    LayerConfig, MaintenanceConfig,
 };
 use maproom::context::types::ContextBundle;
 use maproom::search::results::{
@@ -184,46 +184,8 @@ async fn test_access_count_eviction() {
     assert!(!strategy.should_evict_by_access(&entry, 5));
 }
 
-#[tokio::test]
-async fn test_cache_warming_manual() {
-    let cache = Arc::new(CacheSystem::new(CacheConfig::default()));
-    let queries = vec!["query1".to_string(), "query2".to_string()];
-
-    let warmer =
-        CacheWarmer::with_queries(Arc::clone(&cache), WarmingStrategy::Manual, queries.clone());
-
-    assert_eq!(warmer.query_count(), 2);
-
-    // Warm the cache
-    let stats = warmer.warm().await.unwrap();
-
-    // Both queries should be marked as "would be warmed"
-    // (actual warming requires search execution which is out of scope for cache management)
-    assert!(stats.total_processed() > 0);
-}
-
-#[tokio::test]
-async fn test_cache_warming_from_file() {
-    use std::io::Write;
-    use tempfile::NamedTempFile;
-
-    let cache = Arc::new(CacheSystem::new(CacheConfig::default()));
-    let mut warmer = CacheWarmer::new(Arc::clone(&cache), WarmingStrategy::Startup);
-
-    // Create a temporary file with queries
-    let mut file = NamedTempFile::new().unwrap();
-    writeln!(file, "query1").unwrap();
-    writeln!(file, "# comment").unwrap();
-    writeln!(file, "").unwrap();
-    writeln!(file, "query2").unwrap();
-    file.flush().unwrap();
-
-    // Load queries from file
-    warmer.load_queries_from_file(file.path()).await.unwrap();
-
-    assert_eq!(warmer.query_count(), 2);
-    assert_eq!(warmer.queries(), &["query1", "query2"]);
-}
+// (F69: the no-op CacheWarmer and its two tests were deleted — real cache
+// warming lives in the daemon; see tests/daemon_cache.rs.)
 
 #[tokio::test]
 async fn test_cache_invalidation_file_change() {

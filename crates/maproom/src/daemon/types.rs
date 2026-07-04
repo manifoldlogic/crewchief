@@ -68,6 +68,11 @@ fn default_max_depth() -> i32 {
     2
 }
 
+/// F81: relationship expansion defaults ON (mirrors ExpandOptions::default).
+fn default_true() -> bool {
+    true
+}
+
 /// Parameters for the context JSON-RPC method.
 #[derive(Debug, Deserialize)]
 pub struct ContextParams {
@@ -85,18 +90,22 @@ pub struct ContextParams {
 /// Mirrors `crates/maproom/src/context/types.rs::ExpandOptions`.
 #[derive(Debug, Deserialize)]
 pub struct ExpandConfig {
-    /// Include caller chunks (functions that call the primary chunk)
-    #[serde(default)]
+    /// Include caller chunks (functions that call the primary chunk).
+    /// F81: defaults ON — omit the field to get relationship expansion.
+    #[serde(default = "default_true")]
     pub callers: bool,
-    /// Include callee chunks (functions called by the primary chunk)
-    #[serde(default)]
+    /// Include callee chunks (functions called by the primary chunk).
+    #[serde(default = "default_true")]
     pub callees: bool,
-    /// Include test chunks
-    #[serde(default)]
+    /// Include test chunks.
+    #[serde(default = "default_true")]
     pub tests: bool,
     /// Include documentation chunks
     #[serde(default)]
     pub docs: bool,
+    /// Include import/export relationships (F82). Defaults ON.
+    #[serde(default = "default_true")]
+    pub imports: bool,
     /// Include configuration files
     #[serde(default)]
     pub config: bool,
@@ -119,11 +128,16 @@ pub struct ExpandConfig {
 
 impl Default for ExpandConfig {
     fn default() -> Self {
+        // Must match the serde field defaults — this Default runs when the
+        // whole `expand` object is ABSENT, serde field defaults when it is
+        // present but partial. Divergence here would make `{}` and absent
+        // behave differently (F81).
         Self {
-            callers: false,
-            callees: false,
-            tests: false,
+            callers: true,
+            callees: true,
+            tests: true,
             docs: false,
+            imports: true,
             config: false,
             max_depth: 2, // Match serde default
             routes: false,
@@ -132,6 +146,23 @@ impl Default for ExpandConfig {
             jsx_children: false,
         }
     }
+}
+
+/// Parameters for the cache.warm JSON-RPC method (F69).
+#[derive(Debug, Deserialize)]
+pub struct CacheWarmParams {
+    /// Queries to execute-and-cache (each runs through the SAME cached
+    /// search path as a normal request).
+    pub queries: Vec<String>,
+    pub repo: String,
+    #[serde(default)]
+    pub worktree: Option<String>,
+    /// Search mode for the warmed queries (defaults to the daemon default).
+    #[serde(default)]
+    pub mode: Option<String>,
+    /// Result limit per query (defaults to the search default).
+    #[serde(default)]
+    pub k: Option<usize>,
 }
 
 /// Parameters for the status JSON-RPC method.
@@ -225,9 +256,12 @@ mod tests {
 
         assert_eq!(params.chunk_id, "12345");
         assert_eq!(params.budget_tokens, 6000); // Default
-        assert!(!params.expand.callers); // Default false
-        assert!(!params.expand.callees);
-        assert!(!params.expand.tests);
+        // F81: relationship expansion defaults ON when absent
+        assert!(params.expand.callers);
+        assert!(params.expand.callees);
+        assert!(params.expand.tests);
+        assert!(params.expand.imports);
+        // docs/config/React options remain opt-in
         assert!(!params.expand.docs);
         assert!(!params.expand.config);
         assert_eq!(params.expand.max_depth, 2); // Default
@@ -277,9 +311,12 @@ mod tests {
         // Test the Default implementation
         let config = ExpandConfig::default();
 
-        assert!(!config.callers);
-        assert!(!config.callees);
-        assert!(!config.tests);
+        // F81: Default MUST match the serde field defaults — `expand` absent
+        // and `expand: {}` must behave identically (both expansion-on).
+        assert!(config.callers);
+        assert!(config.callees);
+        assert!(config.tests);
+        assert!(config.imports);
         assert!(!config.docs);
         assert!(!config.config);
         assert_eq!(config.max_depth, 2); // Serde default
@@ -287,26 +324,35 @@ mod tests {
         assert!(!config.hooks);
         assert!(!config.jsx_parents);
         assert!(!config.jsx_children);
+
+        // The absent-vs-empty equivalence, asserted directly:
+        let empty: ExpandConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(empty.callers, config.callers);
+        assert_eq!(empty.callees, config.callees);
+        assert_eq!(empty.tests, config.tests);
+        assert_eq!(empty.imports, config.imports);
     }
 
     #[test]
     fn test_context_params_partial_expand() {
         // Partial expand options - only some fields set
+        // F81: explicit FALSE now carries the signal (defaults are on)
         let json = r#"{
             "chunk_id": "42",
             "expand": {
-                "callers": true,
-                "tests": true
+                "callers": false,
+                "tests": false
             }
         }"#;
         let params: ContextParams = serde_json::from_str(json).unwrap();
 
         assert_eq!(params.chunk_id, "42");
         assert_eq!(params.budget_tokens, 6000); // Default
-        assert!(params.expand.callers);
-        assert!(!params.expand.callees); // Default
-        assert!(params.expand.tests);
-        assert!(!params.expand.docs); // Default
+        assert!(!params.expand.callers); // explicit opt-out honored
+        assert!(params.expand.callees); // untouched fields default ON
+        assert!(!params.expand.tests);
+        assert!(params.expand.imports);
+        assert!(!params.expand.docs); // opt-in family unchanged
         assert_eq!(params.expand.max_depth, 2); // Default
     }
 

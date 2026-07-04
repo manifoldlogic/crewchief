@@ -20,6 +20,12 @@ export interface SearchParams {
   worktree?: string;
   limit?: number;
   threshold?: number;
+  /**
+   * Search mode: "fts", "vector", or "hybrid" (F02). Omitted -> the
+   * daemon's default ("hybrid", with graceful FTS fallback when no
+   * embedding provider is available).
+   */
+  mode?: 'fts' | 'vector' | 'hybrid';
   debug?: boolean;
   /** Deduplicate results across worktrees (default: true) */
   deduplicate?: boolean;
@@ -65,11 +71,18 @@ export interface SearchResult {
 export interface ContextParams {
   chunk_id: string;
   budget_tokens?: number;
+  /**
+   * F81/F82: relationship expansion now defaults ON daemon-side —
+   * omitted callers/callees/tests/imports are treated as true (docs,
+   * config and the React options remain opt-in). Pass explicit false
+   * to suppress a segment.
+   */
   expand?: {
     callers?: boolean;
     callees?: boolean;
     tests?: boolean;
     docs?: boolean;
+    imports?: boolean;
     config?: boolean;
     max_depth?: number;
     routes?: boolean;

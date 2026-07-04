@@ -273,6 +273,18 @@ struct Cli {
     database_url: Option<String>,
 }
 
+/// F01: search mode for the `search` command. The engines all pre-exist
+/// (store trait + both backends + daemon); this only exposes them on the CLI.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, clap::ValueEnum)]
+enum SearchMode {
+    /// Full-text search (default; no embedding provider needed)
+    Fts,
+    /// Vector similarity search (requires an embedding provider)
+    Vector,
+    /// FTS + vector fusion; degrades to FTS with a notice when no provider
+    Hybrid,
+}
+
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// Run database migrations
@@ -307,19 +319,40 @@ enum Commands {
         #[arg(long, default_value_t = 6000)]
         budget: usize,
 
-        /// Include caller functions
+        /// Include caller functions (default: enabled; F81)
         #[arg(long)]
         callers: bool,
 
-        /// Include callee functions
+        /// Exclude caller functions
+        #[arg(long, conflicts_with = "callers")]
+        no_callers: bool,
+
+        /// Include callee functions (default: enabled; F81)
         #[arg(long)]
         callees: bool,
 
-        /// Include test files
+        /// Exclude callee functions
+        #[arg(long, conflicts_with = "callees")]
+        no_callees: bool,
+
+        /// Include test files (default: enabled; F81)
         #[arg(long)]
         tests: bool,
 
-        /// Include documentation
+        /// Exclude test files
+        #[arg(long, conflicts_with = "tests")]
+        no_tests: bool,
+
+        /// Include import/export relationships (default: enabled; F82)
+        #[arg(long)]
+        imports: bool,
+
+        /// Exclude import/export relationships
+        #[arg(long, conflicts_with = "imports")]
+        no_imports: bool,
+
+        /// Include documentation (accepted for forward compatibility; the
+        /// documentation-expansion engine is not implemented yet)
         #[arg(long)]
         docs: bool,
 
@@ -480,6 +513,12 @@ enum Commands {
         /// Filter by file language (comma-separated: py,ts,rs). Case-sensitive. Use file extensions.
         #[arg(long, value_delimiter = ',')]
         lang: Option<Vec<String>>,
+        /// Search mode: fts (default), vector, or hybrid (F01).
+        /// vector/hybrid build a query embedding via the configured provider;
+        /// hybrid degrades gracefully to fts (with a stderr notice) when the
+        /// provider is unavailable, vector errors instead.
+        #[arg(long, value_enum, default_value_t = SearchMode::Fts)]
+        mode: SearchMode,
         /// Include content preview in search results
         #[arg(long, default_value_t = false)]
         preview: bool,
@@ -671,6 +710,25 @@ enum Commands {
         /// Idle timeout in seconds (default: 300 = 5 minutes)
         #[arg(long, default_value_t = 300)]
         idle_timeout: u64,
+
+        /// F69: daemon search-cache TTL in seconds (default 60). The TTL is
+        /// the staleness bound: scan/watch run in other processes and cannot
+        /// invalidate the daemon cache. Raise it deliberately when warming.
+        #[arg(long, default_value_t = 60)]
+        cache_ttl_secs: u64,
+
+        /// F69: warm the daemon search cache at startup from a file of
+        /// queries (one per line). Requires --warm-repo. Stdio mode only.
+        #[arg(long, requires = "warm_repo", conflicts_with = "socket")]
+        warm_queries: Option<PathBuf>,
+
+        /// Repository name the warm queries run against.
+        #[arg(long, requires = "warm_queries")]
+        warm_repo: Option<String>,
+
+        /// Optional worktree scope for the warm queries.
+        #[arg(long, requires = "warm_queries")]
+        warm_worktree: Option<String>,
     },
 
     /// Delete indexed chunks matching patterns in .maproomignore
@@ -1769,6 +1827,7 @@ async fn real_main() -> anyhow::Result<()> {
             deduplicate,
             kind,
             lang,
+            mode,
             preview,
             preview_length,
             format,
@@ -1785,26 +1844,108 @@ async fn real_main() -> anyhow::Result<()> {
             let store = handle_agent_error!(db::connect().await, format);
             // Fetch extra results if deduplication is enabled
             let fetch_k = if deduplicate { k * 3 } else { k };
-            let (hits, total_count) = handle_agent_error!(
-                store
-                    .search_chunks_fts(
-                        &repo,
-                        worktree.as_deref(),
-                        &query,
-                        fetch_k,
-                        debug,
-                        kind.as_deref(),
-                        lang.as_deref(),
-                    )
-                    .await,
-                format
-            );
+
+            // F01: mode routing. vector/hybrid need a query embedding; a
+            // provider failure degrades hybrid to fts (stderr notice, honest
+            // effective-mode metadata) and hard-errors vector — the user
+            // asked for semantics only vectors can deliver.
+            let mut effective_mode = mode;
+            let query_embedding: Option<Vec<f32>> = match mode {
+                SearchMode::Fts => None,
+                SearchMode::Vector | SearchMode::Hybrid => {
+                    use maproom::embedding::EmbeddingService;
+                    let embed_result = match EmbeddingService::from_env().await {
+                        Ok(svc) => svc.embed_text(&query).await.map_err(|e| {
+                            anyhow::Error::from(e).context("Failed to generate query embedding")
+                        }),
+                        Err(e) => Err(anyhow::Error::from(e)
+                            .context("Failed to create embedding service")),
+                    };
+                    match embed_result {
+                        Ok(embedding) => Some(embedding),
+                        Err(e) if mode == SearchMode::Hybrid => {
+                            eprintln!(
+                                "Note: embedding provider unavailable; hybrid degraded to FTS ({e:#})"
+                            );
+                            effective_mode = SearchMode::Fts;
+                            None
+                        }
+                        Err(e) => {
+                            Some(handle_agent_error!(Err::<Vec<f32>, anyhow::Error>(e), format))
+                        }
+                    }
+                }
+            };
+
+            let (hits, total_count) = match (effective_mode, query_embedding) {
+                (SearchMode::Hybrid, Some(embedding)) => {
+                    let hits = handle_agent_error!(
+                        store
+                            .search_chunks_hybrid(
+                                &repo,
+                                worktree.as_deref(),
+                                &query,
+                                &embedding,
+                                fetch_k,
+                                debug,
+                                kind.as_deref(),
+                                lang.as_deref(),
+                            )
+                            .await,
+                        format
+                    );
+                    let total = hits.len();
+                    (hits, total)
+                }
+                (SearchMode::Vector, Some(embedding)) => {
+                    let hits = handle_agent_error!(
+                        store
+                            .search_chunks_vector(
+                                &repo,
+                                worktree.as_deref(),
+                                &embedding,
+                                fetch_k,
+                                debug,
+                                kind.as_deref(),
+                                lang.as_deref(),
+                            )
+                            .await,
+                        format
+                    );
+                    let total = hits.len();
+                    (hits, total)
+                }
+                _ => handle_agent_error!(
+                    store
+                        .search_chunks_fts(
+                            &repo,
+                            worktree.as_deref(),
+                            &query,
+                            fetch_k,
+                            debug,
+                            kind.as_deref(),
+                            lang.as_deref(),
+                        )
+                        .await,
+                    format
+                ),
+            };
 
             // Apply deduplication if enabled
             let hits = if deduplicate {
                 deduplicate_search_hits(hits, k as usize)
             } else {
                 hits
+            };
+
+            // F01: vector/hybrid have no corpus-total statistic — their
+            // pre-dedup fetch count (k*3 over-fetch) would masquerade as
+            // one. Report the post-dedup result count instead; FTS keeps
+            // its real corpus estimate.
+            let total_count = if effective_mode == SearchMode::Fts {
+                total_count
+            } else {
+                hits.len()
             };
 
             // Post-process preview field
@@ -1827,7 +1968,13 @@ async fn real_main() -> anyhow::Result<()> {
             // MRIMP-5: Route output through format module
             let meta = SearchMetadata {
                 query: query.clone(),
-                mode: "fts".to_string(),
+                // F01: report the EFFECTIVE mode (hybrid may have degraded)
+                mode: match effective_mode {
+                    SearchMode::Fts => "fts",
+                    SearchMode::Vector => "vector",
+                    SearchMode::Hybrid => "hybrid",
+                }
+                .to_string(),
                 hits: hits.len(),
                 total_estimate: total_count,
             };
@@ -2267,6 +2414,10 @@ async fn real_main() -> anyhow::Result<()> {
         Commands::Serve {
             socket,
             socket_path,
+            cache_ttl_secs,
+            warm_queries,
+            warm_repo,
+            warm_worktree,
             pid_path,
             idle_timeout,
         } => {
@@ -2307,7 +2458,26 @@ async fn real_main() -> anyhow::Result<()> {
             } else {
                 // Stdio mode (default)
                 tracing::info!("Starting stdio daemon");
-                daemon::run().await?;
+                let warmup = match (warm_queries, warm_repo) {
+                    (Some(path), Some(repo)) => {
+                        let content = std::fs::read_to_string(&path).with_context(|| {
+                            format!("failed to read --warm-queries file {}", path.display())
+                        })?;
+                        let queries: Vec<String> = content
+                            .lines()
+                            .map(str::trim)
+                            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+                            .map(String::from)
+                            .collect();
+                        Some(daemon::CacheWarmupSpec {
+                            queries,
+                            repo,
+                            worktree: warm_worktree,
+                        })
+                    }
+                    _ => None,
+                };
+                daemon::run(warmup, cache_ttl_secs).await?;
             }
         }
 
@@ -2325,42 +2495,73 @@ async fn real_main() -> anyhow::Result<()> {
             chunk_id,
             budget,
             callers,
+            no_callers,
             callees,
+            no_callees,
             tests,
+            no_tests,
+            imports,
+            no_imports,
             docs,
             config,
             max_depth,
             format,
             json: _,
         } => {
-            // TODO(AFM-04): Context structured error handling awaits AFM-03 --format flag.
-            // When AFM-03 lands and adds OutputFormat to Context, add structured error handling
-            // here following the pattern used in search and vector-search commands:
-            //   match db::connect().await { Ok(s) => s, Err(e) if format == Agent => handle_agent_error(...), ... }
-            //   match assembler.assemble() { Ok(ctx) => ctx, Err(e) if format == Agent => ... }
-
-            // Connect to database
-            let store = db::connect().await.context("Database connection failed")?;
+            // F81 flag semantics, backward compatible:
+            //   no flags            -> everything ON (the new default)
+            //   any positive flag   -> EXACTLY the named segments (old
+            //                          behavior: `--callers` meant "callers
+            //                          only", and scripts relying on that
+            //                          must not silently start getting all
+            //                          four segments)
+            //   --no-X              -> default-on minus X
+            let any_positive = callers || callees || tests || imports;
+            let (callers, callees, tests, imports) = if any_positive {
+                (callers, callees, tests, imports)
+            } else {
+                (!no_callers, !no_callees, !no_tests, !no_imports)
+            };
+            // F13 / AFM-04: classify-before-render, same contract as search —
+            // every error goes through classify_error; Agent format gets the
+            // structured stdout line; exit code is the classified one.
+            let store = handle_agent_error!(
+                db::connect().await.context("Database connection failed"),
+                format
+            );
 
             // Create assembler (uses DefaultAssemblyStrategy which has working get_chunk_metadata)
             let assembler = DefaultAssemblyStrategy::new(store);
 
             // Build expand options from CLI args
+            if docs {
+                // Visible regardless of RUST_LOG (the strategy's tracing
+                // warn! is filtered out of a default CLI run).
+                eprintln!(
+                    "Note: --docs is accepted for forward compatibility but documentation \
+                     expansion is not implemented yet; it currently adds nothing."
+                );
+            }
+
             let options = ExpandOptions {
                 callers,
                 callees,
                 tests,
                 docs,
+                imports,
                 config,
                 max_depth,
-                ..Default::default()
+                ..ExpandOptions::primary_only()
             };
 
             // Execute context assembly
-            let bundle = assembler
-                .assemble(chunk_id, budget, options)
-                .await
-                .with_context(|| format!("Failed to assemble context for chunk {}", chunk_id))?;
+            let bundle = handle_agent_error!(
+                assembler
+                    .assemble(chunk_id, budget, options)
+                    .await
+                    .with_context(|| format!("Failed to assemble context for chunk {}", chunk_id)),
+                format
+            );
 
             // Output
             match format {
@@ -2497,6 +2698,28 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
     use maproom::search::errors::SearchErrorDetails;
     use maproom::search::pipeline::PipelineError;
 
+    // Priority 0 (F15): typed store errors — a typo'd repo is USER input,
+    // not an internal bug, and must never classify as `unknown`.
+    if let Some(store_error) = error.downcast_ref::<maproom::db::StoreError>() {
+        let (error_type, suggestion) = match store_error {
+            maproom::db::StoreError::RepositoryNotFound(_) => (
+                "repository_not_found",
+                "Run `maproom status` to list indexed repos; check for typos",
+            ),
+            maproom::db::StoreError::AmbiguousRepository { .. } => (
+                "repository_ambiguous",
+                "Qualify the repository as owner/name to disambiguate",
+            ),
+        };
+        tracing::info!(
+            error_type,
+            exit_code = 1,
+            classification_method = "downcast:StoreError",
+            "Error classified"
+        );
+        return (error_type.to_string(), suggestion.to_string(), 1);
+    }
+
     // Priority 1: Try to downcast to PipelineError (structured search errors)
     if let Some(pipeline_error) = error.downcast_ref::<PipelineError>() {
         let details = SearchErrorDetails::from_pipeline_error(pipeline_error);
@@ -2619,8 +2842,11 @@ fn classify_error(error: &anyhow::Error) -> (String, String, i32) {
         );
     }
 
-    // Priority 3: Fallback to string-based heuristics
-    let error_str = error.to_string();
+    // Priority 3: Fallback to string-based heuristics. Use the FULL anyhow
+    // chain ({:#}) — .to_string() is the outermost context only, which hides
+    // the actual cause behind wrappers like "Failed to assemble context for
+    // chunk 5" (F13: the inner "Chunk 5 not found" is what classifies).
+    let error_str = format!("{error:#}");
     let error_lower = error_str.to_lowercase();
 
     // Warn when heuristic classification is used (downcast failed)
@@ -2797,20 +3023,30 @@ mod tests {
             chunk_id,
             budget,
             callers,
+            no_callers,
             callees,
             tests,
+            imports,
+            no_imports,
             docs,
             config,
             max_depth,
             format,
             json,
+            ..
         } = cli.command
         {
             assert_eq!(chunk_id, 12345);
             assert_eq!(budget, 6000); // default
+            // F81: the positive flags parse false when absent (they are
+            // redundant back-compat flags); the EFFECTIVE default is ON via
+            // the --no-* inversion in the handler.
             assert_eq!(callers, false);
+            assert_eq!(no_callers, false);
             assert_eq!(callees, false);
             assert_eq!(tests, false);
+            assert_eq!(imports, false);
+            assert_eq!(no_imports, false);
             assert_eq!(docs, false);
             assert_eq!(config, false);
             assert_eq!(max_depth, 2); // default
@@ -2819,6 +3055,46 @@ mod tests {
         } else {
             panic!("Expected Context command");
         }
+    }
+
+    /// F81: the --no-* suppression flags parse; --no-callers conflicts with
+    /// --callers.
+    #[test]
+    fn test_context_command_parsing_no_flags() {
+        let cli = Cli::parse_from(&[
+            "maproom",
+            "context",
+            "--chunk-id",
+            "7",
+            "--no-callers",
+            "--no-tests",
+            "--no-imports",
+        ]);
+        if let Commands::Context {
+            no_callers,
+            no_callees,
+            no_tests,
+            no_imports,
+            ..
+        } = cli.command
+        {
+            assert!(no_callers);
+            assert!(!no_callees);
+            assert!(no_tests);
+            assert!(no_imports);
+        } else {
+            panic!("Expected Context command");
+        }
+
+        let conflict = Cli::try_parse_from(&[
+            "maproom",
+            "context",
+            "--chunk-id",
+            "7",
+            "--callers",
+            "--no-callers",
+        ]);
+        assert!(conflict.is_err(), "--callers conflicts with --no-callers");
     }
 
     #[test]
@@ -2847,6 +3123,7 @@ mod tests {
             max_depth,
             format,
             json,
+            ..
         } = cli.command
         {
             assert_eq!(chunk_id, 99999);
@@ -2893,6 +3170,7 @@ mod tests {
             max_depth,
             format,
             json,
+            ..
         } = cli.command
         {
             assert_eq!(chunk_id, 42);
@@ -3822,6 +4100,33 @@ mod tests {
     // ==================== Error Classification Tests (AFM-04.2001) ====================
 
     /// Test classification of embedding config error (missing API key) -> exit code 2
+    #[test]
+    fn test_classify_repository_not_found() {
+        // F15: typed store error, even when context-wrapped, classifies as
+        // repository_not_found — not `unknown`.
+        let error: anyhow::Error = maproom::db::StoreError::RepositoryNotFound(
+            "definitely-a-typo-xyz".to_string(),
+        )
+        .into();
+        let error = error.context("FTS search execution failed");
+        let (error_type, suggestion, exit_code) = classify_error(&error);
+        assert_eq!(error_type, "repository_not_found");
+        assert!(suggestion.contains("maproom status"), "actionable: {suggestion}");
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn test_classify_repository_ambiguous() {
+        let error: anyhow::Error = maproom::db::StoreError::AmbiguousRepository {
+            name: "api".to_string(),
+            matches: "team/Api, vendor/api".to_string(),
+        }
+        .into();
+        let (error_type, _s, exit_code) = classify_error(&error);
+        assert_eq!(error_type, "repository_ambiguous");
+        assert_eq!(exit_code, 1);
+    }
+
     #[test]
     fn test_classify_embedding_config_error() {
         use maproom::embedding::error::{ConfigError, EmbeddingError};

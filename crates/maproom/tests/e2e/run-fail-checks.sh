@@ -213,6 +213,53 @@ then pass "R14(cargo)"; else fail "R14(cargo)" "embedding::factory unit tests re
 if cargo test -q -p maproom --test embedding_service_test -- --test-threads=1 >/dev/null 2>&1
 then pass "R15(cargo)"; else fail "R15(cargo)" "embedding_service_test red"; fi
 
+# ---------- Wave-1 probes (F15/F13/F01/F69/F84) ----------
+# W1-F15: typo'd repo classifies as repository_not_found (not unknown)
+w=$(mktemp -d)
+MAPROOM_DATABASE_URL="sqlite://$w/x.db" "$BIN" db migrate >/dev/null 2>&1
+out=$(MAPROOM_DATABASE_URL="sqlite://$w/x.db" "$BIN" search --repo definitely-a-typo --query x --format agent 2>/dev/null); c=$?
+if [ "$c" -eq 1 ] && printf '%s' "$out" | grep -q 'type=repository_not_found'; then
+  pass "W1-F15"; else fail "W1-F15" "exit=$c out=$out"; fi
+
+# W1-F13: context agent errors are structured (one ERROR line on stdout)
+out=$(MAPROOM_DATABASE_URL="sqlite://$w/x.db" "$BIN" context --chunk-id 424242 --format agent 2>/dev/null); c=$?
+if [ "$c" -eq 1 ] && printf '%s' "$out" | grep -q 'ERROR | type=not_found'; then
+  pass "W1-F13"; else fail "W1-F13" "exit=$c out=$out"; fi
+
+# W1-F69: cache warm refuses honestly (exit 2, points at the daemon)
+MAPROOM_DATABASE_URL="sqlite://$w/x.db" "$BIN" cache warm --query x >/dev/null 2>&1; c=$?
+if [ "$c" -eq 2 ]; then pass "W1-F69(cli)"; else fail "W1-F69(cli)" "exit=$c want 2"; fi
+rm -rf "$w"
+
+# W1-F01: --mode hybrid degrades to fts (exit 0, honest metadata) with a broken provider
+w=$(mktemp -d)
+( cd "$w" && git init -q -b main fx && cd fx \
+  && printf 'export function hybridProbeRunner() { return 1; }\n' > a.ts \
+  && git add a.ts && git -c user.email=t@t -c user.name=t commit -qm init )
+MAPROOM_DATABASE_URL="sqlite://$w/w.db" "$BIN" scan --repo fx --path "$w/fx" >/dev/null 2>&1
+out=$(MAPROOM_DATABASE_URL="sqlite://$w/w.db" MAPROOM_EMBEDDING_PROVIDER=google GOOGLE_APPLICATION_CREDENTIALS=/nonexistent \
+  "$BIN" search --repo fx --query hybridProbeRunner --mode hybrid --format json 2>/dev/null); c=$?
+if [ "$c" -eq 0 ] && printf '%s' "$out" | grep -q hybridProbeRunner \
+   && printf '%s' "$out" | grep -q '"mode": *"fts"'; then
+  pass "W1-F01(degrade)"; else fail "W1-F01(degrade)" "exit=$c out=$(printf '%s' "$out" | head -c 200)"; fi
+
+# W1-F69(daemon): repeated identical search is a cache hit; warm RPC works
+out=$(printf '%s\n%s\n%s\n' \
+  '{"jsonrpc":"2.0","method":"search","params":{"repo":"fx","query":"hybridProbeRunner","mode":"fts"},"id":1}' \
+  '{"jsonrpc":"2.0","method":"search","params":{"repo":"fx","query":"hybridProbeRunner","mode":"fts"},"id":2}' \
+  '{"jsonrpc":"2.0","method":"cache.stats","id":3}' \
+  | MAPROOM_DATABASE_URL="sqlite://$w/w.db" timeout 30 "$BIN" serve 2>/dev/null)
+if printf '%s' "$out" | grep -q '"hits":1'; then
+  pass "W1-F69(daemon)"; else fail "W1-F69(daemon)" "$(printf '%s' "$out" | tail -c 200)"; fi
+
+# W1-F84: reverse-edge index exists after migration (v12)
+idx=$(printf 'SELECT count(*) FROM sqlite_master WHERE type="index" AND name="idx_chunk_edges_dst";\n' \
+  | sqlite3 "$w/w.db" 2>/dev/null || echo probe-skipped)
+if [ "$idx" = "1" ]; then pass "W1-F84"
+elif [ "$idx" = "probe-skipped" ]; then say "W1-F84: sqlite3 CLI unavailable; index covered by unit tests"
+else fail "W1-F84" "idx=$idx"; fi
+rm -rf "$w"
+
 # ---------- PG-gated probes ----------
 if [ -n "${MAPROOM_TEST_PG_URL:-}" ]; then
   PGBIN=target/debug/maproom   # requires a --features postgres build for PG probes

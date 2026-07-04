@@ -161,6 +161,17 @@ pub struct SearchHit {
     pub preview: Option<String>,
 }
 
+/// Typed store errors callers can downcast for classification (F15).
+/// Display text intentionally matches the legacy anyhow messages so
+/// string-matching consumers keep working.
+#[derive(Debug, thiserror::Error)]
+pub enum StoreError {
+    #[error("Repository not found: {0}")]
+    RepositoryNotFound(String),
+    #[error("Ambiguous repository name '{name}'. Matches: {matches}")]
+    AmbiguousRepository { name: String, matches: String },
+}
+
 /// Full chunk data for display/context - read-only view of a chunk
 #[derive(Debug, Clone, Serialize)]
 pub struct ChunkFull {
