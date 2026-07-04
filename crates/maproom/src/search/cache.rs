@@ -85,15 +85,15 @@ const DEFAULT_TTL_SECONDS: u64 = 3600;
 
 /// Cache entry with TTL support.
 #[derive(Debug, Clone)]
-struct CacheEntry {
+struct CacheEntry<V> {
     /// The cached search results
-    results: FinalSearchResults,
+    results: V,
     /// Timestamp when the entry was created (Unix timestamp)
     created_at: u64,
 }
 
-impl CacheEntry {
-    fn new(results: FinalSearchResults) -> Self {
+impl<V> CacheEntry<V> {
+    fn new(results: V) -> Self {
         let created_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -123,9 +123,18 @@ impl CacheEntry {
 /// - Multiple readers can access cache simultaneously
 /// - Writers (put operations) require exclusive lock
 /// - Atomic counters track hits/misses without locking
-pub struct SearchCache {
+/// F69: generic over key and value with defaults preserving the original
+/// pipeline-facing shape (`SearchCache` == `SearchCache<CacheKey,
+/// FinalSearchResults>`). The daemon instantiates
+/// `SearchCache<String, serde_json::Value>` to cache full search responses
+/// keyed by the canonicalized request.
+pub struct SearchCache<K = CacheKey, V = FinalSearchResults>
+where
+    K: std::hash::Hash + Eq + Clone,
+    V: Clone,
+{
     /// LRU cache storage
-    cache: Arc<RwLock<LruCache<CacheKey, CacheEntry>>>,
+    cache: Arc<RwLock<LruCache<K, CacheEntry<V>>>>,
 
     /// Time-to-live for cache entries (seconds, 0 = never expire)
     ttl_seconds: u64,
@@ -143,7 +152,11 @@ pub struct SearchCache {
     expirations: Arc<AtomicU64>,
 }
 
-impl Default for SearchCache {
+impl<K, V> Default for SearchCache<K, V>
+where
+    K: std::hash::Hash + Eq + Clone + std::fmt::Debug,
+    V: Clone,
+{
     /// Create a new SearchCache with default capacity and TTL.
     ///
     /// Uses DEFAULT_CACHE_SIZE (1000 entries) and DEFAULT_TTL_SECONDS (3600s).
@@ -152,7 +165,11 @@ impl Default for SearchCache {
     }
 }
 
-impl SearchCache {
+impl<K, V> SearchCache<K, V>
+where
+    K: std::hash::Hash + Eq + Clone + std::fmt::Debug,
+    V: Clone,
+{
     /// Create a new SearchCache with specified capacity and TTL.
     ///
     /// # Arguments
@@ -223,7 +240,7 @@ impl SearchCache {
     ///     println!("Found {} results in cache", results.results.len());
     /// }
     /// ```
-    pub fn get(&self, key: &CacheKey) -> Option<FinalSearchResults> {
+    pub fn get(&self, key: &K) -> Option<V> {
         let mut cache = self.cache.write().unwrap();
 
         match cache.get(key) {
@@ -270,7 +287,7 @@ impl SearchCache {
     ///
     /// // cache.put(key, results);
     /// ```
-    pub fn put(&self, key: CacheKey, results: FinalSearchResults) {
+    pub fn put(&self, key: K, results: V) {
         let mut cache = self.cache.write().unwrap();
 
         // Check if we're about to evict
@@ -361,6 +378,10 @@ impl SearchCache {
         count
     }
 
+}
+
+/// CacheKey-specific invalidation (needs the key's repo/worktree fields).
+impl<V: Clone> SearchCache<CacheKey, V> {
     /// Invalidate cache entries by repository ID.
     ///
     /// Used when files are updated in a repository.
@@ -422,7 +443,11 @@ impl SearchCache {
     }
 }
 
-impl Clone for SearchCache {
+impl<K, V> Clone for SearchCache<K, V>
+where
+    K: std::hash::Hash + Eq + Clone,
+    V: Clone,
+{
     fn clone(&self) -> Self {
         Self {
             cache: Arc::clone(&self.cache),

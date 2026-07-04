@@ -216,6 +216,11 @@ struct DaemonState {
     /// before falling back to FTS.
     embed_failed_at: std::sync::Mutex<Option<std::time::Instant>>,
     context_assembler: DefaultAssemblyStrategy,
+    /// F69: the daemon's long-lived search-response cache — the thing
+    /// `cache.warm` actually populates and `search` actually consults.
+    /// Short TTL (60s) bounds staleness from EXTERNAL writers (scan/watch
+    /// run in other processes and cannot invalidate this cache).
+    search_cache: crate::search::cache::SearchCache<String, serde_json::Value>,
 }
 
 impl DaemonState {
@@ -225,6 +230,7 @@ impl DaemonState {
             embedding: tokio::sync::OnceCell::new(),
             embed_failed_at: std::sync::Mutex::new(None),
             context_assembler: DefaultAssemblyStrategy::new(store),
+            search_cache: crate::search::cache::SearchCache::with_ttl(500, 60),
         }
     }
 
@@ -265,7 +271,16 @@ impl DaemonState {
     }
 }
 
-pub async fn run() -> Result<()> {
+/// F69: optional startup cache warming — `serve --warm-queries <file>
+/// --warm-repo <name>` reads one query per line and runs each through the
+/// cached search path before serving.
+pub struct CacheWarmupSpec {
+    pub queries: Vec<String>,
+    pub repo: String,
+    pub worktree: Option<String>,
+}
+
+pub async fn run(warmup: Option<CacheWarmupSpec>) -> Result<()> {
     info!("Daemon mode starting...");
 
     // Initialize the configured backend (SQLite or Postgres per the DSN).
@@ -280,6 +295,34 @@ pub async fn run() -> Result<()> {
     // Vertex credential resolution can block for seconds at startup; the
     // hybrid arm degrades to FTS and surfaces the reason per-request.)
     let state = Arc::new(DaemonState::new(store));
+
+    if let Some(spec) = warmup {
+        // Warm in the background: startup must not block on N searches.
+        let warm_state = state.clone();
+        tokio::spawn(async move {
+            let mut warmed = 0usize;
+            let total = spec.queries.len();
+            for query in &spec.queries {
+                let sp = SearchParams {
+                    query: query.clone(),
+                    repo: spec.repo.clone(),
+                    worktree: spec.worktree.clone(),
+                    limit: None,
+                    threshold: None,
+                    mode: None,
+                    deduplicate: Some(true),
+                    kind: None,
+                    lang: None,
+                    include_confidence: None,
+                };
+                match cached_search(warm_state.clone(), sp).await {
+                    Ok(_) => warmed += 1,
+                    Err(e) => tracing::warn!("startup warm failed for '{query}': {e:#}"),
+                }
+            }
+            info!("Startup cache warming complete: {warmed}/{total} queries cached");
+        });
+    }
 
     let stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
@@ -404,7 +447,7 @@ async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> Jso
                 }
             }
 
-            match execute_search(state, params).await {
+            match cached_search(state, params).await {
                 Ok(results) => JsonRpcResponse::success(id, results),
                 Err(e) => {
                     error!("Search failed: {}", e);
@@ -468,6 +511,79 @@ async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> Jso
                 }
             }
         }
+        // F69: warm the daemon's REAL search cache. Each query runs through
+        // cached_search — the exact production path — so `warmed` counts
+        // actual cache population, never fiction.
+        "cache.warm" => {
+            let params: crate::daemon::types::CacheWarmParams = match serde_json::from_value(
+                request.params.clone().unwrap_or(serde_json::Value::Null),
+            ) {
+                Ok(p) => p,
+                Err(e) => {
+                    return JsonRpcResponse::error(
+                        id,
+                        -32602,
+                        "Invalid params".to_string(),
+                        Some(serde_json::json!(e.to_string())),
+                    )
+                }
+            };
+            let mut warmed: usize = 0;
+            let mut failed: Vec<serde_json::Value> = Vec::new();
+            for query in &params.queries {
+                let sp = SearchParams {
+                    query: query.clone(),
+                    repo: params.repo.clone(),
+                    worktree: params.worktree.clone(),
+                    limit: params.k,
+                    threshold: None,
+                    mode: params.mode.clone(),
+                    deduplicate: Some(true),
+                    kind: None,
+                    lang: None,
+                    include_confidence: None,
+                };
+                match cached_search(state.clone(), sp).await {
+                    Ok(_) => warmed += 1,
+                    Err(e) => failed.push(serde_json::json!({
+                        "query": query,
+                        "error": format!("{e:#}"),
+                    })),
+                }
+            }
+            let stats = state.search_cache.stats();
+            JsonRpcResponse::success(
+                id,
+                serde_json::json!({
+                    "warmed": warmed,
+                    "failed": failed,
+                    "cache": {
+                        "size": stats.size,
+                        "capacity": stats.capacity,
+                        "hits": stats.hits,
+                        "misses": stats.misses,
+                        "ttl_seconds": stats.ttl_seconds,
+                    },
+                }),
+            )
+        }
+        // F69: real cache statistics from the live daemon cache.
+        "cache.stats" => {
+            let stats = state.search_cache.stats();
+            JsonRpcResponse::success(
+                id,
+                serde_json::json!({
+                    "size": stats.size,
+                    "capacity": stats.capacity,
+                    "hits": stats.hits,
+                    "misses": stats.misses,
+                    "evictions": stats.evictions,
+                    "expirations": stats.expirations,
+                    "ttl_seconds": stats.ttl_seconds,
+                    "hit_rate": stats.hit_rate(),
+                }),
+            )
+        }
         "status" => {
             let params: StatusParams =
                 serde_json::from_value(request.params.clone().unwrap_or(serde_json::Value::Null))
@@ -530,6 +646,40 @@ async fn worktree_exists(state: &Arc<DaemonState>, repo: &str, worktree: &str) -
         }
     }
     Ok(false)
+}
+
+/// F69: canonical cache key over EVERY result-affecting request field —
+/// a missing field here is a wrong-result-from-cache bug.
+fn search_cache_key(params: &SearchParams) -> String {
+    serde_json::json!({
+        "q": params.query,
+        "repo": params.repo,
+        "wt": params.worktree,
+        "limit": params.limit,
+        "threshold": params.threshold,
+        "mode": params.mode,
+        "dedup": params.deduplicate,
+        "kind": params.kind,
+        "lang": params.lang,
+        "conf": params.include_confidence,
+    })
+    .to_string()
+}
+
+/// F69: the cached search path — consult the daemon cache, fall through to
+/// a real execution on miss, populate on success. `cache.warm` runs the
+/// SAME function, so a warmed query is by construction a later cache hit.
+async fn cached_search(
+    state: Arc<DaemonState>,
+    params: SearchParams,
+) -> Result<serde_json::Value> {
+    let key = search_cache_key(&params);
+    if let Some(cached) = state.search_cache.get(&key) {
+        return Ok(cached);
+    }
+    let result = execute_search(state.clone(), params).await?;
+    state.search_cache.put(key, result.clone());
+    Ok(result)
 }
 
 async fn execute_search(

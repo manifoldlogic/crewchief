@@ -710,6 +710,19 @@ enum Commands {
         /// Idle timeout in seconds (default: 300 = 5 minutes)
         #[arg(long, default_value_t = 300)]
         idle_timeout: u64,
+
+        /// F69: warm the daemon search cache at startup from a file of
+        /// queries (one per line). Requires --warm-repo. Stdio mode only.
+        #[arg(long, requires = "warm_repo")]
+        warm_queries: Option<PathBuf>,
+
+        /// Repository name the warm queries run against.
+        #[arg(long, requires = "warm_queries")]
+        warm_repo: Option<String>,
+
+        /// Optional worktree scope for the warm queries.
+        #[arg(long, requires = "warm_queries")]
+        warm_worktree: Option<String>,
     },
 
     /// Delete indexed chunks matching patterns in .maproomignore
@@ -2385,6 +2398,9 @@ async fn real_main() -> anyhow::Result<()> {
         Commands::Serve {
             socket,
             socket_path,
+            warm_queries,
+            warm_repo,
+            warm_worktree,
             pid_path,
             idle_timeout,
         } => {
@@ -2425,7 +2441,26 @@ async fn real_main() -> anyhow::Result<()> {
             } else {
                 // Stdio mode (default)
                 tracing::info!("Starting stdio daemon");
-                daemon::run().await?;
+                let warmup = match (warm_queries, warm_repo) {
+                    (Some(path), Some(repo)) => {
+                        let content = std::fs::read_to_string(&path).with_context(|| {
+                            format!("failed to read --warm-queries file {}", path.display())
+                        })?;
+                        let queries: Vec<String> = content
+                            .lines()
+                            .map(str::trim)
+                            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+                            .map(String::from)
+                            .collect();
+                        Some(daemon::CacheWarmupSpec {
+                            queries,
+                            repo,
+                            worktree: warm_worktree,
+                        })
+                    }
+                    _ => None,
+                };
+                daemon::run(warmup).await?;
             }
         }
 

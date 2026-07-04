@@ -148,6 +148,23 @@ impl Default for ExpandConfig {
     }
 }
 
+/// Parameters for the cache.warm JSON-RPC method (F69).
+#[derive(Debug, Deserialize)]
+pub struct CacheWarmParams {
+    /// Queries to execute-and-cache (each runs through the SAME cached
+    /// search path as a normal request).
+    pub queries: Vec<String>,
+    pub repo: String,
+    #[serde(default)]
+    pub worktree: Option<String>,
+    /// Search mode for the warmed queries (defaults to the daemon default).
+    #[serde(default)]
+    pub mode: Option<String>,
+    /// Result limit per query (defaults to the search default).
+    #[serde(default)]
+    pub k: Option<usize>,
+}
+
 /// Parameters for the status JSON-RPC method.
 #[derive(Debug, Deserialize, Default)]
 pub struct StatusParams {
