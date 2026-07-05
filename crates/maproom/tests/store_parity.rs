@@ -1169,6 +1169,100 @@ async fn parity_graph() {
     for_each(|n, s| async move { check_graph(n, s.as_ref()).await }).await;
 }
 
+// ── Edge-depth (F-B) parity: batch insert, cross-file callers, test_of ───────
+
+/// Spec DoD §1: `insert_chunk_edges_batch`, cross-file `find_callers`, `test_of`
+/// round-trip, and `list_symbols_for_worktree` behave identically on both backends.
+async fn check_edge_batch_and_test_of(name: &str, store: &(dyn Store + Send + Sync)) {
+    let s = seed(store, "edgebatch").await;
+    let b = unique_base();
+
+    // A second file so caller -> callee is genuinely cross-file.
+    let file_b = store
+        .upsert_file(&FileRecord {
+            repo_id: s.repo,
+            worktree_id: s.wt,
+            commit_id: s.commit,
+            relpath: format!("src/other_{b}.rs"),
+            language: Some("rust".to_string()),
+            content_hash: format!("hb-{b}"),
+            size_bytes: 1,
+            last_modified: None,
+        })
+        .await
+        .unwrap();
+
+    let caller = store
+        .insert_chunk(&chunk(s.file, s.wt, &format!("CA{b}"), "caller", "c", 1, 5))
+        .await
+        .unwrap();
+    let callee = store
+        .insert_chunk(&chunk(file_b, s.wt, &format!("CB{b}"), "callee", "c", 1, 5))
+        .await
+        .unwrap();
+    let test = store
+        .insert_chunk(&chunk(s.file, s.wt, &format!("CT{b}"), "test_caller", "c", 7, 11))
+        .await
+        .unwrap();
+
+    // B4: batch insert cross-file calls + a test_of edge in one transaction.
+    store
+        .insert_chunk_edges_batch(&[
+            (caller, callee, "calls".to_string()),
+            (test, callee, "calls".to_string()),
+            (test, callee, "test_of".to_string()),
+        ])
+        .await
+        .unwrap();
+
+    // Cross-file find_callers: both callers found, all via `calls` (test_of purity).
+    let callers = store.find_callers(callee, Some(1)).await.unwrap();
+    let caller_ids: Vec<i64> = callers.iter().map(|g| g.chunk_id).collect();
+    assert!(
+        caller_ids.contains(&caller) && caller_ids.contains(&test),
+        "[{name}] cross-file callers must include both, got {caller_ids:?}"
+    );
+    assert!(
+        callers.iter().all(|g| g.edge_type == "calls"),
+        "[{name}] test_of must not leak into find_callers"
+    );
+
+    // test_of round-trip: only the test chunk targets callee via test_of.
+    let incoming = store
+        .get_direct_edges(callee, ImportDirection::Incoming)
+        .await
+        .unwrap();
+    let mut test_of_srcs: Vec<i64> = incoming
+        .iter()
+        .filter(|e| e.edge_type == "test_of")
+        .map(|e| e.chunk_id)
+        .collect();
+    test_of_srcs.sort_unstable();
+    assert_eq!(test_of_srcs, vec![test], "[{name}] test_of round-trip");
+
+    // list_symbols_for_worktree returns the worktree's named chunks with relpath+kind.
+    let symbols = store.list_symbols_for_worktree(s.wt).await.unwrap();
+    assert!(
+        symbols
+            .iter()
+            .any(|(id, sym, rel, kind)| *id == callee
+                && sym == "callee"
+                && rel.contains("other_")
+                && kind == "function"),
+        "[{name}] list_symbols must return the callee row, got {symbols:?}"
+    );
+    assert!(
+        symbols.iter().any(|(id, _, _, _)| *id == caller),
+        "[{name}] list_symbols must return the caller row"
+    );
+}
+
+#[tokio::test]
+#[ignore]
+async fn parity_edge_batch_and_test_of() {
+    for_each(|n, s| async move { check_edge_batch_and_test_of(n, s.as_ref()).await }).await;
+}
+
 // ── Wave B (fix spec R09/R05/R18/R03) parity checks ─────────────────────────
 
 /// R09 / R-GC-1..4: unmapping superseded generations keeps only the surviving

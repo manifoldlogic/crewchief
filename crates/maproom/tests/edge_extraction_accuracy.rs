@@ -152,10 +152,13 @@ async fn test_accuracy_simple_repo() {
     .await
     .unwrap();
 
-    // Ground truth from README.md (same-file edges only)
+    // Ground truth from README.md. Same-file edges plus the Phase-2/F-B cross-file
+    // edge main -> calculate (main.ts calls calculate() defined in utils.ts), now
+    // that cross-file resolution is enabled (spec B10).
     let mut expected_edges = HashSet::new();
     expected_edges.insert(EdgePair::new("calculate", "add"));
     expected_edges.insert(EdgePair::new("calculate", "multiply"));
+    expected_edges.insert(EdgePair::new("main", "calculate"));
 
     // Get actual edges
     let actual_edges = get_actual_edges(&store).await;
@@ -334,9 +337,10 @@ async fn test_overall_accuracy_across_fixtures() {
     // Combined ground truth from all fixtures (excluding top-level calls)
     let mut expected_edges = HashSet::new();
 
-    // typescript_simple
+    // typescript_simple (incl. the F-B cross-file edge main -> calculate)
     expected_edges.insert(EdgePair::new("calculate", "add"));
     expected_edges.insert(EdgePair::new("calculate", "multiply"));
+    expected_edges.insert(EdgePair::new("main", "calculate"));
 
     // typescript_methods
     expected_edges.insert(EdgePair::new("multiply", "add"));
@@ -370,6 +374,46 @@ async fn test_overall_accuracy_across_fixtures() {
     println!(
         "\n✅ Phase 1 Success Criteria Met: Precision = {:.2}% (target: ≥85%)",
         metrics.precision * 100.0
+    );
+}
+
+/// F-D enablement gate: Python call extraction must meet the precision bar on a
+/// realistic fixture (direct calls, self-method calls, builtin/class decoys). If
+/// this fails, `py` must be removed from `supports_call_extraction` (ship disabled).
+#[tokio::test]
+async fn test_accuracy_python_repo() {
+    let store = setup_store().await;
+    let test_repo = Path::new("tests/fixtures/edge_extraction/python_calls");
+
+    scan_worktree(&store, "py_repo", "main", test_repo, "HEAD", 4, None, None, None)
+        .await
+        .unwrap();
+
+    // Ground truth from README.md (same-file calls).
+    let mut expected_edges = HashSet::new();
+    expected_edges.insert(EdgePair::new("process", "validate"));
+    expected_edges.insert(EdgePair::new("process", "transform"));
+    expected_edges.insert(EdgePair::new("run", "load"));
+    expected_edges.insert(EdgePair::new("run", "process"));
+
+    let actual_edges = get_actual_edges(&store).await;
+    let metrics = AccuracyMetrics::calculate(&expected_edges, &actual_edges);
+    metrics.print_report("Python Calls");
+
+    if metrics.false_positives > 0 {
+        let fp: Vec<_> = actual_edges.difference(&expected_edges).collect();
+        println!("False positives: {fp:?}");
+    }
+
+    assert!(
+        metrics.precision >= 0.85,
+        "Python precision must be >= 85% to keep `py` enabled, got {:.2}%",
+        metrics.precision * 100.0
+    );
+    assert!(
+        metrics.recall >= 0.60,
+        "Python recall should be >= 60%, got {:.2}%",
+        metrics.recall * 100.0
     );
 }
 

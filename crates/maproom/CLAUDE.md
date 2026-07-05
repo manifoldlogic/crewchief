@@ -32,6 +32,8 @@ Built to `../../packages/cli/bin/<platform>/maproom`:
 - **Git polling, not filesystem events**: File watching uses `git status --porcelain` polling (default 3s). Trades instant detection for 2-5s latency to avoid EMFILE errors on large repos.
 - **No negation in `.maproomignore`**: Unlike `.gitignore`, there is no `!pattern` syntax. All patterns are exclusions only.
 - **Fail-fast patterns**: Invalid glob patterns in `.maproomignore` cause scan/watch startup to fail immediately.
+- **Cross-file edge inbound staleness (v1)**: `calls`/`test_of` edges are resolved cross-file in a per-worktree post-pass. Re-indexing a callee file B alone (via `upsert_files`/watch) deletes B's edges — including inbound `A → B` edges — and single-file recomputation cannot restore them (A is not re-read). This is deliberate v1 policy: inbound edges regenerate on the next scan of A or a full rescan (pinned by `test_inbound_edge_staleness_is_deliberate`). Full `scan` is always internally consistent.
+- **Cross-file resolution never guesses (ambiguity policy)**: a call resolves cross-file only when exactly one same-language callable chunk in another file matches the name (or exactly one of several shares the caller's directory). Otherwise the reference is dropped and counted in a `debug!` summary — no id-order or insertion-order tiebreak. This keeps the accuracy suite's colliding-symbol precision gate (≥ 0.85) intact.
 
 ## Conventions
 

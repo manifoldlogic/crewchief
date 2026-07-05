@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -11,7 +12,6 @@ use crate::db::{ChunkRecord, FileRecord, Store};
 // Sub-traits needed by the #[cfg(test)] module (concrete SqliteStore calls).
 #[cfg(test)]
 use crate::db::traits::StoreCore;
-use crate::incremental::edge_updater::Edge;
 use crate::incremental::ignore::load_ignore_patterns;
 
 pub mod edges;
@@ -125,52 +125,193 @@ pub struct BranchSwitchEvent {
     pub worktree_created: bool,
 }
 
-/// Process Python imports from chunk metadata and create import edges in chunk_edges table
-async fn process_python_imports(
+/// Map a Python import (`module` + `relative_depth`) to candidate relpaths within
+/// the worktree, resolved against the importing file's directory.
+///
+/// - Absolute `a.b` -> `["a/b.py", "a/b/__init__.py"]` (relative to worktree root).
+/// - Relative imports resolve `module` against the importing file's package: one
+///   leading dot = the importing file's own directory, each extra dot pops one more
+///   level (`from ..pkg import x` in `a/b/c.py` -> base `a`, module `pkg`).
+///
+/// Candidate strings are built with `PathBuf` so they byte-match `FileRecord.relpath`
+/// (which is `strip_prefix(root).to_string_lossy()`). Returns an empty vec when there
+/// is nothing to resolve against (e.g. `from . import submod`, whose target is a
+/// submodule file rather than a symbol — v1 emits no edge for that form).
+fn python_module_candidate_relpaths(
+    importing_relpath: &Path,
+    module: &str,
+    relative_depth: Option<usize>,
+) -> Vec<String> {
+    // No module component (`from . import submod`) targets a submodule file rather
+    // than a symbol inside a module file — not resolvable by symbol lookup. v1 emits
+    // no edge for that form (documented in C4).
+    if module.is_empty() {
+        return Vec::new();
+    }
+
+    // Base directory the module path is resolved against.
+    let mut base: PathBuf = match relative_depth {
+        Some(depth) => {
+            // One dot targets the importing file's own package (its directory);
+            // each additional dot climbs one more level. Climbing above the worktree
+            // root is an invalid (over-deep) relative import — yield no candidate
+            // rather than silently clamping to the root.
+            let mut dir = match importing_relpath.parent() {
+                Some(p) => p.to_path_buf(),
+                None => return Vec::new(),
+            };
+            for _ in 1..depth {
+                match dir.parent() {
+                    Some(p) => dir = p.to_path_buf(),
+                    None => return Vec::new(),
+                }
+            }
+            dir
+        }
+        // Absolute import: resolve from the worktree root.
+        None => PathBuf::new(),
+    };
+
+    for part in module.split('.') {
+        base.push(part);
+    }
+
+    // `a/b` -> module file `a/b.py` and package `a/b/__init__.py`. Module path
+    // components are plain identifiers, so `set_extension` only appends the suffix.
+    let mut as_module = base.clone();
+    as_module.set_extension("py");
+    let as_package = base.join("__init__.py");
+
+    vec![
+        as_module.to_string_lossy().to_string(),
+        as_package.to_string_lossy().to_string(),
+    ]
+}
+
+/// A file's python imports, captured during indexing and resolved in a post-pass.
+///
+/// Resolution is deferred until every file is indexed because a `from pkg.utils
+/// import helper` in `a.py` targets a chunk in `pkg/utils.py`, which the file walk
+/// may reach AFTER `a.py`. Resolving inline (as the pre-F-C code did) silently
+/// dropped every forward cross-file import.
+struct PendingPyImports {
+    /// Relpath of the importing file (base for relative-import resolution).
+    relpath: PathBuf,
+    /// Chunk id of this file's `__imports__` chunk (the edge source).
+    src_chunk_id: i64,
+    /// The raw `imports` metadata array for this file.
+    imports: Vec<serde_json::Value>,
+}
+
+/// Capture a python file's imports for later resolution (spec §6 C1).
+///
+/// The source `__imports__` chunk id is taken from THIS file's in-memory chunk ids
+/// (`chunks_with_ids`), never a worktree-global symbol lookup that collapsed every
+/// file's imports onto one arbitrary chunk. Pure — no store access — so it is safe to
+/// call inside the indexing loop. Returns `None` when the file has no imports chunk.
+fn collect_python_imports(
+    relpath: &Path,
+    chunks: &[SymbolChunk],
+    chunks_with_ids: &[edges::ChunkWithId],
+) -> Option<PendingPyImports> {
+    // C1: source chunk id from this file's in-memory chunks (kind match).
+    let src_chunk_id = chunks_with_ids.iter().find(|c| c.kind == "imports").map(|c| c.id)?;
+
+    // The import list lives in the SymbolChunk metadata (ChunkWithId carries none);
+    // chunks and chunks_with_ids are index-parallel.
+    let imports = chunks
+        .iter()
+        .find(|c| c.kind == "imports")
+        .and_then(|c| c.metadata.as_ref())
+        .and_then(|m| m.get("imports"))
+        .and_then(|v| v.as_array())
+        .cloned()?;
+
+    Some(PendingPyImports {
+        relpath: relpath.to_path_buf(),
+        src_chunk_id,
+        imports,
+    })
+}
+
+/// Resolve captured python imports into scoped `imports` edges (spec §6 C2-C5).
+///
+/// Runs after all files are indexed so cross-file targets exist. Each imported name
+/// is resolved module-path-scoped against the target file's relpath — there is no
+/// bare-name worktree-wide fallback, so external modules (`os`, `numpy`) and same-name
+/// decoys in other files produce no edge.
+async fn resolve_python_imports(
     store: &(dyn Store + Send + Sync),
     repo_id: i64,
     worktree_id: i64,
-    _file_id: i64,
-    chunks: &[SymbolChunk],
+    pending: &[PendingPyImports],
 ) -> anyhow::Result<()> {
-    // Find the imports chunk if it exists
-    let imports_chunk = chunks
-        .iter()
-        .find(|c| c.kind == "imports" && c.metadata.is_some());
+    for file in pending {
+        for import_obj in &file.imports {
+            // C4: wildcard/dynamic imports remain no-ops.
+            if import_obj
+                .get("is_wildcard")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                continue;
+            }
+            if import_obj.get("import_type").and_then(|v| v.as_str()) == Some("dynamic") {
+                continue;
+            }
 
-    if let Some(imports) = imports_chunk {
-        if let Some(metadata) = &imports.metadata {
-            if let Some(imports_array) = metadata.get("imports").and_then(|v| v.as_array()) {
-                // Get the chunk_id for the imports chunk itself
-                let imports_chunk_id = store
-                    .find_chunk_by_symbol(repo_id, Some(worktree_id), "__imports__", None)
-                    .await?;
+            // Names are present for `from`/relative imports; empty for `import foo`
+            // (standard-import module linking is an optional C4 form we don't emit).
+            let names: Vec<&str> = import_obj
+                .get("names")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+                .unwrap_or_default();
+            if names.is_empty() {
+                continue;
+            }
 
-                if let Some(src_chunk_id) = imports_chunk_id {
-                    // Process each import
-                    for import_obj in imports_array {
-                        // Extract symbol names from the import
-                        let names = import_obj
-                            .get("names")
-                            .and_then(|v| v.as_array())
-                            .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>())
-                            .unwrap_or_default();
+            let module = import_obj
+                .get("module")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let relative_depth = import_obj
+                .get("relative_depth")
+                .and_then(|v| v.as_u64())
+                .map(|d| d as usize);
 
-                        // For each imported name, try to find the target chunk
-                        for name in names {
-                            if let Ok(Some(dst_chunk_id)) = store
-                                .find_chunk_by_symbol(repo_id, Some(worktree_id), name, None)
-                                .await
-                            {
-                                // Create the import edge
-                                if let Err(e) = store
-                                    .insert_chunk_edge(src_chunk_id, dst_chunk_id, "imports")
-                                    .await
-                                {
-                                    warn!("Failed to create import edge for {}: {}", name, e);
-                                }
-                            }
-                        }
+            // C2/C3: module-path-scoped candidate relpaths; no global fallback.
+            let candidates =
+                python_module_candidate_relpaths(&file.relpath, module, relative_depth);
+            if candidates.is_empty() {
+                continue;
+            }
+
+            for name in &names {
+                // Aliases resolve by ORIGINAL name (already stored in `names`). Try
+                // each candidate relpath in order; the first that resolves wins.
+                // External modules resolve to none -> no edge (C3).
+                let mut dst_chunk_id: Option<i64> = None;
+                for candidate in &candidates {
+                    if let Ok(Some(id)) = store
+                        .find_chunk_by_symbol(repo_id, Some(worktree_id), name, Some(candidate))
+                        .await
+                    {
+                        dst_chunk_id = Some(id);
+                        break;
+                    }
+                }
+
+                if let Some(dst_chunk_id) = dst_chunk_id {
+                    if dst_chunk_id == file.src_chunk_id {
+                        continue; // never a self-edge
+                    }
+                    // C5: per-name warn-and-continue error handling preserved.
+                    if let Err(e) = store
+                        .insert_chunk_edge(file.src_chunk_id, dst_chunk_id, "imports")
+                        .await
+                    {
+                        warn!("Failed to create import edge for {}: {}", name, e);
                     }
                 }
             }
@@ -180,17 +321,156 @@ async fn process_python_imports(
     Ok(())
 }
 
-/// Batch insert edges into the database
-async fn insert_edges(store: &(dyn Store + Send + Sync), edges: &[Edge]) -> Result<()> {
-    for edge in edges {
-        store
-            .insert_chunk_edge(
-                edge.src_chunk_id,
-                edge.dst_chunk_id,
-                edge.edge_type.as_str(),
-            )
-            .await?;
+/// A resolvable cross-file call target (spec B3 candidate): a callable chunk keyed
+/// by symbol name in the worktree symbol index.
+struct SymbolCandidate {
+    chunk_id: i64,
+    relpath: String,
+    lang: &'static str,
+}
+
+/// A call whose callee was not found in its own file, tagged with the caller's file
+/// context so the post-pass can apply the ambiguity policy (spec B3).
+struct PendingCall {
+    src_chunk_id: i64,
+    src_relpath: String,
+    src_lang: &'static str,
+    callee_name: String,
+}
+
+/// Parent directory of a relpath (`""` for a top-level file) for the same-directory
+/// tiebreak. Uses `Path` so it matches how `FileRecord.relpath` is constructed.
+fn relpath_dir(relpath: &str) -> String {
+    Path::new(relpath)
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default()
+}
+
+/// Index a file's callable chunks into the worktree symbol index (spec B2/B3): only
+/// callable kinds become call targets, so `use`/import/struct/module chunks never do.
+/// Also records `chunk_id -> (relpath, symbol)` in `chunk_meta` for test_of
+/// classification (spec B7/B8).
+fn index_callable_symbols(
+    symbol_index: &mut HashMap<String, Vec<SymbolCandidate>>,
+    chunk_meta: &mut HashMap<i64, (String, String)>,
+    chunks_with_ids: &[edges::ChunkWithId],
+    relpath: &str,
+    lang: &'static str,
+) {
+    for c in chunks_with_ids {
+        if !edges::is_callable_kind(&c.kind) {
+            continue;
+        }
+        if let Some(name) = &c.symbol_name {
+            symbol_index
+                .entry(name.clone())
+                .or_default()
+                .push(SymbolCandidate {
+                    chunk_id: c.id,
+                    relpath: relpath.to_string(),
+                    lang,
+                });
+            chunk_meta.insert(c.id, (relpath.to_string(), name.clone()));
+        }
     }
+}
+
+/// Classify a chunk as a test using the EXISTING heuristics (spec B8): the shared
+/// `HeuristicScorer::is_test_file` relpath conventions (`*.test.*`, `*.spec.*`,
+/// `/tests/`, `/__tests__/`, `*_test.*`) plus the `test_` symbol prefix (which also
+/// covers conventionally-named Rust `#[cfg(test)]` functions).
+fn is_test_chunk(
+    scorer: &crate::context::heuristics::HeuristicScorer,
+    chunk_meta: &HashMap<i64, (String, String)>,
+    chunk_id: i64,
+) -> bool {
+    match chunk_meta.get(&chunk_id) {
+        Some((relpath, symbol)) => scorer.is_test_file(relpath) || symbol.starts_with("test_"),
+        None => false,
+    }
+}
+
+/// Derive test_of edges from resolved calls (spec B7): test_of ⊆ calls-from-tests —
+/// for a resolved `calls` edge whose SRC chunk is a test and DST is not, emit
+/// test_of(src, dst). Filename pairing is deliberately NOT used (no honest
+/// chunk-granular target).
+fn derive_test_of_edges(
+    calls: &[(i64, i64)],
+    chunk_meta: &HashMap<i64, (String, String)>,
+) -> Vec<(i64, i64)> {
+    let scorer = crate::context::heuristics::HeuristicScorer::new();
+    calls
+        .iter()
+        .filter(|&&(src, dst)| {
+            is_test_chunk(&scorer, chunk_meta, src) && !is_test_chunk(&scorer, chunk_meta, dst)
+        })
+        .copied()
+        .collect()
+}
+
+/// Resolve pending cross-file calls against the worktree symbol index using the
+/// precision-first ambiguity policy (spec B3): candidates are same-language callable
+/// chunks in OTHER files; an edge is emitted only when exactly one candidate remains,
+/// or when exactly one of several shares the caller's directory. Order- and
+/// id-independent. Returns `(resolved (src, dst) pairs, dropped_count)`.
+fn resolve_cross_file_calls(
+    symbol_index: &HashMap<String, Vec<SymbolCandidate>>,
+    pending: &[PendingCall],
+) -> (Vec<(i64, i64)>, usize) {
+    let mut resolved = Vec::new();
+    let mut dropped = 0usize;
+    for pc in pending {
+        let Some(candidates) = symbol_index.get(&pc.callee_name) else {
+            dropped += 1;
+            continue;
+        };
+        // Callable-kind is already enforced by the index; exclude cross-language
+        // (by resolution FAMILY, so .ts/.tsx/.js/.jsx resolve across dialects), the
+        // caller's own file, and self.
+        let src_family = edges::resolution_family(pc.src_lang);
+        let viable: Vec<&SymbolCandidate> = candidates
+            .iter()
+            .filter(|c| {
+                edges::resolution_family(c.lang) == src_family
+                    && c.relpath != pc.src_relpath
+                    && c.chunk_id != pc.src_chunk_id
+            })
+            .collect();
+        let chosen = match viable.as_slice() {
+            [only] => Some(only.chunk_id),
+            [] => None,
+            many => {
+                // Exactly one candidate sharing the caller's directory MAY be chosen.
+                let src_dir = relpath_dir(&pc.src_relpath);
+                let mut in_dir = many.iter().filter(|c| relpath_dir(&c.relpath) == src_dir);
+                match (in_dir.next(), in_dir.next()) {
+                    (Some(c), None) => Some(c.chunk_id),
+                    _ => None,
+                }
+            }
+        };
+        match chosen {
+            Some(dst) => resolved.push((pc.src_chunk_id, dst)),
+            None => dropped += 1,
+        }
+    }
+    (resolved, dropped)
+}
+
+/// Batch-insert `calls` and derived `test_of` edges in ONE transaction (spec B4/B7).
+async fn insert_call_and_test_edges(
+    store: &(dyn Store + Send + Sync),
+    calls: &[(i64, i64)],
+    test_of: &[(i64, i64)],
+) -> Result<()> {
+    if calls.is_empty() && test_of.is_empty() {
+        return Ok(());
+    }
+    let mut batch: Vec<(i64, i64, String)> = Vec::with_capacity(calls.len() + test_of.len());
+    batch.extend(calls.iter().map(|&(s, d)| (s, d, "calls".to_string())));
+    batch.extend(test_of.iter().map(|&(s, d)| (s, d, "test_of".to_string())));
+    store.insert_chunk_edges_batch(&batch).await?;
     Ok(())
 }
 
@@ -374,6 +654,17 @@ pub async fn scan_worktree(
         p.set_totals(file_paths.len(), None);
     }
 
+    // Python imports are resolved after all files are indexed (F-C post-pass).
+    let mut pending_py_imports: Vec<PendingPyImports> = Vec::new();
+
+    // F-B cross-file call resolution state (spec B2): an in-memory symbol index over
+    // callable chunks, same-file edges, and unresolved refs — all resolved and
+    // batch-inserted in ONE post-pass after the loop (no per-call DB lookups).
+    let mut symbol_index: HashMap<String, Vec<SymbolCandidate>> = HashMap::new();
+    let mut chunk_meta: HashMap<i64, (String, String)> = HashMap::new();
+    let mut same_file_calls: Vec<(i64, i64)> = Vec::new();
+    let mut pending_calls: Vec<PendingCall> = Vec::new();
+
     for (idx, path) in file_paths.iter().enumerate() {
         let relpath = path.strip_prefix(&root_abs).unwrap_or(path);
         let language = detect_language_from_path(path).unwrap(); // Already filtered
@@ -499,37 +790,56 @@ pub async fn scan_worktree(
                 });
             }
 
-            // Process Python imports and create edges
-            if language == "py" {
-                if let Err(e) =
-                    process_python_imports(store, repo_id, worktree_id, file_id, &chunks).await
-                {
-                    warn!(
-                        "Failed to process Python imports for {}: {}",
-                        relpath.display(),
-                        e
-                    );
+            let relpath_str = relpath.to_string_lossy().to_string();
+
+            // F-B: index this file's callable chunks for cross-file resolution.
+            index_callable_symbols(
+                &mut symbol_index,
+                &mut chunk_meta,
+                &chunks_with_ids,
+                &relpath_str,
+                language,
+            );
+
+            // Edge lifecycle (B5/B11): clear this file's stale edges before the
+            // post-passes reinsert. On a full scan every file's outgoing edges are
+            // refreshed this way; the post-passes insert nothing until after the loop,
+            // so no just-built cross-file edge is deleted.
+            // supports_call_extraction now includes py, which also produces the
+            // `imports` edges cleared here.
+            if edges::supports_call_extraction(language) {
+                if let Err(e) = store.delete_edges_for_file(file_id).await {
+                    warn!("Failed to clear stale edges for {}: {}", relpath.display(), e);
                 }
             }
 
-            // Extract edges for TypeScript/JavaScript
-            if matches!(language, "ts" | "tsx" | "js" | "jsx") {
+            // Capture Python imports; resolved in a post-pass once every file is
+            // indexed (cross-file targets may be walked after the importer).
+            if language == "py" {
+                if let Some(pending) =
+                    collect_python_imports(relpath, &chunks, &chunks_with_ids)
+                {
+                    pending_py_imports.push(pending);
+                }
+            }
+
+            // Extract call edges (spec A1: single shared language gate). Same-file
+            // edges are accumulated; cross-file misses become pending refs resolved
+            // in the worktree post-pass (spec B1/B2).
+            if edges::supports_call_extraction(language) {
                 match edges::extract_edges(&content, language, &chunks_with_ids) {
-                    Ok(edges_to_insert) if !edges_to_insert.is_empty() => {
-                        if let Err(e) = insert_edges(store, &edges_to_insert).await {
-                            warn!("Failed to insert edges for {}: {}", relpath.display(), e);
-                            // Continue scan despite edge insertion failure
-                        } else {
-                            debug!(
-                                "Inserted {} edges for {}",
-                                edges_to_insert.len(),
-                                relpath.display()
-                            );
+                    Ok((same_file, unresolved)) => {
+                        for e in same_file {
+                            same_file_calls.push((e.src_chunk_id, e.dst_chunk_id));
                         }
-                    }
-                    Ok(_) => {
-                        // No edges extracted (empty file or no calls)
-                        debug!("No edges extracted for {}", relpath.display());
+                        for u in unresolved {
+                            pending_calls.push(PendingCall {
+                                src_chunk_id: u.src_chunk_id,
+                                src_relpath: relpath_str.clone(),
+                                src_lang: language,
+                                callee_name: u.callee_name,
+                            });
+                        }
                     }
                     Err(e) => {
                         warn!("Edge extraction failed for {}: {}", relpath.display(), e);
@@ -546,6 +856,34 @@ pub async fn scan_worktree(
                 p.print_progress();
             }
         }
+    }
+
+    // F-C post-pass: resolve captured python imports now that every target chunk
+    // exists (see collect_python_imports / PendingPyImports).
+    if let Err(e) = resolve_python_imports(store, repo_id, worktree_id, &pending_py_imports).await {
+        warn!("Failed to resolve Python imports: {}", e);
+    }
+
+    // F-B post-pass: resolve cross-file calls against the in-memory symbol index,
+    // derive test_of edges from the resolved calls (B7), and batch-insert both the
+    // `calls` and `test_of` edges in one transaction (B2/B4).
+    let (cross_file, dropped) = resolve_cross_file_calls(&symbol_index, &pending_calls);
+    let mut all_calls = same_file_calls;
+    all_calls.extend(cross_file.iter().copied());
+    // Repeated identical calls yield duplicate (src,dst) pairs; dedup so test_of
+    // derivation and the batch don't do redundant work (the DB also OR-IGNOREs).
+    all_calls.sort_unstable();
+    all_calls.dedup();
+    let test_of = derive_test_of_edges(&all_calls, &chunk_meta);
+    debug!(
+        calls = all_calls.len(),
+        cross_file = cross_file.len(),
+        test_of = test_of.len(),
+        dropped,
+        "cross-file call + test_of resolution complete"
+    );
+    if let Err(e) = insert_call_and_test_edges(store, &all_calls, &test_of).await {
+        warn!("Failed to batch-insert call/test edges: {}", e);
     }
 
     // R09 / R-GC-5: deleted-file reconciliation. Any relpath present in the
@@ -678,6 +1016,15 @@ pub async fn upsert_files(
         .await?;
     let commit_id = store.get_or_create_commit(repo_id, commit, None).await?;
 
+    // Python imports are resolved after all files are indexed (F-C post-pass).
+    let mut pending_py_imports: Vec<PendingPyImports> = Vec::new();
+
+    // F-B cross-file call resolution state (spec B2). On the upsert path the symbol
+    // index is built from the STORE after the loop (list_symbols_for_worktree), since
+    // the upsert batch holds only the changed files.
+    let mut same_file_calls: Vec<(i64, i64)> = Vec::new();
+    let mut pending_calls: Vec<PendingCall> = Vec::new();
+
     for path in paths {
         let abs = if path.is_absolute() {
             path.clone()
@@ -796,41 +1143,106 @@ pub async fn upsert_files(
                 });
             }
 
-            // Process Python imports and create edges
-            if language.unwrap() == "py" {
-                if let Err(e) =
-                    process_python_imports(store, repo_id, worktree_id, file_id, &chunks).await
-                {
-                    warn!(
-                        "Failed to process Python imports for {}: {}",
-                        relpath.display(),
-                        e
-                    );
+            let language = language.unwrap();
+            let relpath_str = relpath.to_string_lossy().to_string();
+
+            // Edge lifecycle (B5/B11): clear this file's edges (src OR dst) before
+            // reinserting its outgoing edges. On the upsert path this is what makes
+            // inbound A->B edges deliberately go stale when B is re-indexed alone —
+            // they regenerate on the next scan of A or a full rescan (documented v1).
+            // supports_call_extraction now includes py, which also produces the
+            // `imports` edges cleared here.
+            if edges::supports_call_extraction(language) {
+                if let Err(e) = store.delete_edges_for_file(file_id).await {
+                    warn!("Failed to clear stale edges for {}: {}", relpath.display(), e);
                 }
             }
 
-            // Extract edges for TypeScript/JavaScript
-            if matches!(language.unwrap(), "ts" | "tsx" | "js" | "jsx") {
-                match edges::extract_edges(&content, language.unwrap(), &chunks_with_ids) {
-                    Ok(edges_to_insert) if !edges_to_insert.is_empty() => {
-                        if let Err(e) = insert_edges(store, &edges_to_insert).await {
-                            warn!("Failed to insert edges for {}: {}", relpath.display(), e);
-                        } else {
-                            debug!(
-                                "Inserted {} edges for {}",
-                                edges_to_insert.len(),
-                                relpath.display()
-                            );
+            // Capture Python imports; resolved in a post-pass once every file is
+            // indexed (cross-file targets may be walked after the importer).
+            if language == "py" {
+                if let Some(pending) =
+                    collect_python_imports(&relpath, &chunks, &chunks_with_ids)
+                {
+                    pending_py_imports.push(pending);
+                }
+            }
+
+            // Extract call edges (spec A1: single shared language gate). Same-file
+            // edges accumulate; cross-file misses become pending refs resolved against
+            // the STORE symbol index after the loop (the upsert batch is partial, B2).
+            if edges::supports_call_extraction(language) {
+                match edges::extract_edges(&content, language, &chunks_with_ids) {
+                    Ok((same_file, unresolved)) => {
+                        for e in same_file {
+                            same_file_calls.push((e.src_chunk_id, e.dst_chunk_id));
                         }
-                    }
-                    Ok(_) => {
-                        debug!("No edges extracted for {}", relpath.display());
+                        for u in unresolved {
+                            pending_calls.push(PendingCall {
+                                src_chunk_id: u.src_chunk_id,
+                                src_relpath: relpath_str.clone(),
+                                src_lang: language,
+                                callee_name: u.callee_name,
+                            });
+                        }
                     }
                     Err(e) => {
                         warn!("Edge extraction failed for {}: {}", relpath.display(), e);
                     }
                 }
             }
+        }
+    }
+
+    // F-C post-pass: resolve captured python imports now that every target chunk
+    // exists. In the watch/upsert path most targets already live in the DB from a
+    // prior scan; deferring also handles a batch that adds importer + target together.
+    if let Err(e) = resolve_python_imports(store, repo_id, worktree_id, &pending_py_imports).await {
+        warn!("Failed to resolve Python imports: {}", e);
+    }
+
+    // F-B post-pass: build the worktree symbol index from the STORE (the upsert batch
+    // is partial) and resolve cross-file calls, then batch-insert (spec B2/B4).
+    if !pending_calls.is_empty() || !same_file_calls.is_empty() {
+        let mut symbol_index: HashMap<String, Vec<SymbolCandidate>> = HashMap::new();
+        let mut chunk_meta: HashMap<i64, (String, String)> = HashMap::new();
+        match store.list_symbols_for_worktree(worktree_id).await {
+            Ok(rows) => {
+                for (chunk_id, symbol_name, relpath, kind) in rows {
+                    if !edges::is_callable_kind(&kind) {
+                        continue;
+                    }
+                    let Some(lang) = detect_language_from_path(Path::new(&relpath)) else {
+                        continue;
+                    };
+                    chunk_meta.insert(chunk_id, (relpath.clone(), symbol_name.clone()));
+                    symbol_index
+                        .entry(symbol_name)
+                        .or_default()
+                        .push(SymbolCandidate {
+                            chunk_id,
+                            relpath,
+                            lang,
+                        });
+                }
+            }
+            Err(e) => warn!("Failed to load worktree symbols for cross-file resolution: {}", e),
+        }
+        let (cross_file, dropped) = resolve_cross_file_calls(&symbol_index, &pending_calls);
+        let mut all_calls = same_file_calls;
+        all_calls.extend(cross_file.iter().copied());
+        all_calls.sort_unstable();
+        all_calls.dedup();
+        let test_of = derive_test_of_edges(&all_calls, &chunk_meta);
+        debug!(
+            calls = all_calls.len(),
+            cross_file = cross_file.len(),
+            test_of = test_of.len(),
+            dropped,
+            "upsert cross-file call + test_of resolution complete"
+        );
+        if let Err(e) = insert_call_and_test_edges(store, &all_calls, &test_of).await {
+            warn!("Failed to batch-insert call/test edges: {}", e);
         }
     }
 
@@ -939,6 +1351,51 @@ mod tests {
     use crate::db::traits::StoreMigration;
     use std::io::Write;
     use tempfile::NamedTempFile;
+
+    /// F-C (spec §6 C2): module + relative_depth map to worktree-scoped candidate
+    /// relpaths that byte-match `FileRecord.relpath`.
+    #[test]
+    fn test_python_module_candidate_relpaths() {
+        let importing = Path::new("app/service.py");
+
+        // Absolute `from pkg.utils import x` -> pkg/utils.{py,__init__}.
+        assert_eq!(
+            python_module_candidate_relpaths(importing, "pkg.utils", None),
+            vec!["pkg/utils.py".to_string(), "pkg/utils/__init__.py".to_string()],
+        );
+
+        // Absolute single-component module.
+        assert_eq!(
+            python_module_candidate_relpaths(importing, "utils", None),
+            vec!["utils.py".to_string(), "utils/__init__.py".to_string()],
+        );
+
+        // `from . import ...` in app/service.py: one dot = app package.
+        assert_eq!(
+            python_module_candidate_relpaths(importing, "helpers", Some(1)),
+            vec!["app/helpers.py".to_string(), "app/helpers/__init__.py".to_string()],
+        );
+
+        // `from ..pkg import ...` in app/sub/mod.py: two dots climb to app.
+        assert_eq!(
+            python_module_candidate_relpaths(Path::new("app/sub/mod.py"), "pkg", Some(2)),
+            vec!["app/pkg.py".to_string(), "app/pkg/__init__.py".to_string()],
+        );
+
+        // `from . import submod` (no module component) is not symbol-resolvable.
+        assert!(python_module_candidate_relpaths(importing, "", Some(1)).is_empty());
+
+        // Over-deep relative import (climbs above the worktree root) -> no candidate,
+        // NOT a silent clamp to the root (review fix).
+        assert!(
+            python_module_candidate_relpaths(Path::new("app.py"), "pkg", Some(2)).is_empty(),
+            "`from ..pkg` in a root-level file must yield no candidate"
+        );
+        assert!(
+            python_module_candidate_relpaths(Path::new("a/b.py"), "pkg", Some(3)).is_empty(),
+            "`from ...pkg` in a depth-1 file must yield no candidate"
+        );
+    }
 
     /// Test that setup_head_watcher creates a working channel bridge from sync to async
     ///

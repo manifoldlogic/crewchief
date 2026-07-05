@@ -53,9 +53,14 @@ use std::collections::HashMap;
 /// assert!(find_enclosing_chunk(&chunks, 6).is_none());
 /// ```
 pub fn find_enclosing_chunk(chunks: &[ChunkWithId], line: i32) -> Option<&ChunkWithId> {
+    // INNERMOST wins (spec A3): chunkers emit overlapping container chunks
+    // (impl/mod/class) around method chunks; first-match attribution pinned
+    // every method-body call to the CONTAINER. Smallest containing span is
+    // the enclosing function/method.
     chunks
         .iter()
-        .find(|chunk| chunk.start_line <= line && line <= chunk.end_line)
+        .filter(|chunk| chunk.start_line <= line && line <= chunk.end_line)
+        .min_by_key(|chunk| chunk.end_line - chunk.start_line)
 }
 
 /// Build a symbol table mapping symbol names to chunk IDs.
@@ -141,6 +146,33 @@ mod tests {
         assert_eq!(find_enclosing_chunk(&chunks, 3).unwrap().id, 1);
         assert_eq!(find_enclosing_chunk(&chunks, 10).unwrap().id, 2);
         assert!(find_enclosing_chunk(&chunks, 6).is_none());
+    }
+
+    /// Spec A3: with an overlapping container (impl/class) chunk, the
+    /// INNERMOST chunk (the method) is the enclosing one.
+    #[test]
+    fn test_innermost_wins_over_container() {
+        let chunks = vec![
+            ChunkWithId {
+                id: 10,
+                symbol_name: Some("MyImpl".to_string()),
+                kind: "impl".to_string(),
+                start_line: 1,
+                end_line: 20,
+                file_id: 100,
+            },
+            ChunkWithId {
+                id: 11,
+                symbol_name: Some("method_a".to_string()),
+                kind: "method".to_string(),
+                start_line: 3,
+                end_line: 8,
+                file_id: 100,
+            },
+        ];
+        assert_eq!(find_enclosing_chunk(&chunks, 5).unwrap().id, 11);
+        // Outside the method but inside the container: container it is.
+        assert_eq!(find_enclosing_chunk(&chunks, 15).unwrap().id, 10);
     }
 
     #[test]

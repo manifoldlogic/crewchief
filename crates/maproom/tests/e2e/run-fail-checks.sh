@@ -260,6 +260,26 @@ elif [ "$idx" = "probe-skipped" ]; then say "W1-F84: sqlite3 CLI unavailable; in
 else fail "W1-F84" "idx=$idx"; fi
 rm -rf "$w"
 
+# ---------- Edge-depth (F-B): cross-file caller + test_of visible in context ----------
+# A two-file Rust repo: xf_caller (caller.rs) calls xf_helper (helper.rs); a
+# #[cfg(test)] test_xf_caller calls xf_caller. Validates that cross-file `calls`
+# edges and derived `test_of` edges surface through the real `context` CLI.
+ed_make() {
+  ( cd "$1" && git init -q -b main fx && cd fx \
+    && printf 'pub fn xf_helper() -> i32 { 1 }\n' > helper.rs \
+    && printf 'pub fn xf_caller() -> i32 { xf_helper() + 1 }\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n    #[test]\n    fn test_xf_caller() {\n        let x = xf_caller();\n        assert_eq!(x, 2);\n    }\n}\n' > caller.rs \
+    && git add helper.rs caller.rs && git -c user.email=t@t -c user.name=t commit -qm init )
+}
+w=$(mktemp -d); ed_make "$w"
+MAPROOM_DATABASE_URL="sqlite://$w/w.db" "$PWD/$BIN" scan --repo edx --path "$w/fx" >/dev/null 2>&1
+hid=$(printf "SELECT id FROM chunks WHERE symbol_name='xf_helper' LIMIT 1;\n" | sqlite3 "$w/w.db" 2>/dev/null || echo "")
+cid=$(printf "SELECT id FROM chunks WHERE symbol_name='xf_caller' LIMIT 1;\n" | sqlite3 "$w/w.db" 2>/dev/null || echo "")
+if [ -n "$hid" ] && MAPROOM_DATABASE_URL="sqlite://$w/w.db" "$BIN" context --chunk-id "$hid" --format agent 2>/dev/null | grep -q xf_caller
+then pass "ED-FB1(cross-file-caller)"; else fail "ED-FB1(cross-file-caller)" "xf_caller not visible in context for xf_helper (hid=$hid)"; fi
+if [ -n "$cid" ] && MAPROOM_DATABASE_URL="sqlite://$w/w.db" "$BIN" context --chunk-id "$cid" --format agent 2>/dev/null | grep -q test_xf_caller
+then pass "ED-FB2(tests-nonempty)"; else fail "ED-FB2(tests-nonempty)" "test_xf_caller not surfaced as a test for xf_caller (cid=$cid)"; fi
+rm -rf "$w"
+
 # ---------- PG-gated probes ----------
 if [ -n "${MAPROOM_TEST_PG_URL:-}" ]; then
   PGBIN=target/debug/maproom   # requires a --features postgres build for PG probes
@@ -290,6 +310,17 @@ if [ -n "${MAPROOM_TEST_PG_URL:-}" ]; then
   if MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" search --repo fxr --query alphaOne --format json --preview \
     | jq -e '.hits | length == 0' >/dev/null 2>&1
   then pass "R09(pg-stale-gone)"; else fail "R09(pg-stale-gone)" "replaced symbol still searchable on PG"; fi
+  rm -rf "$w"
+
+  # Edge-depth PG: cross-file caller surfaces in context on the Postgres backend.
+  # Reuse the already-migrated maproom_e2e_runner DB (Postgres does not auto-create
+  # databases on connect); a distinct repo name (edxpg) keeps it isolated.
+  w=$(mktemp -d); ed_make "$w"
+  MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" scan --repo edxpg --path "$w/fx" >/dev/null 2>&1
+  edpg_hid=$(MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" search --repo edxpg --query xf_helper --format json 2>/dev/null \
+    | jq -r '.hits[0].chunk_id // empty' 2>/dev/null || echo "")
+  if [ -n "$edpg_hid" ] && MAPROOM_DATABASE_URL="$PGDB" "$PGBIN" context --chunk-id "$edpg_hid" --format agent 2>/dev/null | grep -q xf_caller
+  then pass "ED-FB1(pg cross-file-caller)"; else fail "ED-FB1(pg cross-file-caller)" "xf_caller not visible in PG context for xf_helper (hid=$edpg_hid)"; fi
   rm -rf "$w"
   fi
 else

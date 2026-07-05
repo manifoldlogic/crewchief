@@ -1029,6 +1029,58 @@ impl StoreChunks for SqliteStore {
         .await
     }
 
+    async fn insert_chunk_edges_batch(&self, edges: &[(i64, i64, String)]) -> anyhow::Result<()> {
+        if edges.is_empty() {
+            return Ok(());
+        }
+        let edges = edges.to_vec();
+        self.write_with_retry(move |conn| {
+            // Spec B4: one transaction for the whole batch.
+            let tx = conn.transaction()?;
+            {
+                let mut stmt = tx.prepare(
+                    "INSERT OR IGNORE INTO chunk_edges(src_chunk_id, dst_chunk_id, type) \
+                     VALUES (?1, ?2, ?3)",
+                )?;
+                for (src, dst, edge_type) in &edges {
+                    stmt.execute(params![src, dst, edge_type])?;
+                }
+            }
+            tx.commit()?;
+            Ok(())
+        })
+        .await
+    }
+
+    async fn list_symbols_for_worktree(
+        &self,
+        worktree_id: i64,
+    ) -> anyhow::Result<Vec<(i64, String, String, String)>> {
+        self.run(move |conn| {
+            // Scope by worktree via the chunk_worktrees junction (content-addressed
+            // chunks are shared across worktrees). Named symbols only.
+            let mut stmt = conn.prepare(
+                "SELECT c.id, c.symbol_name, f.relpath, c.kind \
+                 FROM chunks c \
+                 JOIN chunk_worktrees cw ON cw.chunk_id = c.id \
+                 JOIN files f ON f.id = c.file_id \
+                 WHERE cw.worktree_id = ?1 AND c.symbol_name IS NOT NULL",
+            )?;
+            let rows: Result<Vec<_>, _> = stmt
+                .query_map(params![worktree_id], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                })?
+                .collect();
+            Ok(rows?)
+        })
+        .await
+    }
+
     async fn remove_worktree_from_chunks(
         &self,
         worktree_id: i64,

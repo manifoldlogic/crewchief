@@ -99,6 +99,19 @@ use `--no-callers` / `--no-callees` / `--no-tests` / `--no-imports` to
 suppress a segment, and `--max-depth N` (default 2) to control transitive
 traversal depth.
 
+**Edge coverage.** `calls` edges resolve **within and across files** for
+TypeScript/JavaScript, Rust, and Python; `test_of` edges are derived for test
+functions (so `--tests` is populated, not empty); Python `imports` are scoped to
+the actual target module. Two v1 behaviors to keep in mind:
+
+- **Ambiguity is never guessed.** A call resolves cross-file only when exactly one
+  same-language definition matches the name (or one shares the caller's directory);
+  otherwise no edge is emitted. Overloaded/duplicated names may therefore show
+  fewer caller/callee edges than exist — supplement with Grep for those.
+- **Inbound edges can be briefly stale after a single-file edit.** Re-indexing a
+  callee alone drops its inbound edges until the caller is re-indexed or a full
+  `scan` runs. A full scan is always internally consistent.
+
 Example output:
 
 ```text

@@ -10,10 +10,17 @@ use tracing::{debug, trace, warn};
 use tree_sitter::{Node, Parser};
 
 use super::common::{build_symbol_table, find_enclosing_chunk};
-use super::{ChunkWithId, Edge, EdgeType};
+use super::{ChunkWithId, Edge, EdgeType, UnresolvedRef};
 
-/// Extract call edges from Rust source
-pub fn extract_calls(source: &str, chunks: &[ChunkWithId]) -> Result<Vec<Edge>> {
+/// Extract call edges from Rust source.
+///
+/// Returns `(same_file_edges, unresolved_refs)` (spec B1): callees found among
+/// this file's callable chunks become edges immediately; callees not found locally
+/// are returned as unresolved references for the worktree cross-file post-pass.
+pub fn extract_calls(
+    source: &str,
+    chunks: &[ChunkWithId],
+) -> Result<(Vec<Edge>, Vec<UnresolvedRef>)> {
     // Parse source with tree-sitter
     let mut parser = Parser::new();
     let language = tree_sitter_rust::language();
@@ -25,21 +32,33 @@ pub fn extract_calls(source: &str, chunks: &[ChunkWithId]) -> Result<Vec<Edge>> 
         Some(t) => t,
         None => {
             warn!("Failed to parse Rust file for edge extraction");
-            return Ok(Vec::new());
+            return Ok((Vec::new(), Vec::new()));
         }
     };
 
-    // Build symbol table for same-file resolution
-    let symbol_table = build_symbol_table(chunks);
+    // Build symbol table for same-file resolution, restricted to CALLABLE
+    // kinds (spec A6): `use`/struct/module chunks share names with real
+    // functions and would otherwise become bogus call targets.
+    let callable: Vec<ChunkWithId> = chunks
+        .iter()
+        .filter(|c| super::is_callable_kind(&c.kind))
+        .cloned()
+        .collect();
+    let symbol_table = build_symbol_table(&callable);
 
     // Find all call expressions
     let mut edges = Vec::new();
+    let mut unresolved = Vec::new();
     let root = tree.root_node();
 
-    find_call_expressions(&root, source, chunks, &symbol_table, &mut edges);
+    find_call_expressions(&root, source, chunks, &symbol_table, &mut edges, &mut unresolved);
 
-    debug!("Extracted {} call edges from Rust file", edges.len());
-    Ok(edges)
+    debug!(
+        "Extracted {} same-file call edges, {} unresolved refs from Rust file",
+        edges.len(),
+        unresolved.len()
+    );
+    Ok((edges, unresolved))
 }
 
 /// Recursively find call expressions in AST
@@ -49,21 +68,19 @@ fn find_call_expressions(
     chunks: &[ChunkWithId],
     symbol_table: &HashMap<String, i64>,
     edges: &mut Vec<Edge>,
+    unresolved: &mut Vec<UnresolvedRef>,
 ) {
-    match node.kind() {
-        "call_expression" => {
-            process_call_expression(node, source, chunks, symbol_table, edges);
-        }
-        "method_call_expression" => {
-            process_method_call_expression(node, source, chunks, symbol_table, edges);
-        }
-        _ => {}
+    // NOTE: tree-sitter-rust has no separate method-call node kind —
+    // method calls arrive as call_expression with a field_expression callee
+    // and are handled by extract_function_identifier below.
+    if node.kind() == "call_expression" {
+        process_call_expression(node, source, chunks, symbol_table, edges, unresolved);
     }
 
     // Recursively traverse children
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        find_call_expressions(&child, source, chunks, symbol_table, edges);
+        find_call_expressions(&child, source, chunks, symbol_table, edges, unresolved);
     }
 }
 
@@ -74,6 +91,7 @@ fn process_call_expression(
     chunks: &[ChunkWithId],
     symbol_table: &HashMap<String, i64>,
     edges: &mut Vec<Edge>,
+    unresolved: &mut Vec<UnresolvedRef>,
 ) {
     // Extract function identifier
     let callee_name = match extract_function_identifier(node, source) {
@@ -87,41 +105,7 @@ fn process_call_expression(
         }
     };
 
-    resolve_and_create_edge(node, &callee_name, chunks, symbol_table, edges);
-}
-
-/// Process a method call expression (obj.method(), self.method())
-fn process_method_call_expression(
-    node: &Node,
-    source: &str,
-    chunks: &[ChunkWithId],
-    symbol_table: &HashMap<String, i64>,
-    edges: &mut Vec<Edge>,
-) {
-    // Extract method name from the method field
-    let method_node = match node.child_by_field_name("method") {
-        Some(n) => n,
-        None => {
-            trace!(
-                "Method call at line {} has no method field",
-                node.start_position().row + 1
-            );
-            return;
-        }
-    };
-
-    let method_name = match method_node.utf8_text(source.as_bytes()).ok() {
-        Some(name) => name.to_string(),
-        None => {
-            trace!(
-                "Could not extract method name at line {}",
-                node.start_position().row + 1
-            );
-            return;
-        }
-    };
-
-    resolve_and_create_edge(node, &method_name, chunks, symbol_table, edges);
+    resolve_and_create_edge(node, &callee_name, chunks, symbol_table, edges, unresolved);
 }
 
 /// Extract function identifier from call expression
@@ -173,27 +157,17 @@ fn extract_rightmost_identifier(node: &Node, source: &str) -> Option<String> {
     })
 }
 
-/// Resolve callee and create edge
+/// Resolve callee and create an edge, or record an unresolved cross-file reference.
 fn resolve_and_create_edge(
     node: &Node,
     callee_name: &str,
     chunks: &[ChunkWithId],
     symbol_table: &HashMap<String, i64>,
     edges: &mut Vec<Edge>,
+    unresolved: &mut Vec<UnresolvedRef>,
 ) {
-    // Resolve callee in symbol table
-    let callee_id = match symbol_table.get(callee_name) {
-        Some(&id) => id,
-        None => {
-            trace!(
-                "Unresolved call: {} (may be cross-crate or built-in)",
-                callee_name
-            );
-            return;
-        }
-    };
-
-    // Find caller chunk (chunk containing this call)
+    // Find caller chunk (chunk containing this call) FIRST — an unresolved ref must
+    // be attributed to its caller, so we need the enclosing chunk even on a miss.
     let call_line = node.start_position().row as i32 + 1; // tree-sitter is 0-indexed
     let caller_chunk = match find_enclosing_chunk(chunks, call_line) {
         Some(chunk) => chunk,
@@ -202,6 +176,28 @@ fn resolve_and_create_edge(
             return;
         }
     };
+
+    // Resolve callee in the same-file symbol table.
+    let callee_id = match symbol_table.get(callee_name) {
+        Some(&id) => id,
+        None => {
+            // Spec B1: not silently dropped — handed to the cross-file post-pass.
+            trace!(
+                "Unresolved local call: {} (cross-file candidate)",
+                callee_name
+            );
+            unresolved.push(UnresolvedRef {
+                src_chunk_id: caller_chunk.id,
+                callee_name: callee_name.to_string(),
+            });
+            return;
+        }
+    };
+
+    // Spec A6: no self-edges (recursion is not a relationship worth a row).
+    if caller_chunk.id == callee_id {
+        return;
+    }
 
     // Create edge
     edges.push(Edge {
@@ -222,6 +218,131 @@ fn resolve_and_create_edge(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Map REAL chunker output to ChunkWithId (sequential fake ids) — the
+    /// hand-built chunk lists in the older tests hide container overlap.
+    fn real_chunks(source: &str) -> Vec<ChunkWithId> {
+        crate::indexer::parser::extract_chunks(source, "rs")
+            .into_iter()
+            .enumerate()
+            .map(|(i, c)| ChunkWithId {
+                id: (i + 1) as i64,
+                symbol_name: c.symbol_name,
+                kind: c.kind,
+                start_line: c.start_line,
+                end_line: c.end_line,
+                file_id: 100,
+            })
+            .collect()
+    }
+
+    fn chunk_by_symbol<'a>(chunks: &'a [ChunkWithId], name: &str) -> &'a ChunkWithId {
+        chunks
+            .iter()
+            .find(|c| c.symbol_name.as_deref() == Some(name))
+            .unwrap_or_else(|| panic!("chunk {name} not found in {chunks:?}"))
+    }
+
+    /// Spec A3 acceptance: with REAL chunker output (impl container chunk
+    /// overlapping methods), a method-body call attributes to the METHOD.
+    #[test]
+    fn test_method_call_attributes_to_method_not_impl() {
+        let source = r#"
+pub struct Calculator;
+
+impl Calculator {
+    pub fn add(&self, a: i32, b: i32) -> i32 {
+        a + b
+    }
+
+    pub fn multiply(&self, a: i32, b: i32) -> i32 {
+        self.add(a, a) * b
+    }
+}
+"#;
+        let chunks = real_chunks(source);
+        // Sanity: the chunker must actually emit an overlapping container.
+        assert!(
+            chunks.iter().any(|c| c.kind == "impl" || c.kind == "struct"),
+            "fixture must exercise container overlap: {chunks:?}"
+        );
+        let (edges, _unresolved) = extract_calls(source, &chunks).unwrap();
+        let add = chunk_by_symbol(&chunks, "add");
+        let multiply = chunk_by_symbol(&chunks, "multiply");
+        let call = edges
+            .iter()
+            .find(|e| e.dst_chunk_id == add.id)
+            .expect("multiply -> add edge required");
+        assert_eq!(
+            call.src_chunk_id, multiply.id,
+            "src must be the METHOD chunk (innermost), not the impl container"
+        );
+    }
+
+    /// Spec A6: `use` statements sharing a callee's name must not become
+    /// call targets, and recursion produces no self-edge.
+    #[test]
+    fn test_callable_kind_filter_and_no_self_edge() {
+        let source = r#"
+use other::helper;
+
+pub fn helper() -> i32 {
+    helper_inner()
+}
+
+pub fn helper_inner() -> i32 {
+    helper_inner_recurse()
+}
+
+pub fn helper_inner_recurse() -> i32 {
+    helper_inner_recurse()
+}
+"#;
+        let chunks = real_chunks(source);
+        let (edges, _unresolved) = extract_calls(source, &chunks).unwrap();
+        for e in &edges {
+            let dst = chunks.iter().find(|c| c.id == e.dst_chunk_id).unwrap();
+            assert!(
+                super::super::is_callable_kind(&dst.kind),
+                "non-callable dst leaked: {dst:?}"
+            );
+            assert_ne!(e.src_chunk_id, e.dst_chunk_id, "self-edge leaked");
+        }
+    }
+
+    /// Spec A: cfg(test) fn calling the target is a plain calls edge with
+    /// the test fn as src (feeds F-B test_of derivation).
+    #[test]
+    fn test_cfg_test_module_call_extracted() {
+        let source = r#"
+pub fn alpha() -> i32 {
+    43
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_alpha() {
+        // call OUTSIDE a macro: assert_eq!(alpha(), ..) hides the call in a
+        // macro token-tree (documented out-of-scope for extraction)
+        let result = alpha();
+        assert_eq!(result, 43);
+    }
+}
+"#;
+        let chunks = real_chunks(source);
+        let (edges, _unresolved) = extract_calls(source, &chunks).unwrap();
+        let alpha = chunk_by_symbol(&chunks, "alpha");
+        let test_alpha = chunk_by_symbol(&chunks, "test_alpha");
+        assert!(
+            edges
+                .iter()
+                .any(|e| e.src_chunk_id == test_alpha.id && e.dst_chunk_id == alpha.id),
+            "test_alpha -> alpha calls edge required; got {edges:?} chunks {chunks:?}"
+        );
+    }
 
     #[test]
     fn test_extract_simple_call() {
@@ -252,7 +373,7 @@ mod tests {
             },
         ];
 
-        let edges = extract_calls(source, &chunks).unwrap();
+        let (edges, _unresolved) = extract_calls(source, &chunks).unwrap();
 
         assert_eq!(edges.len(), 1, "Should find one call edge");
         assert_eq!(edges[0].src_chunk_id, 2, "Caller should be bar");
@@ -291,7 +412,7 @@ mod tests {
             },
         ];
 
-        let edges = extract_calls(source, &chunks).unwrap();
+        let (edges, _unresolved) = extract_calls(source, &chunks).unwrap();
 
         // Should find multiply → add call
         assert!(edges.len() >= 1, "Should find at least one method call");
@@ -316,7 +437,7 @@ mod tests {
             file_id: 100,
         }];
 
-        let edges = extract_calls(source, &chunks).unwrap();
+        let (edges, _unresolved) = extract_calls(source, &chunks).unwrap();
 
         // println! should be skipped (macro, not a function call)
         // Note: macros use macro_invocation node, not call_expression
@@ -331,7 +452,9 @@ mod tests {
         let result = extract_calls(invalid_source, &chunks);
 
         assert!(result.is_ok(), "Should not fail on parse error");
-        assert_eq!(result.unwrap().len(), 0, "Should return empty vec");
+        let (edges, unresolved) = result.unwrap();
+        assert_eq!(edges.len(), 0, "Should return empty edges");
+        assert_eq!(unresolved.len(), 0, "Should return empty unresolved refs");
     }
 
     #[test]
@@ -373,7 +496,7 @@ mod tests {
             },
         ];
 
-        let edges = extract_calls(source, &chunks).unwrap();
+        let (edges, _unresolved) = extract_calls(source, &chunks).unwrap();
 
         assert_eq!(edges.len(), 2, "Should find two calls");
         assert!(edges.iter().any(|e| e.dst_chunk_id == 1), "Should call add");
@@ -413,7 +536,7 @@ mod tests {
             },
         ];
 
-        let edges = extract_calls(source, &chunks).unwrap();
+        let (edges, _unresolved) = extract_calls(source, &chunks).unwrap();
 
         // Should resolve utils::helper() to "helper" and find the call
         assert_eq!(edges.len(), 1, "Should find qualified call");

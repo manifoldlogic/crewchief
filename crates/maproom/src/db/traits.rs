@@ -260,6 +260,20 @@ pub trait StoreChunks: Send + Sync {
     /// the number of edges removed. Used before recomputing a file's edges.
     async fn delete_edges_for_file(&self, file_id: i64) -> anyhow::Result<u64>;
 
+    /// Insert many directed edges in ONE transaction (spec B4). The per-edge
+    /// `insert_chunk_edge` is the identified scan-latency hazard once cross-file
+    /// resolution multiplies edge counts; the resolution post-pass writes through
+    /// this instead. Idempotent (INSERT OR IGNORE / ON CONFLICT DO NOTHING).
+    async fn insert_chunk_edges_batch(&self, edges: &[(i64, i64, String)]) -> anyhow::Result<()>;
+
+    /// List every NAMED symbol in a worktree as `(chunk_id, symbol_name, relpath,
+    /// kind)` (spec B2). Used by the watch/upsert cross-file resolution post-pass,
+    /// which cannot build an in-memory symbol map from the partial upsert batch.
+    async fn list_symbols_for_worktree(
+        &self,
+        worktree_id: i64,
+    ) -> anyhow::Result<Vec<(i64, String, String, String)>>;
+
     /// Remove a worktree's association with the chunks of one file (by relpath),
     /// then GC any chunk left referenced by no worktree. Returns the number of
     /// `chunk_worktrees` rows removed. Used by incremental file-deletion handling.
