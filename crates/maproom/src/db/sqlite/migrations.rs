@@ -454,6 +454,22 @@ CREATE INDEX IF NOT EXISTS idx_chunk_edges_dst ON chunk_edges(dst_chunk_id, type
 DROP INDEX IF EXISTS idx_chunk_edges_dst;
                 "#,
             },
+            Migration {
+                version: 13,
+                name: "add_store_settings",
+                up: r#"
+-- F48: per-database settings. Holds the sticky don't-store-content minimization
+-- marker (key 'minimize_content') so scan/incremental/import all honor it and a
+-- later normal-mode scan cannot silently re-add content.
+CREATE TABLE IF NOT EXISTS store_settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+                "#,
+                down: r#"
+DROP TABLE IF EXISTS store_settings;
+                "#,
+            },
         ]
     }
 }
@@ -516,8 +532,8 @@ mod tests {
         // Apply migrations
         runner.migrate().unwrap();
 
-        // Should now be at latest version (12)
-        assert_eq!(runner.current_version().unwrap(), 12);
+        // Should now be at latest version (13)
+        assert_eq!(runner.current_version().unwrap(), 13);
         assert!(!runner.needs_migration().unwrap());
 
         // Verify core tables exist (excluding virtual tables and dropped
@@ -614,7 +630,7 @@ mod tests {
 
         // Version should be the same
         assert_eq!(version_after_first, version_after_second);
-        assert_eq!(version_after_second, 12);
+        assert_eq!(version_after_second, 13);
 
         // Check each migration was only recorded once
         let migration_count: i32 = conn
@@ -622,7 +638,7 @@ mod tests {
                 row.get(0)
             })
             .unwrap();
-        assert_eq!(migration_count, 12, "Expected 12 migrations to be recorded");
+        assert_eq!(migration_count, 13, "Expected 13 migrations to be recorded");
     }
 
     #[test]

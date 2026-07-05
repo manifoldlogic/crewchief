@@ -849,6 +849,22 @@ enum DbCommand {
         #[arg(long, help = "Destination postgres:// database URL")]
         to: String,
     },
+
+    /// Enable don't-store-content minimization on the configured database (F48).
+    ///
+    /// Persists a sticky, one-way marker so all future scans/imports store only
+    /// hashes, embeddings, line ranges, and minimal metadata (symbol_name/kind) —
+    /// never raw code content. Any content already at rest is purged. On SQLite this
+    /// disables full-text search (vector-only); on Postgres keyword search is retained
+    /// via the derived tsvector. Reverse only by re-scanning with content.
+    ///
+    /// Examples:
+    ///   maproom db minimize --confirm
+    Minimize {
+        /// Confirm enabling minimization (purges any content already at rest)
+        #[arg(long, help = "Confirm (this purges existing content and is one-way)")]
+        confirm: bool,
+    },
 }
 
 /// Auto-generate embeddings for chunks with NULL embeddings.
@@ -1312,6 +1328,26 @@ async fn real_main() -> anyhow::Result<()> {
                     anyhow::bail!(
                         "db import requires a maproom build with --features postgres \
                          (the Postgres backend it targets is not compiled into the default binary)"
+                    );
+                }
+            }
+            DbCommand::Minimize { confirm } => {
+                if !confirm {
+                    println!(
+                        "Minimization is STICKY and one-way: it purges raw content already at rest \
+                         (blob hashes, embeddings, line ranges, and symbol names are kept)."
+                    );
+                    println!(
+                        "On SQLite it disables full-text search (vector-only); Postgres keeps \
+                         keyword search via the derived tsvector."
+                    );
+                    println!("Re-run with --confirm to enable it.");
+                } else {
+                    let store = db::connect().await?;
+                    store.set_content_minimized().await?;
+                    println!(
+                        "✅ Don't-store-content minimization enabled (sticky). Future scans and \
+                         imports store no raw content."
                     );
                 }
             }

@@ -41,6 +41,10 @@ pub struct PostgresStore {
     /// (default + `MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH` override) at connect
     /// (spec S3.2). Tunable without an index rebuild.
     pub(crate) ef_search: u32,
+    /// F48: cached don't-store-content minimization marker (read at connect). When
+    /// true, chunk inserts persist no raw content (FTS is retained via the derived
+    /// tsvector, which is not raw-content-backed on Postgres).
+    pub(crate) minimized: Arc<AtomicBool>,
 }
 
 impl PostgresStore {
@@ -91,10 +95,17 @@ impl PostgresStore {
     pub async fn from_pool(pool: PgPool) -> anyhow::Result<Self> {
         migrations::run(pool.clone()).await?;
         let vec_available = probe_vector_extension(&pool).await?;
+        // F48: load the sticky minimization marker (store_settings created by 0005).
+        let minimized: Option<String> =
+            sqlx::query_scalar("SELECT value FROM store_settings WHERE key = 'minimize_content'")
+                .fetch_optional(&pool)
+                .await
+                .unwrap_or(None);
         Ok(Self {
             pool,
             vec_available: Arc::new(AtomicBool::new(vec_available)),
             ef_search: crate::config::IndexConfig::resolved_hnsw_ef_search(),
+            minimized: Arc::new(AtomicBool::new(minimized.as_deref() == Some("true"))),
         })
     }
 
@@ -108,6 +119,7 @@ impl PostgresStore {
             pool,
             vec_available: Arc::new(AtomicBool::new(vec_available)),
             ef_search: crate::config::IndexConfig::resolved_hnsw_ef_search(),
+            minimized: Arc::new(AtomicBool::new(false)),
         }
     }
 

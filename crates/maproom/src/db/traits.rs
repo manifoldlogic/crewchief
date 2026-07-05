@@ -57,6 +57,18 @@ pub trait StoreCore: Send + Sync {
     /// ```
     fn has_vector_extension(&self) -> bool;
 
+    /// F48: whether this database is in don't-store-content minimization mode
+    /// (cached at connect). When true, chunk inserts persist NO raw content
+    /// (preview/docstring/signature/FTS source) — only hashes, embeddings, line
+    /// ranges, and minimal metadata (symbol_name/kind). Postgres retains keyword
+    /// search via the derived tsvector; SQLite is vector-only under minimization.
+    fn is_content_minimized(&self) -> bool;
+
+    /// F48: enable minimization (sticky/one-way). Persists the marker and updates the
+    /// cached flag so subsequent writes suppress content. Existing content is NOT
+    /// retroactively removed; a full re-scan under minimization replaces it.
+    async fn set_content_minimized(&self) -> anyhow::Result<()>;
+
     /// Get or create a repository by name and root path. Returns repo ID.
     ///
     /// If a repository with the given name already exists, its ID is returned

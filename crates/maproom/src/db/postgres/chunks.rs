@@ -35,16 +35,24 @@ fn bind_chunk<'q>(
     q: sqlx::query::QueryScalar<'q, sqlx::Postgres, i64, sqlx::postgres::PgArguments>,
     chunk: &'q ChunkRecord,
     metadata: Option<String>,
+    minimized: bool,
 ) -> sqlx::query::QueryScalar<'q, sqlx::Postgres, i64, sqlx::postgres::PgArguments> {
+    // F48: under minimization persist NO raw content — preview/signature/docstring
+    // NULL — but KEEP `ts_doc_text` feeding `to_tsvector` so keyword search survives
+    // (the stored `ts_doc` tsvector is derived, not raw-content-backed). symbol_name/
+    // kind/metadata and the blob_sha pool key are retained.
+    let signature = if minimized { None } else { chunk.signature.as_deref() };
+    let docstring = if minimized { None } else { chunk.docstring.as_deref() };
+    let preview: Option<&str> = if minimized { None } else { Some(chunk.preview.as_str()) };
     q.bind(chunk.file_id)
         .bind(&chunk.blob_sha)
         .bind(chunk.symbol_name.as_deref())
         .bind(&chunk.kind)
-        .bind(chunk.signature.as_deref())
-        .bind(chunk.docstring.as_deref())
+        .bind(signature)
+        .bind(docstring)
         .bind(chunk.start_line)
         .bind(chunk.end_line)
-        .bind(&chunk.preview)
+        .bind(preview)
         .bind(&chunk.ts_doc_text)
         .bind(chunk.recency_score)
         .bind(chunk.churn_score)
@@ -70,7 +78,8 @@ impl PostgresStore {
 impl StoreChunks for PostgresStore {
     async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64> {
         let metadata = chunk.metadata.as_ref().map(|v| v.to_string());
-        let id: i64 = bind_chunk(sqlx::query_scalar(INSERT_CHUNK_CTE), chunk, metadata)
+        let minimized = self.minimized.load(std::sync::atomic::Ordering::Relaxed);
+        let id: i64 = bind_chunk(sqlx::query_scalar(INSERT_CHUNK_CTE), chunk, metadata, minimized)
             .fetch_one(&self.pool)
             .await?;
         Ok(id)
@@ -84,9 +93,10 @@ impl StoreChunks for PostgresStore {
         // every chunk (no partially-indexed file), matching the SQLite backend.
         let mut tx = self.pool.begin().await?;
         let mut ids = Vec::with_capacity(chunks.len());
+        let minimized = self.minimized.load(std::sync::atomic::Ordering::Relaxed);
         for chunk in chunks {
             let metadata = chunk.metadata.as_ref().map(|v| v.to_string());
-            let id: i64 = bind_chunk(sqlx::query_scalar(INSERT_CHUNK_CTE), chunk, metadata)
+            let id: i64 = bind_chunk(sqlx::query_scalar(INSERT_CHUNK_CTE), chunk, metadata, minimized)
                 .fetch_one(&mut *tx)
                 .await?;
             ids.push(id);
