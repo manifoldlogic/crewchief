@@ -386,13 +386,16 @@ impl StoreCore for SqliteStore {
                 [],
             )?;
             // Sticky one-shot: purge any content already at rest — clear the external
-            // -content FTS index and blank the content columns. Vector-only from here.
+            // -content FTS index, blank ALL content columns (incl. metadata, which can
+            // carry raw initializer text), and drop the context cache (its bundle_json
+            // embeds raw code read from disk). Vector-only from here.
             tx.execute("INSERT INTO fts_chunks(fts_chunks) VALUES('delete-all')", [])?;
             tx.execute(
                 "UPDATE chunks SET preview = '', signature = NULL, docstring = NULL, \
-                 ts_doc_text = NULL",
+                 ts_doc_text = NULL, metadata = NULL",
                 [],
             )?;
+            tx.execute("DELETE FROM context_cache", [])?;
             tx.commit()?;
             Ok(())
         })
@@ -920,7 +923,13 @@ impl StoreChunks for SqliteStore {
             let tx = conn.transaction()?;
 
             // For JSON fields, we need to serialize to string if rusqlite doesn't support JSON directly
-            let metadata_json = chunk.metadata.as_ref().map(|v| v.to_string());
+            // F48: metadata can carry raw source fragments (parsers store const/field
+            // initializer text there) — suppress it under minimization.
+            let metadata_json = if minimized {
+                None
+            } else {
+                chunk.metadata.as_ref().map(|v| v.to_string())
+            };
 
             // F48: under minimization persist NO raw content — preview blanked (NOT
             // NULL), signature/docstring/ts_doc_text NULL, and the FTS write skipped
@@ -1030,7 +1039,13 @@ impl StoreChunks for SqliteStore {
                 )?;
 
                 for chunk in &chunks {
-                    let metadata_json = chunk.metadata.as_ref().map(|v| v.to_string());
+                    // F48: metadata can carry raw source fragments (parsers store const/field
+            // initializer text there) — suppress it under minimization.
+            let metadata_json = if minimized {
+                None
+            } else {
+                chunk.metadata.as_ref().map(|v| v.to_string())
+            };
 
                     // F48: suppress content under minimization (see insert_chunk).
                     let eff_preview: &str =
@@ -4287,7 +4302,7 @@ mod tests {
             ts_doc_text: "f secret".into(),
             recency_score: 1.0,
             churn_score: 0.0,
-            metadata: None,
+            metadata: Some(serde_json::json!({ "init": "topsecret" })),
             worktree_id: wt,
         };
 
@@ -4302,21 +4317,28 @@ mod tests {
         // Insert a NEW chunk under minimization.
         let c2 = store.insert_chunk(&mk("B2", 3, 4)).await.unwrap();
 
-        // Pre-existing chunk c1: content purged (preview blanked, rest NULL).
-        let (p1, sig1, doc1, ts1): (String, Option<String>, Option<String>, Option<String>) = store
+        // Pre-existing chunk c1: content purged (preview blanked, rest incl. metadata NULL).
+        let (p1, sig1, doc1, ts1, meta1): (
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        ) = store
             .run(move |conn| {
                 Ok(conn.query_row(
-                    "SELECT preview, signature, docstring, ts_doc_text FROM chunks WHERE id = ?1",
+                    "SELECT preview, signature, docstring, ts_doc_text, metadata \
+                     FROM chunks WHERE id = ?1",
                     rusqlite::params![c1],
-                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
                 )?)
             })
             .await
             .unwrap();
         assert_eq!(p1, "", "purged preview is blank");
         assert!(
-            sig1.is_none() && doc1.is_none() && ts1.is_none(),
-            "purged signature/docstring/ts_doc_text are NULL"
+            sig1.is_none() && doc1.is_none() && ts1.is_none() && meta1.is_none(),
+            "purged signature/docstring/ts_doc_text/metadata are NULL"
         );
 
         // New chunk c2: no content stored, but symbol_name + blob_sha retained.

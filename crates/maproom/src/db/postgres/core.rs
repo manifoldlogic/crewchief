@@ -42,11 +42,16 @@ impl StoreCore for PostgresStore {
         )
         .execute(&mut *tx)
         .await?;
-        // Sticky one-shot: purge raw content already at rest. Keep `ts_doc` (the
-        // derived tsvector, not raw-content-backed) so keyword search survives.
-        sqlx::query("UPDATE chunks SET preview = NULL, signature = NULL, docstring = NULL")
-            .execute(&mut *tx)
-            .await?;
+        // Sticky one-shot: purge raw content already at rest — preview/signature/
+        // docstring/metadata NULL — and REBUILD `ts_doc` from symbol_name only, since a
+        // 'simple' tsvector of the raw preview is a recoverable copy of the source.
+        // Symbol-name keyword search survives; no content remains.
+        sqlx::query(
+            "UPDATE chunks SET preview = NULL, signature = NULL, docstring = NULL, \
+             metadata = NULL, ts_doc = to_tsvector('simple', COALESCE(symbol_name, ''))",
+        )
+        .execute(&mut *tx)
+        .await?;
         tx.commit().await?;
         self.minimized.store(true, std::sync::atomic::Ordering::Relaxed);
         Ok(())

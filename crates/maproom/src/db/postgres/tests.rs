@@ -1509,7 +1509,7 @@ async fn minimize_content_live() {
         ts_doc_text: "alpha secret".to_string(),
         recency_score: 1.0,
         churn_score: 0.0,
-        metadata: None,
+        metadata: Some(serde_json::json!({ "init": "topsecret" })),
         worktree_id: wt,
     };
 
@@ -1519,36 +1519,43 @@ async fn minimize_content_live() {
     assert!(store.is_content_minimized());
     let c2 = store.insert_chunk(&mk("MB2", 3, 4)).await.unwrap();
 
-    // Both chunks: NO raw content, but the tsvector is retained + symbol_name kept.
+    // Both chunks: NO raw content (preview/signature/docstring/metadata all NULL), but
+    // symbol_name kept and the tsvector rebuilt FROM symbol_name only.
     for id in [c1, c2] {
-        let (preview, sig, doc, has_tsv, sym): (
+        let (preview, sig, doc, meta_null, has_tsv, sym): (
             Option<String>,
             Option<String>,
             Option<String>,
             bool,
+            bool,
             Option<String>,
         ) = sqlx::query_as(
-            "SELECT preview, signature, docstring, ts_doc IS NOT NULL, symbol_name \
-             FROM chunks WHERE id = $1",
+            "SELECT preview, signature, docstring, metadata IS NULL, ts_doc IS NOT NULL, \
+             symbol_name FROM chunks WHERE id = $1",
         )
         .bind(id)
         .fetch_one(&store.pool)
         .await
         .unwrap();
         assert!(
-            preview.is_none() && sig.is_none() && doc.is_none(),
-            "chunk {id} must have no raw content"
+            preview.is_none() && sig.is_none() && doc.is_none() && meta_null,
+            "chunk {id} must have no raw content (incl. metadata)"
         );
-        assert!(has_tsv, "chunk {id} keeps its derived tsvector (PG retains FTS)");
+        assert!(has_tsv, "chunk {id} keeps a symbol-name tsvector");
         assert_eq!(sym.as_deref(), Some("alpha"), "symbol_name retained");
     }
 
-    // Keyword search still works on the minimized index (via the tsvector).
-    let (hits, _) = store
+    // Raw content ("secret") is NOT searchable; the kept symbol_name ("alpha") IS.
+    let (secret_hits, _) = store
         .search_chunks_fts("acme/min", Some("main"), "secret", 10, false, None, None)
         .await
         .unwrap();
-    assert!(!hits.is_empty(), "FTS works on minimized Postgres via tsvector");
+    assert!(secret_hits.is_empty(), "raw content is not searchable under minimization");
+    let (name_hits, _) = store
+        .search_chunks_fts("acme/min", Some("main"), "alpha", 10, false, None, None)
+        .await
+        .unwrap();
+    assert!(!name_hits.is_empty(), "symbol-name keyword search works on minimized Postgres");
 
     // Marker is sticky.
     let marker: Option<String> =

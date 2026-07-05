@@ -22,6 +22,7 @@ use base64ct::{Base64, Encoding};
 use serde::{Deserialize, Serialize};
 
 use crate::db::sqlite::SqliteStore;
+use crate::db::traits::StoreCore;
 
 /// The Postgres importer (`db import`). Gated: using the Postgres backend already
 /// requires this build, so import being postgres-only is no new burden (§S5.2).
@@ -208,6 +209,8 @@ pub async fn export_sqlite<W: Write + Send + 'static>(
     mut w: W,
 ) -> Result<(W, TransferStats)> {
     let maproom_version = env!("CARGO_PKG_VERSION").to_string();
+    // Carry the source's minimization state so import can keep the destination sticky.
+    let minimized = store.is_content_minimized();
     store
         .run(move |conn| {
             let mut s = TransferStats::default();
@@ -218,7 +221,7 @@ pub async fn export_sqlite<W: Write + Send + 'static>(
                     format_version: FORMAT_VERSION,
                     source_backend: "sqlite".to_string(),
                     maproom_version,
-                    minimized: false,
+                    minimized,
                 }),
             )?;
 

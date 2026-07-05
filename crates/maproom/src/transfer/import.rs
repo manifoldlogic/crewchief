@@ -84,6 +84,12 @@ pub async fn import_postgres<R: BufRead>(
                 }
                 report.source_minimized = h.minimized;
                 header_seen = true;
+                // If the source was minimized, make the destination sticky-minimized
+                // too (and suppress content on every insert below via the cached flag),
+                // so the policy carries across the migration.
+                if h.minimized {
+                    store.set_content_minimized().await?;
+                }
             }
             Record::Repo(r) => {
                 let dest = store.get_or_create_repo(&r.name, &r.root_path).await?;
@@ -162,12 +168,17 @@ pub async fn import_postgres<R: BufRead>(
                 report.stats.chunks += 1;
             }
             Record::Embedding(e) => {
-                if !SUPPORTED_DIMS.contains(&e.embedding_dim) {
-                    report.skipped_bad_dim += 1;
-                    continue;
-                }
-                let embedding = decode_embedding(&e.embedding_b64)
-                    .with_context(|| format!("decode embedding for blob {}", e.blob_sha))?;
+                // Skip-with-report keys off the DECODED length (the byte payload is the
+                // source of truth), not the stated `embedding_dim` — a mismatch, a
+                // non-multiple-of-4 payload, or an off-registry dim must skip, never
+                // abort the whole migration (upsert would `bail!` on a bad length).
+                let embedding = match decode_embedding(&e.embedding_b64) {
+                    Ok(v) if SUPPORTED_DIMS.contains(&(v.len() as i64)) => v,
+                    _ => {
+                        report.skipped_bad_dim += 1;
+                        continue;
+                    }
+                };
                 embed_buf.push(EmbeddingRecord {
                     blob_sha: e.blob_sha,
                     embedding,
@@ -213,9 +224,11 @@ pub async fn import_postgres<R: BufRead>(
                     .get(&is.worktree_id)
                     .context("index_state references unknown worktree")?;
                 sqlx::query(
+                    // SQLite datetimes are naive UTC; interpret them as UTC (not the
+                    // PG session TimeZone) so migrated timestamps stay consistent.
                     "INSERT INTO index_state \
                      (worktree_id, tree_sha, chunks_processed, embeddings_generated, last_indexed) \
-                     VALUES ($1, $2, $3, $4, $5::timestamptz) \
+                     VALUES ($1, $2, $3, $4, ($5::timestamp AT TIME ZONE 'UTC')) \
                      ON CONFLICT (worktree_id) DO UPDATE SET \
                          tree_sha = EXCLUDED.tree_sha, \
                          chunks_processed = EXCLUDED.chunks_processed, \
@@ -236,7 +249,8 @@ pub async fn import_postgres<R: BufRead>(
                     "INSERT INTO encoding_runs \
                      (started_at, finished_at, status, total_chunks, chunks_completed, \
                       chunks_per_second, last_batch_at, provider, dimension) \
-                     VALUES ($1::timestamptz, $2::timestamptz, $3, $4, $5, $6, $7::timestamptz, $8, $9)",
+                     VALUES (($1::timestamp AT TIME ZONE 'UTC'), ($2::timestamp AT TIME ZONE 'UTC'), \
+                      $3, $4, $5, $6, ($7::timestamp AT TIME ZONE 'UTC'), $8, $9)",
                 )
                 .bind(&er.started_at)
                 .bind(er.finished_at.as_deref())

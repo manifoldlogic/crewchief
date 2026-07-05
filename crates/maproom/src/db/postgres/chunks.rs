@@ -37,13 +37,21 @@ fn bind_chunk<'q>(
     metadata: Option<String>,
     minimized: bool,
 ) -> sqlx::query::QueryScalar<'q, sqlx::Postgres, i64, sqlx::postgres::PgArguments> {
-    // F48: under minimization persist NO raw content — preview/signature/docstring
-    // NULL — but KEEP `ts_doc_text` feeding `to_tsvector` so keyword search survives
-    // (the stored `ts_doc` tsvector is derived, not raw-content-backed). symbol_name/
-    // kind/metadata and the blob_sha pool key are retained.
+    // F48: under minimization persist NO raw content. preview/signature/docstring are
+    // NULLed; `metadata` (parsers store raw initializer text there) is dropped; and the
+    // `ts_doc` tsvector is built from `symbol_name` ONLY — a kept identifier — NOT the
+    // raw preview-derived `ts_doc_text`, whose 'simple' tsvector is a recoverable copy
+    // of the source. So minimized Postgres keeps SYMBOL-NAME keyword search with no
+    // content at rest. blob_sha/kind/line-ranges/symbol_name/embeddings are retained.
     let signature = if minimized { None } else { chunk.signature.as_deref() };
     let docstring = if minimized { None } else { chunk.docstring.as_deref() };
     let preview: Option<&str> = if minimized { None } else { Some(chunk.preview.as_str()) };
+    let ts_source: &str = if minimized {
+        chunk.symbol_name.as_deref().unwrap_or("")
+    } else {
+        chunk.ts_doc_text.as_str()
+    };
+    let metadata = if minimized { None } else { metadata };
     q.bind(chunk.file_id)
         .bind(&chunk.blob_sha)
         .bind(chunk.symbol_name.as_deref())
@@ -53,7 +61,7 @@ fn bind_chunk<'q>(
         .bind(chunk.start_line)
         .bind(chunk.end_line)
         .bind(preview)
-        .bind(&chunk.ts_doc_text)
+        .bind(ts_source)
         .bind(chunk.recency_score)
         .bind(chunk.churn_score)
         .bind(metadata)
@@ -223,7 +231,7 @@ impl StoreChunks for PostgresStore {
             docstring: r.get("docstring"),
             start_line: r.get("start_line"),
             end_line: r.get("end_line"),
-            preview: r.get("preview"),
+            preview: r.get::<Option<String>, _>("preview").unwrap_or_default(),
             file_path: r.get("file_path"),
         }))
     }
@@ -252,7 +260,7 @@ impl StoreChunks for PostgresStore {
                 docstring: r.get("docstring"),
                 start_line: r.get("start_line"),
                 end_line: r.get("end_line"),
-                preview: r.get("preview"),
+                preview: r.get::<Option<String>, _>("preview").unwrap_or_default(),
                 file_path: r.get("file_path"),
             })
             .collect())
