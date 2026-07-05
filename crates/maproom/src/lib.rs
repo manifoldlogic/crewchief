@@ -24,4 +24,5 @@ pub mod profiling;
 pub mod progress;
 pub mod search;
 pub mod status;
+pub mod transfer;
 pub mod upsert;

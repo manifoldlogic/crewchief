@@ -42,6 +42,11 @@ const MIGRATIONS: &[(i32, &str, &str)] = &[
         "vector_ann",
         include_str!("../../../migrations_pg/0004_vector_ann.sql"),
     ),
+    (
+        5,
+        "store_settings",
+        include_str!("../../../migrations_pg/0005_store_settings.sql"),
+    ),
 ];
 
 /// Session-level advisory-lock key serializing concurrent migration runs across

@@ -41,7 +41,7 @@ use maproom::cli::format::{
 };
 use maproom::context::{AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions};
 use maproom::progress::{OutputMode, ProgressTracker};
-use maproom::{daemon, db, indexer};
+use maproom::{daemon, db, indexer, transfer};
 
 /// Exit code for runtime errors (transient, may retry).
 /// Documented in: docs/cli-help-after.md, CLAUDE.md
@@ -815,6 +815,56 @@ enum DbCommand {
         #[arg(long, short, help = "Show detailed information")]
         verbose: bool,
     },
+
+    /// Export a SQLite index to a portable artifact for backend migration (F47).
+    ///
+    /// Reads the configured SQLite database and writes a versioned NDJSON dump that
+    /// `maproom db import` loads into a Postgres backend WITHOUT re-indexing or
+    /// re-embedding (the content-addressed embedding pool moves verbatim). Runs from
+    /// the shipped SQLite-only binary.
+    ///
+    /// Examples:
+    ///   maproom db export --out index.mrx
+    Export {
+        /// Output artifact file path
+        #[arg(long, help = "Output artifact file path")]
+        out: PathBuf,
+    },
+
+    /// Import a maproom export artifact into a Postgres backend (F47).
+    ///
+    /// Loads a `db export` artifact into the Postgres database at --to, remapping
+    /// ids by natural key and merging the content-addressed embedding pool WITHOUT
+    /// re-embedding. Requires a `--features postgres` build (the Postgres backend it
+    /// targets is not compiled into the default binary).
+    ///
+    /// Examples:
+    ///   maproom db import --in index.mrx --to postgres://user@host/maproom
+    Import {
+        /// Input artifact file path (from `db export`)
+        #[arg(long = "in", help = "Input artifact file path")]
+        in_file: PathBuf,
+
+        /// Destination Postgres database URL
+        #[arg(long, help = "Destination postgres:// database URL")]
+        to: String,
+    },
+
+    /// Enable don't-store-content minimization on the configured database (F48).
+    ///
+    /// Persists a sticky, one-way marker so all future scans/imports store only
+    /// hashes, embeddings, line ranges, and minimal metadata (symbol_name/kind) —
+    /// never raw code content. Any content already at rest is purged. On SQLite this
+    /// disables full-text search (vector-only); on Postgres keyword search is retained
+    /// via the derived tsvector. Reverse only by re-scanning with content.
+    ///
+    /// Examples:
+    ///   maproom db minimize --confirm
+    Minimize {
+        /// Confirm enabling minimization (purges any content already at rest)
+        #[arg(long, help = "Confirm (this purges existing content and is one-way)")]
+        confirm: bool,
+    },
 }
 
 /// Auto-generate embeddings for chunks with NULL embeddings.
@@ -1215,6 +1265,91 @@ async fn real_main() -> anyhow::Result<()> {
                     );
                 }
                 println!("✅ {backend} database is up to date");
+            }
+            DbCommand::Export { out } => {
+                // Export runs against the SQLite source (connect_sqlite errors if the
+                // configured URL is Postgres). The file-artifact transport lets this
+                // run from the shipped SQLite-only binary; `db import` is postgres-gated.
+                let store = db::connect_sqlite().await?;
+                let file = std::fs::File::create(&out)
+                    .with_context(|| format!("create export artifact {}", out.display()))?;
+                let (mut w, stats) =
+                    transfer::export_sqlite(&store, std::io::BufWriter::new(file)).await?;
+                w.flush().context("flush export artifact")?;
+                println!("✅ Exported to {}", out.display());
+                println!(
+                    "   {} repos, {} worktrees, {} commits, {} files, {} chunks",
+                    stats.repos, stats.worktrees, stats.commits, stats.files, stats.chunks
+                );
+                println!(
+                    "   {} embeddings, {} chunk-worktrees, {} edges, {} index-state, {} encoding-runs",
+                    stats.embeddings,
+                    stats.chunk_worktrees,
+                    stats.chunk_edges,
+                    stats.index_state,
+                    stats.encoding_runs
+                );
+            }
+            DbCommand::Import { in_file, to } => {
+                #[cfg(feature = "postgres")]
+                {
+                    if !matches!(
+                        db::connection::backend_for_url(&to),
+                        db::connection::Backend::Postgres
+                    ) {
+                        anyhow::bail!("db import --to must be a postgres:// URL, got: {to}");
+                    }
+                    let store = db::PostgresStore::connect(&to).await?;
+                    let file = std::fs::File::open(&in_file)
+                        .with_context(|| format!("open import artifact {}", in_file.display()))?;
+                    let report =
+                        transfer::import::import_postgres(&store, std::io::BufReader::new(file))
+                            .await?;
+                    let s = &report.stats;
+                    println!("✅ Imported into {to}");
+                    println!(
+                        "   {} repos, {} worktrees, {} commits, {} files, {} chunks",
+                        s.repos, s.worktrees, s.commits, s.files, s.chunks
+                    );
+                    println!(
+                        "   {} embeddings, {} chunk-worktrees, {} edges, {} index-state, {} encoding-runs",
+                        s.embeddings, s.chunk_worktrees, s.chunk_edges, s.index_state, s.encoding_runs
+                    );
+                    if report.skipped_bad_dim > 0 {
+                        println!(
+                            "   [warn] skipped {} embeddings with an unsupported dimension (not 768/1024/1536)",
+                            report.skipped_bad_dim
+                        );
+                    }
+                }
+                #[cfg(not(feature = "postgres"))]
+                {
+                    let _ = (in_file, to);
+                    anyhow::bail!(
+                        "db import requires a maproom build with --features postgres \
+                         (the Postgres backend it targets is not compiled into the default binary)"
+                    );
+                }
+            }
+            DbCommand::Minimize { confirm } => {
+                if !confirm {
+                    println!(
+                        "Minimization is STICKY and one-way: it purges raw content already at rest \
+                         (blob hashes, embeddings, line ranges, and symbol names are kept)."
+                    );
+                    println!(
+                        "On SQLite it disables full-text search (vector-only); Postgres keeps \
+                         keyword search via the derived tsvector."
+                    );
+                    println!("Re-run with --confirm to enable it.");
+                } else {
+                    let store = db::connect().await?;
+                    store.set_content_minimized().await?;
+                    println!(
+                        "✅ Don't-store-content minimization enabled (sticky). Future scans and \
+                         imports store no raw content."
+                    );
+                }
             }
             DbCommand::CleanupStale { confirm, verbose } => {
                 // Start timer for elapsed time tracking

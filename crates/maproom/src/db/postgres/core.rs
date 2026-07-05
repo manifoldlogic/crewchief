@@ -30,6 +30,33 @@ impl StoreCore for PostgresStore {
         PostgresStore::has_vector_extension(self)
     }
 
+    fn is_content_minimized(&self) -> bool {
+        self.minimized.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    async fn set_content_minimized(&self) -> anyhow::Result<()> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            "INSERT INTO store_settings (key, value) VALUES ('minimize_content', 'true') \
+             ON CONFLICT (key) DO UPDATE SET value = 'true'",
+        )
+        .execute(&mut *tx)
+        .await?;
+        // Sticky one-shot: purge raw content already at rest — preview/signature/
+        // docstring/metadata NULL — and REBUILD `ts_doc` from symbol_name only, since a
+        // 'simple' tsvector of the raw preview is a recoverable copy of the source.
+        // Symbol-name keyword search survives; no content remains.
+        sqlx::query(
+            "UPDATE chunks SET preview = NULL, signature = NULL, docstring = NULL, \
+             metadata = NULL, ts_doc = to_tsvector('simple', COALESCE(symbol_name, ''))",
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        self.minimized.store(true, std::sync::atomic::Ordering::Relaxed);
+        Ok(())
+    }
+
     async fn get_or_create_repo(&self, name: &str, root_path: &str) -> anyhow::Result<i64> {
         let id: i64 = sqlx::query_scalar(
             "INSERT INTO repos (name, root_path) VALUES ($1, $2) \

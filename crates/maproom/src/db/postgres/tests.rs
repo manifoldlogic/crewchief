@@ -64,11 +64,11 @@ async fn phase1_live() {
     };
     let store = fresh_store(&url).await;
 
-    // ── Migrations auto-ran; integer-version adapter returns {1,2,3,4} (§5.2/§7) ──
+    // ── Migrations auto-ran; integer-version adapter returns {1,2,3,4,5} (§5.2/§7) ──
     let applied = store.get_applied_migrations().await.unwrap();
     assert_eq!(
         applied,
-        HashSet::from([1, 2, 3, 4]),
+        HashSet::from([1, 2, 3, 4, 5]),
         "applied migration versions"
     );
 
@@ -76,13 +76,13 @@ async fn phase1_live() {
     let store2 = PostgresStore::connect(&url).await.unwrap();
     assert_eq!(
         store2.get_applied_migrations().await.unwrap(),
-        HashSet::from([1, 2, 3, 4])
+        HashSet::from([1, 2, 3, 4, 5])
     );
     let mig_rows: i64 = sqlx::query_scalar("SELECT count(*) FROM schema_migrations")
         .fetch_one(&store.pool)
         .await
         .unwrap();
-    assert_eq!(mig_rows, 4, "schema_migrations stable across reconnect");
+    assert_eq!(mig_rows, 5, "schema_migrations stable across reconnect");
 
     // ── Schema shape (§7 Migrations) ──
     for t in [
@@ -1467,4 +1467,102 @@ async fn graph_scoring_live() {
         .is_empty());
 
     eprintln!("graph_scoring_live: all StoreGraph scoring assertions passed");
+}
+
+/// F48 (spec §S4, live): minimized Postgres stores NO raw content (preview/signature/
+/// docstring NULL) yet keeps keyword search via the derived tsvector; enabling purges
+/// content already at rest; the marker is sticky.
+#[tokio::test]
+#[ignore]
+async fn minimize_content_live() {
+    let Some(url) = test_url() else {
+        eprintln!("skipping minimize_content_live: MAPROOM_TEST_PG_URL unset");
+        return;
+    };
+    let store = fresh_store(&url).await;
+    let repo = store.get_or_create_repo("acme/min", "/m").await.unwrap();
+    let wt = store.get_or_create_worktree(repo, "main", "/m").await.unwrap();
+    let commit = store.get_or_create_commit(repo, "s", None).await.unwrap();
+    let file = store
+        .upsert_file(&FileRecord {
+            repo_id: repo,
+            worktree_id: wt,
+            commit_id: commit,
+            relpath: "a.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "h".to_string(),
+            size_bytes: 1,
+            last_modified: None,
+        })
+        .await
+        .unwrap();
+    let mk = |blob: &str, s: i32, e: i32| ChunkRecord {
+        file_id: file,
+        blob_sha: blob.to_string(),
+        symbol_name: Some("alpha".to_string()),
+        kind: "function".to_string(),
+        signature: Some("fn alpha()".to_string()),
+        docstring: Some("d".to_string()),
+        start_line: s,
+        end_line: e,
+        preview: "fn alpha() { secret }".to_string(),
+        ts_doc_text: "alpha secret".to_string(),
+        recency_score: 1.0,
+        churn_score: 0.0,
+        metadata: Some(serde_json::json!({ "init": "topsecret" })),
+        worktree_id: wt,
+    };
+
+    // Insert WITH content, enable minimization (purges), then insert under minimization.
+    let c1 = store.insert_chunk(&mk("MB1", 1, 2)).await.unwrap();
+    store.set_content_minimized().await.unwrap();
+    assert!(store.is_content_minimized());
+    let c2 = store.insert_chunk(&mk("MB2", 3, 4)).await.unwrap();
+
+    // Both chunks: NO raw content (preview/signature/docstring/metadata all NULL), but
+    // symbol_name kept and the tsvector rebuilt FROM symbol_name only.
+    for id in [c1, c2] {
+        let (preview, sig, doc, meta_null, has_tsv, sym): (
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            bool,
+            bool,
+            Option<String>,
+        ) = sqlx::query_as(
+            "SELECT preview, signature, docstring, metadata IS NULL, ts_doc IS NOT NULL, \
+             symbol_name FROM chunks WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_one(&store.pool)
+        .await
+        .unwrap();
+        assert!(
+            preview.is_none() && sig.is_none() && doc.is_none() && meta_null,
+            "chunk {id} must have no raw content (incl. metadata)"
+        );
+        assert!(has_tsv, "chunk {id} keeps a symbol-name tsvector");
+        assert_eq!(sym.as_deref(), Some("alpha"), "symbol_name retained");
+    }
+
+    // Raw content ("secret") is NOT searchable; the kept symbol_name ("alpha") IS.
+    let (secret_hits, _) = store
+        .search_chunks_fts("acme/min", Some("main"), "secret", 10, false, None, None)
+        .await
+        .unwrap();
+    assert!(secret_hits.is_empty(), "raw content is not searchable under minimization");
+    let (name_hits, _) = store
+        .search_chunks_fts("acme/min", Some("main"), "alpha", 10, false, None, None)
+        .await
+        .unwrap();
+    assert!(!name_hits.is_empty(), "symbol-name keyword search works on minimized Postgres");
+
+    // Marker is sticky.
+    let marker: Option<String> =
+        sqlx::query_scalar("SELECT value FROM store_settings WHERE key = 'minimize_content'")
+            .fetch_optional(&store.pool)
+            .await
+            .unwrap();
+    assert_eq!(marker.as_deref(), Some("true"), "minimization marker persisted");
+    eprintln!("minimize_content_live: no raw content at rest, FTS+vector+marker OK");
 }

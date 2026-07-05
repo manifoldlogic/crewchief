@@ -35,17 +35,33 @@ fn bind_chunk<'q>(
     q: sqlx::query::QueryScalar<'q, sqlx::Postgres, i64, sqlx::postgres::PgArguments>,
     chunk: &'q ChunkRecord,
     metadata: Option<String>,
+    minimized: bool,
 ) -> sqlx::query::QueryScalar<'q, sqlx::Postgres, i64, sqlx::postgres::PgArguments> {
+    // F48: under minimization persist NO raw content. preview/signature/docstring are
+    // NULLed; `metadata` (parsers store raw initializer text there) is dropped; and the
+    // `ts_doc` tsvector is built from `symbol_name` ONLY — a kept identifier — NOT the
+    // raw preview-derived `ts_doc_text`, whose 'simple' tsvector is a recoverable copy
+    // of the source. So minimized Postgres keeps SYMBOL-NAME keyword search with no
+    // content at rest. blob_sha/kind/line-ranges/symbol_name/embeddings are retained.
+    let signature = if minimized { None } else { chunk.signature.as_deref() };
+    let docstring = if minimized { None } else { chunk.docstring.as_deref() };
+    let preview: Option<&str> = if minimized { None } else { Some(chunk.preview.as_str()) };
+    let ts_source: &str = if minimized {
+        chunk.symbol_name.as_deref().unwrap_or("")
+    } else {
+        chunk.ts_doc_text.as_str()
+    };
+    let metadata = if minimized { None } else { metadata };
     q.bind(chunk.file_id)
         .bind(&chunk.blob_sha)
         .bind(chunk.symbol_name.as_deref())
         .bind(&chunk.kind)
-        .bind(chunk.signature.as_deref())
-        .bind(chunk.docstring.as_deref())
+        .bind(signature)
+        .bind(docstring)
         .bind(chunk.start_line)
         .bind(chunk.end_line)
-        .bind(&chunk.preview)
-        .bind(&chunk.ts_doc_text)
+        .bind(preview)
+        .bind(ts_source)
         .bind(chunk.recency_score)
         .bind(chunk.churn_score)
         .bind(metadata)
@@ -70,7 +86,8 @@ impl PostgresStore {
 impl StoreChunks for PostgresStore {
     async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64> {
         let metadata = chunk.metadata.as_ref().map(|v| v.to_string());
-        let id: i64 = bind_chunk(sqlx::query_scalar(INSERT_CHUNK_CTE), chunk, metadata)
+        let minimized = self.minimized.load(std::sync::atomic::Ordering::Relaxed);
+        let id: i64 = bind_chunk(sqlx::query_scalar(INSERT_CHUNK_CTE), chunk, metadata, minimized)
             .fetch_one(&self.pool)
             .await?;
         Ok(id)
@@ -84,9 +101,10 @@ impl StoreChunks for PostgresStore {
         // every chunk (no partially-indexed file), matching the SQLite backend.
         let mut tx = self.pool.begin().await?;
         let mut ids = Vec::with_capacity(chunks.len());
+        let minimized = self.minimized.load(std::sync::atomic::Ordering::Relaxed);
         for chunk in chunks {
             let metadata = chunk.metadata.as_ref().map(|v| v.to_string());
-            let id: i64 = bind_chunk(sqlx::query_scalar(INSERT_CHUNK_CTE), chunk, metadata)
+            let id: i64 = bind_chunk(sqlx::query_scalar(INSERT_CHUNK_CTE), chunk, metadata, minimized)
                 .fetch_one(&mut *tx)
                 .await?;
             ids.push(id);
@@ -213,7 +231,7 @@ impl StoreChunks for PostgresStore {
             docstring: r.get("docstring"),
             start_line: r.get("start_line"),
             end_line: r.get("end_line"),
-            preview: r.get("preview"),
+            preview: r.get::<Option<String>, _>("preview").unwrap_or_default(),
             file_path: r.get("file_path"),
         }))
     }
@@ -242,7 +260,7 @@ impl StoreChunks for PostgresStore {
                 docstring: r.get("docstring"),
                 start_line: r.get("start_line"),
                 end_line: r.get("end_line"),
-                preview: r.get("preview"),
+                preview: r.get::<Option<String>, _>("preview").unwrap_or_default(),
                 file_path: r.get("file_path"),
             })
             .collect())

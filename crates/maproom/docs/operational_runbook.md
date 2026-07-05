@@ -432,11 +432,11 @@ ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
    ```sql
    -- Reindex main tables
    REINDEX TABLE chunks;
-   REINDEX TABLE chunk_embeddings;
+   REINDEX TABLE code_embeddings;
 
    -- Analyze tables
    ANALYZE chunks;
-   ANALYZE chunk_embeddings;
+   ANALYZE code_embeddings;
    ```
 
 2. **Vacuum if needed**:
@@ -645,8 +645,8 @@ sudo logrotate -f /etc/logrotate.d/maproom
 ```sql
 -- Run vacuum
 VACUUM ANALYZE chunks;
-VACUUM ANALYZE chunk_embeddings;
-VACUUM ANALYZE repositories;
+VACUUM ANALYZE code_embeddings;
+VACUUM ANALYZE repos;
 
 -- Reindex if needed
 REINDEX TABLE CONCURRENTLY chunks;

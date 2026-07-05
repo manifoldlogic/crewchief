@@ -282,7 +282,9 @@ impl StoreEmbeddings for PostgresStore {
                 blob_sha: r.get("blob_sha"),
                 signature: r.get("signature"),
                 docstring: r.get("docstring"),
-                preview: r.get("preview"),
+                // F48: preview is NULL under minimization; ChunkForEmbedding.preview is
+                // non-Option, so decode via Option to avoid a NULL→String panic.
+                preview: r.get::<Option<String>, _>("preview").unwrap_or_default(),
             })
             .collect())
     }

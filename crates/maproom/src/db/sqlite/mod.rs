@@ -59,6 +59,8 @@ pub struct SqliteStore {
     // Extension verification (cached after first check)
     vec_available: Arc<AtomicBool>,
     vec_checked: Arc<AtomicBool>,
+    // F48: cached don't-store-content minimization marker (read at connect).
+    minimized: Arc<AtomicBool>,
     // Configuration (needed for retry logic)
     config: SqliteConfig,
 }
@@ -173,6 +175,7 @@ impl SqliteStore {
             pool,
             vec_available: Arc::new(AtomicBool::new(false)),
             vec_checked: Arc::new(AtomicBool::new(false)),
+            minimized: Arc::new(AtomicBool::new(false)),
             config: config.clone(),
         };
 
@@ -184,6 +187,23 @@ impl SqliteStore {
             .await
             .context("Failed to run database migrations")?;
         tracing::debug!("SqliteStore::connect: migrations complete");
+
+        // F48: load the sticky don't-store-content marker (post-migration so the
+        // store_settings table exists; any error → not minimized).
+        let minimized = store
+            .run(|conn| {
+                let v: Option<String> = conn
+                    .query_row(
+                        "SELECT value FROM store_settings WHERE key = 'minimize_content'",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .optional()?;
+                Ok(v.as_deref() == Some("true"))
+            })
+            .await
+            .unwrap_or(false);
+        store.minimized.store(minimized, Ordering::Relaxed);
 
         Ok(store)
     }
@@ -351,6 +371,37 @@ pub fn resolve_repo_id(conn: &Connection, repo: &str) -> anyhow::Result<i64> {
 impl StoreCore for SqliteStore {
     fn has_vector_extension(&self) -> bool {
         self.vec_available.load(Ordering::Relaxed)
+    }
+
+    fn is_content_minimized(&self) -> bool {
+        self.minimized.load(Ordering::Relaxed)
+    }
+
+    async fn set_content_minimized(&self) -> anyhow::Result<()> {
+        self.run(|conn| {
+            let tx = conn.transaction()?;
+            tx.execute(
+                "INSERT INTO store_settings (key, value) VALUES ('minimize_content', 'true') \
+                 ON CONFLICT(key) DO UPDATE SET value = 'true'",
+                [],
+            )?;
+            // Sticky one-shot: purge any content already at rest — clear the external
+            // -content FTS index, blank ALL content columns (incl. metadata, which can
+            // carry raw initializer text), and drop the context cache (its bundle_json
+            // embeds raw code read from disk). Vector-only from here.
+            tx.execute("INSERT INTO fts_chunks(fts_chunks) VALUES('delete-all')", [])?;
+            tx.execute(
+                "UPDATE chunks SET preview = '', signature = NULL, docstring = NULL, \
+                 ts_doc_text = NULL, metadata = NULL",
+                [],
+            )?;
+            tx.execute("DELETE FROM context_cache", [])?;
+            tx.commit()?;
+            Ok(())
+        })
+        .await?;
+        self.minimized.store(true, Ordering::Relaxed);
+        Ok(())
     }
 
     async fn get_or_create_repo(&self, name: &str, root_path: &str) -> anyhow::Result<i64> {
@@ -867,11 +918,29 @@ impl StoreCore for SqliteStore {
 impl StoreChunks for SqliteStore {
     async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64> {
         let chunk = chunk.clone();
+        let minimized = self.minimized.load(Ordering::Relaxed);
         self.write_with_retry(move |conn| {
             let tx = conn.transaction()?;
 
             // For JSON fields, we need to serialize to string if rusqlite doesn't support JSON directly
-            let metadata_json = chunk.metadata.as_ref().map(|v| v.to_string());
+            // F48: metadata can carry raw source fragments (parsers store const/field
+            // initializer text there) — suppress it under minimization.
+            let metadata_json = if minimized {
+                None
+            } else {
+                chunk.metadata.as_ref().map(|v| v.to_string())
+            };
+
+            // F48: under minimization persist NO raw content — preview blanked (NOT
+            // NULL), signature/docstring/ts_doc_text NULL, and the FTS write skipped
+            // (SQLite minimized = vector-only). blob_sha/symbol_name/kind/metadata kept.
+            let eff_preview: &str = if minimized { "" } else { chunk.preview.as_str() };
+            let eff_signature: Option<&str> =
+                if minimized { None } else { chunk.signature.as_deref() };
+            let eff_docstring: Option<&str> =
+                if minimized { None } else { chunk.docstring.as_deref() };
+            let eff_ts: Option<&str> =
+                if minimized { None } else { Some(chunk.ts_doc_text.as_str()) };
 
             // SQLite UPSERT - no longer includes worktree_ids column
             tx.execute(
@@ -897,12 +966,12 @@ impl StoreChunks for SqliteStore {
                     chunk.blob_sha,
                     chunk.symbol_name,
                     chunk.kind,
-                    chunk.signature,
-                    chunk.docstring,
+                    eff_signature,
+                    eff_docstring,
                     chunk.start_line,
                     chunk.end_line,
-                    chunk.preview,
-                    chunk.ts_doc_text,
+                    eff_preview,
+                    eff_ts,
                     chunk.recency_score,
                     chunk.churn_score,
                     metadata_json,
@@ -922,11 +991,13 @@ impl StoreChunks for SqliteStore {
                 params![chunk_id, chunk.worktree_id],
             )?;
 
-            // Update FTS index manually
-            tx.execute(
-                "INSERT OR REPLACE INTO fts_chunks(rowid, content, docstring, symbol_name) VALUES (?1, ?2, ?3, ?4)",
-                params![chunk_id, chunk.preview, chunk.docstring, chunk.symbol_name],
-            )?;
+            // Update FTS index manually — skipped under minimization (vector-only).
+            if !minimized {
+                tx.execute(
+                    "INSERT OR REPLACE INTO fts_chunks(rowid, content, docstring, symbol_name) VALUES (?1, ?2, ?3, ?4)",
+                    params![chunk_id, chunk.preview, chunk.docstring, chunk.symbol_name],
+                )?;
+            }
 
             tx.commit()?;
             Ok(chunk_id)
@@ -935,6 +1006,7 @@ impl StoreChunks for SqliteStore {
 
     async fn insert_chunks_batch(&self, chunks: &[ChunkRecord]) -> anyhow::Result<Vec<i64>> {
         let chunks = chunks.to_vec();
+        let minimized = self.minimized.load(Ordering::Relaxed);
         self.write_with_retry(move |conn| {
             let tx = conn.transaction()?;
             let mut ids = Vec::new();
@@ -967,19 +1039,35 @@ impl StoreChunks for SqliteStore {
                 )?;
 
                 for chunk in &chunks {
-                    let metadata_json = chunk.metadata.as_ref().map(|v| v.to_string());
+                    // F48: metadata can carry raw source fragments (parsers store const/field
+            // initializer text there) — suppress it under minimization.
+            let metadata_json = if minimized {
+                None
+            } else {
+                chunk.metadata.as_ref().map(|v| v.to_string())
+            };
+
+                    // F48: suppress content under minimization (see insert_chunk).
+                    let eff_preview: &str =
+                        if minimized { "" } else { chunk.preview.as_str() };
+                    let eff_signature: Option<&str> =
+                        if minimized { None } else { chunk.signature.as_deref() };
+                    let eff_docstring: Option<&str> =
+                        if minimized { None } else { chunk.docstring.as_deref() };
+                    let eff_ts: Option<&str> =
+                        if minimized { None } else { Some(chunk.ts_doc_text.as_str()) };
 
                     let chunk_id: i64 = stmt.query_row(params![
                         chunk.file_id,
                         chunk.blob_sha,
                         chunk.symbol_name,
                         chunk.kind,
-                        chunk.signature,
-                        chunk.docstring,
+                        eff_signature,
+                        eff_docstring,
                         chunk.start_line,
                         chunk.end_line,
-                        chunk.preview,
-                        chunk.ts_doc_text,
+                        eff_preview,
+                        eff_ts,
                         chunk.recency_score,
                         chunk.churn_score,
                         metadata_json,
@@ -988,7 +1076,9 @@ impl StoreChunks for SqliteStore {
                     // Insert into junction table
                     junction_stmt.execute(params![chunk_id, chunk.worktree_id])?;
 
-                    fts_stmt.execute(params![chunk_id, chunk.preview, chunk.docstring, chunk.symbol_name])?;
+                    if !minimized {
+                        fts_stmt.execute(params![chunk_id, chunk.preview, chunk.docstring, chunk.symbol_name])?;
+                    }
                     ids.push(chunk_id);
                 }
             }
@@ -1113,6 +1203,7 @@ impl StoreChunks for SqliteStore {
         keep_file_id: Option<i64>,
     ) -> anyhow::Result<usize> {
         let relpath = relpath.to_string();
+        let minimized = self.minimized.load(Ordering::Relaxed);
         self.write_with_retry(move |conn| {
             // R09 / R-GC-2: one explicit transaction — write_with_retry
             // itself provides NO transaction. Review [06]/[24]/[32]: every
@@ -1165,15 +1256,19 @@ impl StoreChunks for SqliteStore {
             // 2. FTS5 'delete' for candidates now orphaned — BEFORE step 3,
             //    while the rows still exist to read the originally indexed
             //    values (fts_chunks is external-content, maintained manually).
-            tx.execute(
-                &format!(
-                    "INSERT INTO fts_chunks(fts_chunks, rowid, content, docstring, symbol_name) \
-                     SELECT 'delete', id, preview, docstring, symbol_name FROM chunks \
-                     WHERE id IN ({id_list}) \
-                       AND NOT EXISTS (SELECT 1 FROM chunk_worktrees cw WHERE cw.chunk_id = chunks.id)"
-                ),
-                [],
-            )?;
+            //    F48: skipped under minimization — the FTS index is never populated,
+            //    so a readback-delete (reading blanked previews) would corrupt it.
+            if !minimized {
+                tx.execute(
+                    &format!(
+                        "INSERT INTO fts_chunks(fts_chunks, rowid, content, docstring, symbol_name) \
+                         SELECT 'delete', id, preview, docstring, symbol_name FROM chunks \
+                         WHERE id IN ({id_list}) \
+                           AND NOT EXISTS (SELECT 1 FROM chunk_worktrees cw WHERE cw.chunk_id = chunks.id)"
+                    ),
+                    [],
+                )?;
+            }
 
             // 3. Orphan-GC, scoped to the candidates.
             tx.execute(
@@ -3420,6 +3515,7 @@ impl StoreCleanup for SqliteStore {
         &self,
         worktree_id: i64,
     ) -> anyhow::Result<crate::db::WorktreeCleanupResult> {
+        let minimized = self.minimized.load(Ordering::Relaxed);
         self.write_with_retry(move |conn| {
             // R05 / R-STALE-1: the whole multi-table delete runs in ONE
             // explicit transaction — write_with_retry provides no transaction,
@@ -3475,16 +3571,19 @@ impl StoreCleanup for SqliteStore {
                 // 2. FTS5 'delete' for candidates now orphaned — BEFORE the
                 //    row delete, while the originally indexed values are
                 //    still readable (external-content discipline, same as
-                //    unmap_superseded_file_chunks).
-                tx.execute(
-                    &format!(
-                        "INSERT INTO fts_chunks(fts_chunks, rowid, content, docstring, symbol_name) \
-                         SELECT 'delete', id, preview, docstring, symbol_name FROM chunks \
-                         WHERE id IN ({id_list}) \
-                           AND NOT EXISTS (SELECT 1 FROM chunk_worktrees cw WHERE cw.chunk_id = chunks.id)"
-                    ),
-                    [],
-                )?;
+                //    unmap_superseded_file_chunks). F48: skipped under minimization
+                //    (the FTS index is never populated; a readback would corrupt it).
+                if !minimized {
+                    tx.execute(
+                        &format!(
+                            "INSERT INTO fts_chunks(fts_chunks, rowid, content, docstring, symbol_name) \
+                             SELECT 'delete', id, preview, docstring, symbol_name FROM chunks \
+                             WHERE id IN ({id_list}) \
+                               AND NOT EXISTS (SELECT 1 FROM chunk_worktrees cw WHERE cw.chunk_id = chunks.id)"
+                        ),
+                        [],
+                    )?;
+                }
 
                 // 3. Edges touching the orphans.
                 tx.execute(
@@ -4166,6 +4265,125 @@ mod tests {
             .expect("Failed to create test store");
         store.migrate().await.expect("Failed to run migrations");
         store
+    }
+
+    /// F48 (spec §S4): minimization suppresses new content, purges content already at
+    /// rest, empties the FTS index (vector-only on SQLite), keeps symbol_name/blob_sha,
+    /// and persists a sticky marker.
+    #[tokio::test]
+    async fn test_content_minimization_suppresses_and_purges() {
+        let store = setup_test_store().await;
+        let repo = store.get_or_create_repo("acme/min", "/m").await.unwrap();
+        let wt = store.get_or_create_worktree(repo, "main", "/m").await.unwrap();
+        let commit = store.get_or_create_commit(repo, "sha1", None).await.unwrap();
+        let file = store
+            .upsert_file(&crate::db::FileRecord {
+                repo_id: repo,
+                worktree_id: wt,
+                commit_id: commit,
+                relpath: "a.rs".into(),
+                language: Some("rust".into()),
+                content_hash: "h".into(),
+                size_bytes: 1,
+                last_modified: None,
+            })
+            .await
+            .unwrap();
+        let mk = |blob: &str, s: i32, e: i32| crate::db::ChunkRecord {
+            file_id: file,
+            blob_sha: blob.into(),
+            symbol_name: Some("f".into()),
+            kind: "function".into(),
+            signature: Some("fn f()".into()),
+            docstring: Some("doc".into()),
+            start_line: s,
+            end_line: e,
+            preview: "fn f() { secret }".into(),
+            ts_doc_text: "f secret".into(),
+            recency_score: 1.0,
+            churn_score: 0.0,
+            metadata: Some(serde_json::json!({ "init": "topsecret" })),
+            worktree_id: wt,
+        };
+
+        // Insert WITH content (normal mode).
+        let c1 = store.insert_chunk(&mk("B1", 1, 2)).await.unwrap();
+        assert!(!store.is_content_minimized());
+
+        // Enable minimization — purges existing content.
+        store.set_content_minimized().await.unwrap();
+        assert!(store.is_content_minimized());
+
+        // Insert a NEW chunk under minimization.
+        let c2 = store.insert_chunk(&mk("B2", 3, 4)).await.unwrap();
+
+        // Pre-existing chunk c1: content purged (preview blanked, rest incl. metadata NULL).
+        let (p1, sig1, doc1, ts1, meta1): (
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        ) = store
+            .run(move |conn| {
+                Ok(conn.query_row(
+                    "SELECT preview, signature, docstring, ts_doc_text, metadata \
+                     FROM chunks WHERE id = ?1",
+                    rusqlite::params![c1],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+                )?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(p1, "", "purged preview is blank");
+        assert!(
+            sig1.is_none() && doc1.is_none() && ts1.is_none() && meta1.is_none(),
+            "purged signature/docstring/ts_doc_text/metadata are NULL"
+        );
+
+        // New chunk c2: no content stored, but symbol_name + blob_sha retained.
+        let (p2, sym2, blob2): (String, Option<String>, String) = store
+            .run(move |conn| {
+                Ok(conn.query_row(
+                    "SELECT preview, symbol_name, blob_sha FROM chunks WHERE id = ?1",
+                    rusqlite::params![c2],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                )?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(p2, "", "minimized insert stores no preview");
+        assert_eq!(sym2.as_deref(), Some("f"), "symbol_name retained");
+        assert_eq!(blob2, "B2", "blob_sha (pool key) retained");
+
+        // Nothing is searchable via FTS under minimization (vector-only): the token
+        // "secret" (present in the pre-minimization content) was purged and the new
+        // insert skipped the FTS write. MATCH uses the inverted index only (not the
+        // content table), so it avoids the external-content name-mapping quirk.
+        let fts_matches: i64 = store
+            .run(|conn| {
+                Ok(conn.query_row(
+                    "SELECT count(*) FROM fts_chunks WHERE fts_chunks MATCH 'secret'",
+                    [],
+                    |r| r.get(0),
+                )?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(fts_matches, 0, "no content searchable via FTS under minimization");
+
+        // Marker persisted (sticky — a reconnect would read it).
+        let marker: String = store
+            .run(|conn| {
+                Ok(conn.query_row(
+                    "SELECT value FROM store_settings WHERE key = 'minimize_content'",
+                    [],
+                    |r| r.get(0),
+                )?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(marker, "true", "minimization marker is persisted");
     }
 
     #[tokio::test]
