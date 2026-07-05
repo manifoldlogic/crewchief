@@ -830,6 +830,25 @@ enum DbCommand {
         #[arg(long, help = "Output artifact file path")]
         out: PathBuf,
     },
+
+    /// Import a maproom export artifact into a Postgres backend (F47).
+    ///
+    /// Loads a `db export` artifact into the Postgres database at --to, remapping
+    /// ids by natural key and merging the content-addressed embedding pool WITHOUT
+    /// re-embedding. Requires a `--features postgres` build (the Postgres backend it
+    /// targets is not compiled into the default binary).
+    ///
+    /// Examples:
+    ///   maproom db import --in index.mrx --to postgres://user@host/maproom
+    Import {
+        /// Input artifact file path (from `db export`)
+        #[arg(long = "in", help = "Input artifact file path")]
+        in_file: PathBuf,
+
+        /// Destination Postgres database URL
+        #[arg(long, help = "Destination postgres:// database URL")]
+        to: String,
+    },
 }
 
 /// Auto-generate embeddings for chunks with NULL embeddings.
@@ -1254,6 +1273,47 @@ async fn real_main() -> anyhow::Result<()> {
                     stats.index_state,
                     stats.encoding_runs
                 );
+            }
+            DbCommand::Import { in_file, to } => {
+                #[cfg(feature = "postgres")]
+                {
+                    if !matches!(
+                        db::connection::backend_for_url(&to),
+                        db::connection::Backend::Postgres
+                    ) {
+                        anyhow::bail!("db import --to must be a postgres:// URL, got: {to}");
+                    }
+                    let store = db::PostgresStore::connect(&to).await?;
+                    let file = std::fs::File::open(&in_file)
+                        .with_context(|| format!("open import artifact {}", in_file.display()))?;
+                    let report =
+                        transfer::import::import_postgres(&store, std::io::BufReader::new(file))
+                            .await?;
+                    let s = &report.stats;
+                    println!("✅ Imported into {to}");
+                    println!(
+                        "   {} repos, {} worktrees, {} commits, {} files, {} chunks",
+                        s.repos, s.worktrees, s.commits, s.files, s.chunks
+                    );
+                    println!(
+                        "   {} embeddings, {} chunk-worktrees, {} edges, {} index-state, {} encoding-runs",
+                        s.embeddings, s.chunk_worktrees, s.chunk_edges, s.index_state, s.encoding_runs
+                    );
+                    if report.skipped_bad_dim > 0 {
+                        println!(
+                            "   [warn] skipped {} embeddings with an unsupported dimension (not 768/1024/1536)",
+                            report.skipped_bad_dim
+                        );
+                    }
+                }
+                #[cfg(not(feature = "postgres"))]
+                {
+                    let _ = (in_file, to);
+                    anyhow::bail!(
+                        "db import requires a maproom build with --features postgres \
+                         (the Postgres backend it targets is not compiled into the default binary)"
+                    );
+                }
             }
             DbCommand::CleanupStale { confirm, verbose } => {
                 // Start timer for elapsed time tracking

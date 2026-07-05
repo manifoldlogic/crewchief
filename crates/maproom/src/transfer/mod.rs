@@ -23,7 +23,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::db::sqlite::SqliteStore;
 
-// `mod import;` (the Postgres importer) is added in Phase 3.
+/// The Postgres importer (`db import`). Gated: using the Postgres backend already
+/// requires this build, so import being postgres-only is no new burden (§S5.2).
+#[cfg(feature = "postgres")]
+pub mod import;
 
 /// Artifact format version. Bump on any breaking change to the record schema.
 pub const FORMAT_VERSION: u32 = 1;

@@ -152,3 +152,103 @@ async fn export_empty_index() {
     assert!(matches!(recs[0], Record::Header(_)));
     assert_eq!(stats, TransferStats::default());
 }
+
+/// Spec §S3 / §S5.3 (PG-gated): a full SQLite → export → import → Postgres round-trip
+/// preserves entity counts and the embedding vector, with NO recompute. Gated on
+/// `MAPROOM_TEST_PG_URL`; run with `--features postgres -- --ignored --test-threads=1`.
+#[cfg(feature = "postgres")]
+#[tokio::test]
+#[ignore]
+async fn sqlite_to_postgres_roundtrip() {
+    use crate::db::postgres::PostgresStore;
+    use sqlx::postgres::PgPoolOptions;
+
+    let Ok(pg_url) = std::env::var("MAPROOM_TEST_PG_URL") else {
+        eprintln!("skipping sqlite_to_postgres_roundtrip: MAPROOM_TEST_PG_URL unset");
+        return;
+    };
+
+    // 1. Build a SQLite source index with two chunks, an edge, and embeddings.
+    let src = mem_store("roundtrip_src").await;
+    let repo = src.get_or_create_repo("acme/rt", "/rt").await.unwrap();
+    let wt = src.get_or_create_worktree(repo, "main", "/rt/main").await.unwrap();
+    let commit = src.get_or_create_commit(repo, "cafe1234", None).await.unwrap();
+    let file = src
+        .upsert_file(&FileRecord {
+            repo_id: repo,
+            worktree_id: wt,
+            commit_id: commit,
+            relpath: "src/m.rs".to_string(),
+            language: Some("rust".to_string()),
+            content_hash: "chz".to_string(),
+            size_bytes: 10,
+            last_modified: None,
+        })
+        .await
+        .unwrap();
+    let mk = |sym: &str, s: i32, e: i32, blob: &str| ChunkRecord {
+        file_id: file,
+        blob_sha: blob.to_string(),
+        symbol_name: Some(sym.to_string()),
+        kind: "function".to_string(),
+        signature: None,
+        docstring: None,
+        start_line: s,
+        end_line: e,
+        preview: format!("fn {sym}"),
+        ts_doc_text: sym.to_string(),
+        recency_score: 1.0,
+        churn_score: 0.0,
+        metadata: None,
+        worktree_id: wt,
+    };
+    let ca = src.insert_chunk(&mk("aa", 1, 3, "RBA")).await.unwrap();
+    let cb = src.insert_chunk(&mk("bb", 4, 6, "RBB")).await.unwrap();
+    src.insert_chunk_edge(ca, cb, "calls").await.unwrap();
+    let mut va = vec![0.0f32; 768];
+    va[0] = 0.1;
+    va[5] = -0.7;
+    src.upsert_embedding("RBA", &va, "m").await.unwrap();
+    src.upsert_embedding("RBB", &vec![0.25f32; 768], "m").await.unwrap();
+
+    let (buf, ex_stats) = export_sqlite(&src, Vec::<u8>::new()).await.unwrap();
+
+    // 2. Fresh Postgres target (drop + reconnect re-applies migrations, incl. 0004).
+    let pool = PgPoolOptions::new().connect(&pg_url).await.unwrap();
+    sqlx::raw_sql("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+    let pg = PostgresStore::connect(&pg_url).await.unwrap();
+
+    // 3. Import.
+    let report = super::import::import_postgres(&pg, std::io::Cursor::new(buf))
+        .await
+        .unwrap();
+
+    // 4. Counts match the export exactly (nothing dropped, nothing recomputed).
+    assert_eq!(report.stats, ex_stats, "import stats == export stats");
+    assert_eq!(report.skipped_bad_dim, 0);
+    assert_eq!(pg.get_global_chunk_count().await.unwrap(), 2);
+    assert_eq!(pg.get_global_embedding_count().await.unwrap(), 2);
+
+    // 5. The migrated embedding is preserved (f32-exact in practice; tight tolerance
+    // guards against any pgvector text-format edge). The artifact itself is bit-exact
+    // (see export_sqlite_full_roundtrip).
+    let got = pg.get_embedding("RBA").await.unwrap().unwrap();
+    assert_eq!(got.len(), 768);
+    for (a, b) in va.iter().zip(&got) {
+        assert!((a - b).abs() < 1e-6, "embedding preserved: {a} vs {b}");
+    }
+
+    // 6. Idempotent: a second import of the same artifact adds no duplicate rows.
+    let (buf2, _) = export_sqlite(&src, Vec::<u8>::new()).await.unwrap();
+    super::import::import_postgres(&pg, std::io::Cursor::new(buf2))
+        .await
+        .unwrap();
+    assert_eq!(pg.get_global_chunk_count().await.unwrap(), 2, "re-import is idempotent");
+    assert_eq!(pg.get_global_embedding_count().await.unwrap(), 2);
+
+    eprintln!("sqlite_to_postgres_roundtrip: counts + vector preserved, idempotent");
+}
