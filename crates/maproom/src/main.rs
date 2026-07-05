@@ -41,7 +41,7 @@ use maproom::cli::format::{
 };
 use maproom::context::{AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions};
 use maproom::progress::{OutputMode, ProgressTracker};
-use maproom::{daemon, db, indexer};
+use maproom::{daemon, db, indexer, transfer};
 
 /// Exit code for runtime errors (transient, may retry).
 /// Documented in: docs/cli-help-after.md, CLAUDE.md
@@ -815,6 +815,21 @@ enum DbCommand {
         #[arg(long, short, help = "Show detailed information")]
         verbose: bool,
     },
+
+    /// Export a SQLite index to a portable artifact for backend migration (F47).
+    ///
+    /// Reads the configured SQLite database and writes a versioned NDJSON dump that
+    /// `maproom db import` loads into a Postgres backend WITHOUT re-indexing or
+    /// re-embedding (the content-addressed embedding pool moves verbatim). Runs from
+    /// the shipped SQLite-only binary.
+    ///
+    /// Examples:
+    ///   maproom db export --out index.mrx
+    Export {
+        /// Output artifact file path
+        #[arg(long, help = "Output artifact file path")]
+        out: PathBuf,
+    },
 }
 
 /// Auto-generate embeddings for chunks with NULL embeddings.
@@ -1215,6 +1230,30 @@ async fn real_main() -> anyhow::Result<()> {
                     );
                 }
                 println!("✅ {backend} database is up to date");
+            }
+            DbCommand::Export { out } => {
+                // Export runs against the SQLite source (connect_sqlite errors if the
+                // configured URL is Postgres). The file-artifact transport lets this
+                // run from the shipped SQLite-only binary; `db import` is postgres-gated.
+                let store = db::connect_sqlite().await?;
+                let file = std::fs::File::create(&out)
+                    .with_context(|| format!("create export artifact {}", out.display()))?;
+                let (mut w, stats) =
+                    transfer::export_sqlite(&store, std::io::BufWriter::new(file)).await?;
+                w.flush().context("flush export artifact")?;
+                println!("✅ Exported to {}", out.display());
+                println!(
+                    "   {} repos, {} worktrees, {} commits, {} files, {} chunks",
+                    stats.repos, stats.worktrees, stats.commits, stats.files, stats.chunks
+                );
+                println!(
+                    "   {} embeddings, {} chunk-worktrees, {} edges, {} index-state, {} encoding-runs",
+                    stats.embeddings,
+                    stats.chunk_worktrees,
+                    stats.chunk_edges,
+                    stats.index_state,
+                    stats.encoding_runs
+                );
             }
             DbCommand::CleanupStale { confirm, verbose } => {
                 // Start timer for elapsed time tracking
