@@ -287,6 +287,15 @@ impl SearchConfig {
                 self.index.ivfflat_probes
             );
         }
+        if let Ok(ef) = std::env::var("MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH") {
+            self.index.hnsw_ef_search = ef
+                .parse()
+                .context("Failed to parse MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH")?;
+            debug!(
+                "Override: index.hnsw_ef_search = {}",
+                self.index.hnsw_ef_search
+            );
+        }
         if let Ok(refresh) = std::env::var("MAPROOM_SEARCH_INDEX_REFRESH_INTERVAL_SECONDS") {
             self.index.refresh_interval_seconds = refresh
                 .parse()
@@ -655,6 +664,18 @@ impl PerformanceConfig {
     }
 }
 
+/// pgvector's hard upper bound for the `hnsw.ef_search` GUC (`HNSW_MAX_EF_SEARCH`);
+/// a `SET LOCAL hnsw.ef_search` above this is rejected by Postgres. Single source of
+/// truth for config validation and the KNN query builder's clamp.
+pub const HNSW_MAX_EF_SEARCH: u32 = 1000;
+
+/// Serde default for `IndexConfig::hnsw_ef_search` (pgvector's default). Field-level
+/// default so configs written before this field existed still deserialize (a bare
+/// required field would break every pre-existing config/YAML fixture).
+fn default_hnsw_ef_search() -> u32 {
+    40
+}
+
 /// Index configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexConfig {
@@ -663,6 +684,14 @@ pub struct IndexConfig {
 
     /// IVFFlat probe count
     pub ivfflat_probes: u32,
+
+    /// HNSW `ef_search`: candidate-list size for the cosine ANN scan (the Postgres
+    /// backend's active index, migration 0004). Higher = better recall, slower.
+    /// pgvector's default is 40. Consumed by the Postgres KNN transaction via
+    /// `SET LOCAL hnsw.ef_search` (clamped up to the query's k), so recall is tunable
+    /// without an index rebuild.
+    #[serde(default = "default_hnsw_ef_search")]
+    pub hnsw_ef_search: u32,
 
     /// Index refresh interval in seconds
     pub refresh_interval_seconds: u64,
@@ -673,6 +702,7 @@ impl Default for IndexConfig {
         Self {
             ivfflat_lists: 100,
             ivfflat_probes: 10,
+            hnsw_ef_search: 40,
             refresh_interval_seconds: 3600,
         }
     }
@@ -702,7 +732,40 @@ impl IndexConfig {
             );
         }
 
+        // pgvector caps `hnsw.ef_search` at 1000 (HNSW_MAX_EF_SEARCH) and rejects a
+        // larger `SET LOCAL` at query time. Reject an out-of-range config value up
+        // front so a bad `hnsw_ef_search` fails config validation, not every search.
+        if self.hnsw_ef_search == 0 || self.hnsw_ef_search > HNSW_MAX_EF_SEARCH {
+            return Err(SearchConfigError::ValidationError(format!(
+                "hnsw_ef_search must be in 1..={HNSW_MAX_EF_SEARCH} (pgvector's limit), got {}",
+                self.hnsw_ef_search
+            ))
+            .into());
+        }
+
         Ok(())
+    }
+
+    /// Resolve `hnsw_ef_search` from the default plus its env override, for the DB
+    /// layer — which builds from config defaults (like `tuned_pool`'s
+    /// `DatabaseConfig::default()`) rather than loading a `SearchConfig` file. Keeps
+    /// `ef_search` tunable without a rebuild (spec S3.2). An unparseable or zero
+    /// override is ignored (falls back to the default) rather than failing a connect,
+    /// and any value is clamped to pgvector's `[1, HNSW_MAX_EF_SEARCH]` range so the
+    /// KNN `SET LOCAL` can never exceed the limit (defense-in-depth; the KNN builder
+    /// also clamps).
+    pub fn resolved_hnsw_ef_search() -> u32 {
+        let mut cfg = Self::default();
+        if let Ok(raw) = std::env::var("MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH") {
+            match raw.parse::<u32>() {
+                Ok(v) if v > 0 => cfg.hnsw_ef_search = v,
+                _ => warn!(
+                    "ignoring invalid MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH={raw:?} (want a positive integer); using default {}",
+                    cfg.hnsw_ef_search
+                ),
+            }
+        }
+        cfg.hnsw_ef_search.clamp(1, HNSW_MAX_EF_SEARCH)
     }
 }
 
@@ -1197,6 +1260,20 @@ mod tests {
         config = IndexConfig::default();
         config.ivfflat_probes = 0;
         assert!(config.validate().is_err());
+
+        // hnsw_ef_search must be in 1..=HNSW_MAX_EF_SEARCH (pgvector's limit).
+        config = IndexConfig::default();
+        config.hnsw_ef_search = 0;
+        assert!(config.validate().is_err(), "ef_search 0 must be rejected");
+        config = IndexConfig::default();
+        config.hnsw_ef_search = HNSW_MAX_EF_SEARCH + 1;
+        assert!(
+            config.validate().is_err(),
+            "ef_search above pgvector's 1000 cap must be rejected"
+        );
+        config = IndexConfig::default();
+        config.hnsw_ef_search = HNSW_MAX_EF_SEARCH;
+        assert!(config.validate().is_ok(), "ef_search == 1000 is valid");
     }
 
     #[test]

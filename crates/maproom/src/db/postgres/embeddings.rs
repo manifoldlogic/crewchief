@@ -4,9 +4,12 @@
 //! `fetch_chunks_needing_embeddings` (+ trivial count / sync no-ops / copy).
 //! `upsert_embeddings_batch_new` is a Phase-3 stub.
 //!
-//! Vectors cross the wire as pgvector's text form `[a,b,c]` via `$N::vector` on
-//! write and `embedding::text` on read (the crate omits the pgvector crate / the
-//! sqlx json+chrono features — see Cargo.toml).
+//! Vectors cross the wire as pgvector's text form `[a,b,c]` via `$N::vector(dim)`
+//! on write and `<col>::text` on read (the crate omits the pgvector crate / the
+//! sqlx json+chrono features — see Cargo.toml). Storage is dimension-typed
+//! (spec §4/F04): each row lives in exactly one of `embedding_768`/`embedding_1024`/
+//! `embedding_1536` (the column matching its dim), the others NULL — so pgvector's
+//! per-dim cosine HNSW index (migration 0004) can serve the KNN scan.
 
 use async_trait::async_trait;
 use sqlx::{QueryBuilder, Row};
@@ -16,7 +19,10 @@ use crate::db::traits::StoreEmbeddings;
 use crate::db::types::EmbeddingRecord;
 use crate::db::ChunkForEmbedding;
 
-/// Embedding dimensions maproom supports (mirrors `SUPPORTED_DIMENSIONS`).
+/// Embedding dimensions maproom supports (mirrors SQLite's `SUPPORTED_DIMENSIONS`).
+/// Single source of truth for the pool's dim registry (spec S1.5): insert routing,
+/// read, and the search path all derive their typed column from it, so adding a dim
+/// is one edit here + one typed column & index in a new migration.
 const SUPPORTED_DIMENSIONS: [usize; 3] = [768, 1024, 1536];
 
 fn validate_dim(dim: usize) -> anyhow::Result<()> {
@@ -28,8 +34,24 @@ fn validate_dim(dim: usize) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The typed vector column a given dim's embeddings live in (spec S1.1/S1.5).
+/// `pub(super)` so `search.rs` targets the same column the write path populated.
+/// Returns a `&'static str` from a fixed, validated set — safe to inline into SQL
+/// (never user-derived), which the dynamic column name requires (Postgres has no
+/// bind-param for identifiers).
+pub(super) fn embedding_column_for_dim(dim: usize) -> anyhow::Result<&'static str> {
+    match dim {
+        768 => Ok("embedding_768"),
+        1024 => Ok("embedding_1024"),
+        1536 => Ok("embedding_1536"),
+        _ => anyhow::bail!(
+            "unsupported embedding dimension {dim}; supported dimensions: 768, 1024, 1536"
+        ),
+    }
+}
+
 /// Validate an embedding's dimension AND that every component is finite. pgvector
-/// rejects `NaN`/`±inf` on its `::vector` cast, and a `NaN` would poison `<->`
+/// rejects `NaN`/`±inf` on its `::vector` cast, and a `NaN` would poison `<=>`
 /// distance ordering, so non-finite values are caught here on both the write and
 /// the search paths rather than surfacing as an opaque DB error. `pub(super)` so
 /// `search.rs` reuses it.
@@ -55,7 +77,27 @@ fn format_vector(v: &[f32]) -> String {
     s
 }
 
-/// Parse pgvector's `embedding::text` output `[a,b,c]` back into a float vec.
+/// Push the three typed-vector column slots for one row of a multi-row INSERT: the
+/// column matching the embedding's dim gets the `::vector(N)` literal, the other two
+/// get `NULL` — so every pool row has exactly one non-null typed column (the storage
+/// invariant that keeps read/search unambiguous). The dim is assumed already
+/// validated (unsupported dims never reach here).
+fn push_typed_vector_slots(qb: &mut QueryBuilder<'_, sqlx::Postgres>, embedding: &[f32]) {
+    let d = embedding.len();
+    let lit = format_vector(embedding);
+    for (i, dim) in [768usize, 1024, 1536].into_iter().enumerate() {
+        if i > 0 {
+            qb.push(", ");
+        }
+        if d == dim {
+            qb.push_bind(lit.clone()).push(format!("::vector({dim})"));
+        } else {
+            qb.push("NULL");
+        }
+    }
+}
+
+/// Parse pgvector's `<col>::text` output `[a,b,c]` back into a float vec.
 fn parse_vector(text: &str) -> anyhow::Result<Vec<f32>> {
     let inner = text
         .trim()
@@ -80,21 +122,32 @@ impl StoreEmbeddings for PostgresStore {
         model_version: &str,
     ) -> anyhow::Result<i64> {
         validate_embedding(embedding)?;
-        let id: i64 = sqlx::query_scalar(
-            "INSERT INTO code_embeddings (blob_sha, embedding, embedding_dim, model_version) \
-             VALUES ($1, $2::vector, $3, $4) \
+        let dim = embedding.len();
+        let col = embedding_column_for_dim(dim)?;
+        // Route into the typed column for this dim. `col`/`dim` are from the fixed,
+        // validated registry — safe to inline (identifiers/typmods take no bind
+        // param). ON CONFLICT copies ALL THREE typed columns from EXCLUDED (which
+        // has only `col` populated, the others NULL), so re-embedding the same
+        // blob_sha at a different dim clears the stale column — preserving the
+        // exactly-one-non-null invariant.
+        let sql = format!(
+            "INSERT INTO code_embeddings (blob_sha, {col}, embedding_dim, model_version) \
+             VALUES ($1, $2::vector({dim}), $3, $4) \
              ON CONFLICT (blob_sha) DO UPDATE SET \
-                 embedding = EXCLUDED.embedding, \
+                 embedding_768 = EXCLUDED.embedding_768, \
+                 embedding_1024 = EXCLUDED.embedding_1024, \
+                 embedding_1536 = EXCLUDED.embedding_1536, \
                  embedding_dim = EXCLUDED.embedding_dim, \
                  model_version = EXCLUDED.model_version \
-             RETURNING id",
-        )
-        .bind(blob_sha)
-        .bind(format_vector(embedding))
-        .bind(embedding.len() as i32)
-        .bind(model_version)
-        .fetch_one(&self.pool)
-        .await?;
+             RETURNING id"
+        );
+        let id: i64 = sqlx::query_scalar(&sql)
+            .bind(blob_sha)
+            .bind(format_vector(embedding))
+            .bind(dim as i32)
+            .bind(model_version)
+            .fetch_one(&self.pool)
+            .await?;
         Ok(id)
     }
 
@@ -113,8 +166,13 @@ impl StoreEmbeddings for PostgresStore {
         }
         // One multi-row INSERT … ON CONFLICT — a single statement is atomic, so no
         // held Transaction (which would trip the async_trait Send/Executor check).
+        // Each row routes its vector into the typed column for its dim (the other
+        // two slots NULL, via push_typed_vector_slots), so a mixed-dim batch is
+        // still one statement — no per-dim grouping needed.
         let mut qb = QueryBuilder::<sqlx::Postgres>::new(
-            "INSERT INTO code_embeddings (blob_sha, embedding, embedding_dim, model_version) VALUES ",
+            "INSERT INTO code_embeddings \
+             (blob_sha, embedding_768, embedding_1024, embedding_1536, embedding_dim, model_version) \
+             VALUES ",
         );
         let mut first = true;
         for e in embeddings {
@@ -122,19 +180,21 @@ impl StoreEmbeddings for PostgresStore {
                 qb.push(", ");
             }
             first = false;
-            qb.push("(")
-                .push_bind(e.blob_sha.clone())
-                .push(", ")
-                .push_bind(format_vector(&e.embedding))
-                .push("::vector, ")
+            qb.push("(").push_bind(e.blob_sha.clone()).push(", ");
+            push_typed_vector_slots(&mut qb, &e.embedding);
+            qb.push(", ")
                 .push_bind(e.embedding.len() as i32)
                 .push(", ")
                 .push_bind(e.model_version.clone())
                 .push(")");
         }
+        // Copy all three typed columns from EXCLUDED so a re-embed at a different
+        // dim clears the stale column (same invariant as single upsert).
         qb.push(
             " ON CONFLICT (blob_sha) DO UPDATE SET \
-             embedding = EXCLUDED.embedding, \
+             embedding_768 = EXCLUDED.embedding_768, \
+             embedding_1024 = EXCLUDED.embedding_1024, \
+             embedding_1536 = EXCLUDED.embedding_1536, \
              embedding_dim = EXCLUDED.embedding_dim, \
              model_version = EXCLUDED.model_version",
         );
@@ -152,11 +212,15 @@ impl StoreEmbeddings for PostgresStore {
     }
 
     async fn get_embedding(&self, blob_sha: &str) -> anyhow::Result<Option<Vec<f32>>> {
-        let text: Option<String> =
-            sqlx::query_scalar("SELECT embedding::text FROM code_embeddings WHERE blob_sha = $1")
-                .bind(blob_sha)
-                .fetch_optional(&self.pool)
-                .await?;
+        // Read the one non-null typed column (each row populates exactly one).
+        // COALESCE over the per-dim columns returns whichever is set, as text.
+        let text: Option<String> = sqlx::query_scalar(
+            "SELECT COALESCE(embedding_768::text, embedding_1024::text, embedding_1536::text) \
+             FROM code_embeddings WHERE blob_sha = $1",
+        )
+        .bind(blob_sha)
+        .fetch_optional(&self.pool)
+        .await?;
         match text {
             Some(t) => Ok(Some(parse_vector(&t)?)),
             None => Ok(None),
@@ -168,8 +232,8 @@ impl StoreEmbeddings for PostgresStore {
         _embedding_id: i64,
         _embedding: &[f32],
     ) -> anyhow::Result<()> {
-        // No-op: in pgvector the `embedding` column IS the ANN-searchable column,
-        // so the SQLite vec0-sync step collapses (§5.4).
+        // No-op: in pgvector the typed `embedding_<dim>` column IS the ANN-searchable
+        // column (indexed by HNSW), so the SQLite vec0-sync step collapses (§5.4).
         Ok(())
     }
 
