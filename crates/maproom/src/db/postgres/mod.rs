@@ -37,6 +37,10 @@ pub struct PostgresStore {
     /// Cached result of the one-time `pg_extension` probe for pgvector. When
     /// false, vector/hybrid search degrades to FTS-only (R-TRAIT-3 / R-SEARCH-5).
     pub(crate) vec_available: Arc<AtomicBool>,
+    /// HNSW `ef_search` for the KNN transaction, resolved from `IndexConfig`
+    /// (default + `MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH` override) at connect
+    /// (spec S3.2). Tunable without an index rebuild.
+    pub(crate) ef_search: u32,
 }
 
 impl PostgresStore {
@@ -90,6 +94,7 @@ impl PostgresStore {
         Ok(Self {
             pool,
             vec_available: Arc::new(AtomicBool::new(vec_available)),
+            ef_search: crate::config::IndexConfig::resolved_hnsw_ef_search(),
         })
     }
 
@@ -102,6 +107,7 @@ impl PostgresStore {
         Self {
             pool,
             vec_available: Arc::new(AtomicBool::new(vec_available)),
+            ef_search: crate::config::IndexConfig::resolved_hnsw_ef_search(),
         }
     }
 

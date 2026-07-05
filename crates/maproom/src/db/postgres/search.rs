@@ -3,9 +3,10 @@
 //! - FTS: Postgres `tsvector`/`to_tsquery('simple')` with the SAME token list as
 //!   SQLite (reusing `sanitize_fts_term`); `exact_mult` stored separately
 //!   (R-SEARCH-9), `total_count` before LIMIT (R-SEARCH-3), filters (R-SEARCH-4).
-//! - Vector: pgvector `<->` (L2) KNN, `similarity = 1/(1+distance)`
-//!   (`distance_to_similarity`, R-SEARCH-5); degrades to empty when
-//!   `has_vector_extension()` is false; scoped to matching `embedding_dim`.
+//! - Vector: pgvector cosine `<=>` KNN over the per-dim typed column, served by a
+//!   partial HNSW `vector_cosine_ops` index (migration 0004); `similarity = 1 - d`
+//!   (`cosine_distance_to_similarity`, R-SEARCH-5); degrades to empty when
+//!   `has_vector_extension()` is false; scoped to the typed column for the query dim.
 //! - Hybrid: reuses SQLite's `combine_results` (RRF) and `apply_semantic_ranking`
 //!   UNMODIFIED (R-SEARCH-6/7) — fed FTS/vector position orderings.
 //!
@@ -20,7 +21,7 @@ use sqlx::{PgPool, QueryBuilder, Row};
 use super::PostgresStore;
 use crate::db::sqlite::fts::FtsResult;
 use crate::db::sqlite::hybrid::{apply_semantic_ranking, combine_results};
-use crate::db::sqlite::vector::{distance_to_similarity, VectorResult};
+use crate::db::sqlite::vector::VectorResult;
 use crate::db::traits::StoreSearch;
 use crate::db::types::{
     ChunkMetadata, HybridResult, HybridWeights, RankedSearchHit, SemanticRanking,
@@ -66,14 +67,23 @@ fn vector_literal(v: &[f32]) -> String {
     s
 }
 
-/// Recover an L2 distance from a `1/(1+d)` similarity (inverse of
-/// `distance_to_similarity`), for feeding `VectorResult`.
+/// Map pgvector cosine DISTANCE (`d = 1 - cos_sim`, range `[0, 2]`) to a similarity
+/// in `[0, 1]`: `1.0` for identical direction, `0.0` for orthogonal-or-opposed. The
+/// raw cosine similarity `1 - d` is `[-1, 1]`, but the CLI/API contract documents
+/// scores as `0.0-1.0` (e.g. `--threshold`), so opposed vectors (which are simply
+/// "not relevant" for code search) clamp to `0.0` rather than emit a negative score.
+/// Result ORDER is unaffected — SQL orders by `distance ASC`, not this score. PG-LOCAL
+/// by design: SQLite still uses L2's `distance_to_similarity` (`1/(1+d)`), which MUST
+/// NOT change (spec §3 non-goal).
+fn cosine_distance_to_similarity(distance: f64) -> f64 {
+    (1.0 - distance).clamp(0.0, 1.0)
+}
+
+/// Inverse of `cosine_distance_to_similarity` — recover cosine distance from a
+/// similarity, for feeding `VectorResult`. The hybrid RRF fuses by rank position,
+/// not raw distance, so this is bookkeeping (kept consistent for honesty).
 fn similarity_to_distance(sim: f64) -> f64 {
-    if sim <= 0.0 {
-        f64::INFINITY
-    } else {
-        (1.0 / sim) - 1.0
-    }
+    1.0 - sim
 }
 
 async fn resolve_repo_id(pool: &PgPool, repo: &str) -> anyhow::Result<Option<i64>> {
@@ -158,21 +168,37 @@ struct HitDetail {
 }
 
 impl PostgresStore {
-    /// Run a built KNN query without the session `statement_timeout`.
-    ///
-    /// The exact nearest-neighbour scan over `code_embeddings` has no ANN index
-    /// yet (Phase-2; see `migrations_pg/0002`), so on a non-trivial corpus it can
-    /// exceed the `statement_timeout` `tuned_pool` sets on every connection and be
-    /// killed mid-scan. Running it in a read-only transaction with
-    /// `SET LOCAL statement_timeout = 0` lets the scan complete; `SET LOCAL` is
-    /// scoped to the transaction and reverts on commit, so the pooled connection
-    /// keeps its normal timeout for every other query.
+    /// Session GUC for the KNN transaction (spec S3). Tunes HNSW recall via
+    /// `hnsw.ef_search`, kept `>= k` where possible so the ANN scan can return `k`
+    /// rows, but CLAMPED into pgvector's valid `[1, 1000]` range: pgvector registers
+    /// `hnsw.ef_search` with a hard max of 1000 (`HNSW_MAX_EF_SEARCH`) and rejects a
+    /// larger `SET LOCAL`, which would abort the whole KNN/hybrid query. `k` is
+    /// user-controlled (`--limit`, and the hybrid path over-fetches `k*3`), so it can
+    /// exceed 1000 — and the configured/env `ef_search` is independently unbounded —
+    /// hence the clamp is required, not cosmetic. Deliberately does NOT touch
+    /// `statement_timeout`: now that the cosine HNSW index (migration 0004) bounds the
+    /// scan, the KNN runs under the tuned-pool cap `tuned_pool` sets on every
+    /// connection, so a regression back to a sequential scan surfaces as a timeout
+    /// error instead of silently hanging (the old `SET LOCAL statement_timeout = 0`
+    /// workaround is gone).
+    pub(super) fn knn_session_sql(ef_search: u32, k: i64) -> String {
+        let max = crate::config::HNSW_MAX_EF_SEARCH;
+        let k_floor = k.clamp(1, max as i64) as u32;
+        let ef = ef_search.max(k_floor).clamp(1, max);
+        format!("SET LOCAL hnsw.ef_search = {ef}")
+    }
+
+    /// Run a built KNN query in a transaction that sets `hnsw.ef_search`. `SET LOCAL`
+    /// is scoped to the transaction and reverts on commit, so the pooled connection
+    /// keeps its defaults (including the real `statement_timeout`) for every other
+    /// query.
     async fn fetch_knn_rows(
         &self,
         mut qb: QueryBuilder<'_, sqlx::Postgres>,
+        k: i64,
     ) -> anyhow::Result<Vec<sqlx::postgres::PgRow>> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("SET LOCAL statement_timeout = 0")
+        sqlx::query(&Self::knn_session_sql(self.ef_search, k))
             .execute(&mut *tx)
             .await?;
         let rows = qb.build().fetch_all(&mut *tx).await?;
@@ -377,23 +403,29 @@ impl StoreSearch for PostgresStore {
             },
             None => None,
         };
+        let dim = embedding.len();
+        // Target the typed column for this dim so the partial cosine HNSW index can
+        // serve the scan (col is from the validated dim registry — safe to inline).
+        let col = super::embeddings::embedding_column_for_dim(dim)?;
         let lit = vector_literal(embedding);
         let mut qb = QueryBuilder::<sqlx::Postgres>::new(
             "SELECT c.id, c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath, c.preview, \
-             (e.embedding <-> ",
+             (e.",
         );
-        qb.push_bind(lit).push(
-            "::vector) AS distance \
+        qb.push(col).push(" <=> ").push_bind(lit).push(format!(
+            "::vector({dim})) AS distance \
              FROM code_embeddings e JOIN chunks c ON c.blob_sha = e.blob_sha \
-             JOIN files f ON f.id = c.file_id",
-        );
+             JOIN files f ON f.id = c.file_id"
+        ));
         if wt_id.is_some() {
             qb.push(" JOIN chunk_worktrees cw ON cw.chunk_id = c.id");
         }
+        // `<col> IS NOT NULL` both scopes to this dim (each row populates exactly one
+        // typed column) AND matches the partial index predicate so the planner can
+        // use the HNSW index.
         qb.push(" WHERE f.repo_id = ")
             .push_bind(repo_id)
-            .push(" AND e.embedding_dim = ")
-            .push_bind(embedding.len() as i32);
+            .push(format!(" AND e.{col} IS NOT NULL"));
         if let Some(wid) = wt_id {
             qb.push(" AND cw.worktree_id = ").push_bind(wid);
         }
@@ -407,13 +439,22 @@ impl StoreSearch for PostgresStore {
                 .push_bind(langs.to_vec())
                 .push(")");
         }
-        qb.push(" ORDER BY distance ASC, c.id LIMIT ").push_bind(k);
-        let rows = self.fetch_knn_rows(qb).await?;
+        // No secondary sort key. EXPLAIN confirms that a non-index tiebreak (`, c.id`)
+        // forces a `Seq Scan` + top-N sort and defeats the HNSW index's ordered scan
+        // (measured ~150x slower on a 5k-row corpus). Consequence: because the pool is
+        // content-addressed (one embedding row fans out over the JOIN to every
+        // same-content chunk sharing its `blob_sha`), those chunks carry an identical
+        // `distance`, so their order among themselves — and membership at the exact
+        // `k` boundary — is not pinned run-to-run. This is the accepted ANN tradeoff:
+        // HNSW is approximate, so exact reproducibility is traded for scale, and the
+        // tied rows are identical content anyway (documented in crates/maproom/CLAUDE.md).
+        qb.push(" ORDER BY distance ASC LIMIT ").push_bind(k);
+        let rows = self.fetch_knn_rows(qb, k).await?;
         Ok(rows
             .iter()
             .map(|r| {
                 let distance: f64 = r.get("distance");
-                let similarity = distance_to_similarity(distance);
+                let similarity = cosine_distance_to_similarity(distance);
                 SearchHit {
                     chunk_id: r.get("id"),
                     start_line: r.get("start_line"),
@@ -444,28 +485,32 @@ impl StoreSearch for PostgresStore {
             return Ok(Vec::new());
         }
         super::embeddings::validate_embedding(query_embedding)?;
+        let dim = query_embedding.len();
+        let col = super::embeddings::embedding_column_for_dim(dim)?;
         let lit = vector_literal(query_embedding);
         let mut qb = QueryBuilder::<sqlx::Postgres>::new(
             "SELECT c.id, c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath, c.preview, \
-             (e.embedding <-> ",
+             (e.",
         );
-        qb.push_bind(lit).push(
-            "::vector) AS distance \
+        qb.push(col).push(" <=> ").push_bind(lit).push(format!(
+            "::vector({dim})) AS distance \
              FROM code_embeddings e JOIN chunks c ON c.blob_sha = e.blob_sha \
-             JOIN files f ON f.id = c.file_id",
-        );
+             JOIN files f ON f.id = c.file_id"
+        ));
         if worktree_id.is_some() {
             qb.push(" JOIN chunk_worktrees cw ON cw.chunk_id = c.id");
         }
         qb.push(" WHERE f.repo_id = ")
             .push_bind(repo_id)
-            .push(" AND e.embedding_dim = ")
-            .push_bind(query_embedding.len() as i32);
+            .push(format!(" AND e.{col} IS NOT NULL"));
         if let Some(wid) = worktree_id {
             qb.push(" AND cw.worktree_id = ").push_bind(wid);
         }
-        qb.push(" ORDER BY distance ASC, c.id LIMIT ").push_bind(k);
-        let rows = self.fetch_knn_rows(qb).await?;
+        // No secondary sort key — same rationale as search_chunks_vector (a `, c.id`
+        // tiebreak defeats the HNSW index; content-addressed fanout ties are the
+        // accepted ANN tradeoff).
+        qb.push(" ORDER BY distance ASC LIMIT ").push_bind(k);
+        let rows = self.fetch_knn_rows(qb, k).await?;
         Ok(rows
             .iter()
             .map(|r| {
@@ -477,7 +522,7 @@ impl StoreSearch for PostgresStore {
                     symbol_name: r.get("symbol_name"),
                     kind: r.get("kind"),
                     file_relpath: r.get("relpath"),
-                    score: distance_to_similarity(distance),
+                    score: cosine_distance_to_similarity(distance),
                     base_score: None,
                     kind_mult: None,
                     exact_mult: None,

@@ -19,6 +19,32 @@ The Maproom hybrid search system uses PostgreSQL with the pgvector extension to 
 - **Recall**: >80% on test queries
 - **Throughput**: 10+ queries per second
 
+> **⚠️ As-built vs. this guide.** Much of this document describes an earlier design
+> (an `ivfflat` index on `chunks.code_embedding`/`text_embedding`, plus materialized
+> views) that was NOT the shipped schema. **What actually ships** (migration
+> `0004_vector_ann.sql`):
+>
+> - **Storage**: a content-addressed `code_embeddings` pool (one row per `blob_sha`,
+>   shared across worktrees), with one typed vector column per supported dim —
+>   `embedding_768 vector(768)`, `embedding_1024 vector(1024)`, `embedding_1536
+>   vector(1536)`. Each row populates exactly the column matching its `embedding_dim`.
+> - **Index**: one **partial HNSW** index per dim,
+>   `USING hnsw (embedding_<dim> vector_cosine_ops) WHERE embedding_<dim> IS NOT NULL`
+>   — NOT `ivfflat`. `pgvector >= 0.5.0` (0.8.0 in CI) is required, not "in future".
+> - **Query**: cosine distance `<=>` over the typed column for the query's dim,
+>   `ORDER BY (embedding_<dim> <=> $q::vector(<dim>)) ASC LIMIT k`; similarity =
+>   `1 - cosine_distance`.
+> - **Tuning**: `hnsw.ef_search` is set per KNN transaction from config
+>   (`MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH`, default 40, clamped up to `k`). The
+>   `ivfflat.probes` / `ivfflat.lists` knobs below are inert for this backend.
+> - **Timeout**: the KNN runs under the normal `statement_timeout` (the HNSW index
+>   bounds the scan); there is no `SET LOCAL statement_timeout = 0`.
+>
+> EXPLAIN on a 5000-row dim-768 corpus: the planner uses
+> `Index Scan using idx_code_embeddings_hnsw_768` (0.38 ms) vs. a forced brute-force
+> seq-scan + top-N sort (58 ms) — ~150× faster. The `ivfflat`/materialized-view
+> sections below are retained for historical reference only.
+
 ### Architecture Components
 
 ```

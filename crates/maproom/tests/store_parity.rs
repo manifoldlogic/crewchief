@@ -974,7 +974,10 @@ async fn check_vector(name: &str, store: &(dyn Store + Send + Sync)) {
         .await
         .unwrap();
     let order: Vec<i64> = v.iter().map(|h| h.chunk_id).collect();
-    assert_eq!(order, ids, "[{name}] vector order by ascending L2 distance");
+    // SQLite ranks by L2 distance, Postgres by cosine distance; the engineered
+    // fixtures (A=[1,0], B=[.5,.5], C=[0,1] vs Q=[1,0]) give the SAME order A,B,C and
+    // identical-vector similarity 1.0 under both metrics — that's the parity contract.
+    assert_eq!(order, ids, "[{name}] vector order by nearest-distance");
     assert!(
         v[0].score > v[1].score && v[1].score > v[2].score,
         "[{name}] similarity descending"

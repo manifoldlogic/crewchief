@@ -64,11 +64,11 @@ async fn phase1_live() {
     };
     let store = fresh_store(&url).await;
 
-    // ── Migrations auto-ran; integer-version adapter returns {1,2,3} (§5.2/§7) ──
+    // ── Migrations auto-ran; integer-version adapter returns {1,2,3,4} (§5.2/§7) ──
     let applied = store.get_applied_migrations().await.unwrap();
     assert_eq!(
         applied,
-        HashSet::from([1, 2, 3]),
+        HashSet::from([1, 2, 3, 4]),
         "applied migration versions"
     );
 
@@ -76,13 +76,13 @@ async fn phase1_live() {
     let store2 = PostgresStore::connect(&url).await.unwrap();
     assert_eq!(
         store2.get_applied_migrations().await.unwrap(),
-        HashSet::from([1, 2, 3])
+        HashSet::from([1, 2, 3, 4])
     );
     let mig_rows: i64 = sqlx::query_scalar("SELECT count(*) FROM schema_migrations")
         .fetch_one(&store.pool)
         .await
         .unwrap();
-    assert_eq!(mig_rows, 3, "schema_migrations stable across reconnect");
+    assert_eq!(mig_rows, 4, "schema_migrations stable across reconnect");
 
     // ── Schema shape (§7 Migrations) ──
     for t in [
@@ -560,19 +560,23 @@ async fn vector_hybrid_live() {
         .await
         .unwrap();
 
-    // Query Q=[1,0,..]; A identical (dist 0), B dist 0.5, C dist sqrt(2). Distinct order.
+    // Query Q=[1,0,..]. Under COSINE (pgvector `<=>`): A identical (cos 1.0, dist 0),
+    // B=[.5,.5,..] partly aligned (cos .707), C=[0,1,..] orthogonal (cos 0). Strictly
+    // decreasing similarity, distinct order. (B must NOT be collinear with Q — e.g.
+    // [.5,0,..] — or cosine would tie it with A at 1.0.)
     let mut q = vec![0f32; 768];
     q[0] = 1.0;
     let a = q.clone();
     let mut b = vec![0f32; 768];
     b[0] = 0.5;
+    b[1] = 0.5;
     let mut c = vec![0f32; 768];
     c[1] = 1.0;
     store.upsert_embedding("EA", &a, "m").await.unwrap();
     store.upsert_embedding("EB", &b, "m").await.unwrap();
     store.upsert_embedding("EC", &c, "m").await.unwrap();
 
-    // Vector KNN ordered by ascending distance: A, B, C (R-SEARCH-5).
+    // Vector KNN ordered by ascending cosine distance: A, B, C (R-SEARCH-5).
     let v = store
         .search_chunks_vector("acme/vec", Some("main"), &q, 10, false, None, None)
         .await
@@ -581,7 +585,7 @@ async fn vector_hybrid_live() {
     assert_eq!(
         order,
         vec![ca, cb, cc],
-        "vector order by ascending L2 distance"
+        "vector order by ascending cosine distance"
     );
     assert!(
         v[0].score > v[1].score && v[1].score > v[2].score,
@@ -590,6 +594,19 @@ async fn vector_hybrid_live() {
     assert!(
         (v[0].score - 1.0).abs() < 1e-6,
         "identical vector -> similarity 1.0"
+    );
+    // Scores ARE cosine similarity, not L2's 1/(1+d): B=[.5,.5] has cos .7071 with
+    // Q=[1,0] (L2 would give 1/(1+.707)=.586); C=[0,1] is orthogonal -> 0. This pins
+    // the PG-local cosine mapping (spec S2.3) and would fail under the old `<->`.
+    assert!(
+        (v[1].score - std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-4,
+        "B partly-aligned -> cosine similarity ~0.7071, got {}",
+        v[1].score
+    );
+    assert!(
+        v[2].score.abs() < 1e-4,
+        "C orthogonal -> cosine similarity ~0, got {}",
+        v[2].score
     );
 
     // Degraded mode: a store with vec flag forced false returns empty (R-SEARCH-5).
@@ -655,6 +672,256 @@ async fn vector_hybrid_live() {
     }
 
     eprintln!("vector_hybrid_live: all vector+hybrid assertions passed");
+}
+
+/// pgvector text literal `[a,b,c]` for a manual `$N::vector` bind (test-local; the
+/// production `format_vector` is private to `embeddings.rs`).
+fn pgvec_literal(v: &[f32]) -> String {
+    let mut s = String::from("[");
+    for (i, x) in v.iter().enumerate() {
+        if i > 0 {
+            s.push(',');
+        }
+        s.push_str(&x.to_string());
+    }
+    s.push(']');
+    s
+}
+
+/// Spec §4 S1 Gherkin: round-trip an embedding at each supported dim, and verify
+/// each row populates exactly the matching typed column (the storage invariant).
+#[tokio::test]
+#[ignore]
+async fn dim_typed_roundtrip_live() {
+    let Some(url) = test_url() else {
+        eprintln!("skipping dim_typed_roundtrip_live: MAPROOM_TEST_PG_URL unset");
+        return;
+    };
+    let store = fresh_store(&url).await;
+    for dim in [768usize, 1024, 1536] {
+        let blob = format!("RT{dim}");
+        let v: Vec<f32> = (0..dim).map(|i| (i % 7) as f32 * 0.125).collect();
+        store.upsert_embedding(&blob, &v, "m").await.unwrap();
+
+        // get_embedding returns the identical vector (via the typed column).
+        let got = store.get_embedding(&blob).await.unwrap().unwrap();
+        assert_eq!(got.len(), dim, "dim {dim} round-trip length");
+        for (a, b) in v.iter().zip(&got) {
+            assert!((a - b).abs() <= 1e-5, "dim {dim} round-trip value {a} vs {b}");
+        }
+
+        // Exactly the matching typed column is non-null; the other two are null.
+        let (c768, c1024, c1536): (bool, bool, bool) = sqlx::query_as(
+            "SELECT embedding_768 IS NOT NULL, embedding_1024 IS NOT NULL, \
+             embedding_1536 IS NOT NULL FROM code_embeddings WHERE blob_sha = $1",
+        )
+        .bind(&blob)
+        .fetch_one(&store.pool)
+        .await
+        .unwrap();
+        let expected = (dim == 768, dim == 1024, dim == 1536);
+        assert_eq!(
+            (c768, c1024, c1536),
+            expected,
+            "dim {dim}: exactly the matching typed column is populated"
+        );
+    }
+    eprintln!("dim_typed_roundtrip_live: typed-column round-trip at 768/1024/1536 passed");
+}
+
+/// Spec §4 S1.2 Gherkin: a pool populated the pre-0004 way (typeless `embedding`
+/// column) is backfilled into the typed columns by migration 0004, preserving every
+/// vector, and the typeless column no longer exists afterwards. Rebuilds the pre-0004
+/// schema (migrations 0001-0003) and records them applied, so `from_pool` runs ONLY
+/// 0004 and must backfill.
+#[tokio::test]
+#[ignore]
+async fn backfill_preserves_live() {
+    let Some(url) = test_url() else {
+        eprintln!("skipping backfill_preserves_live: MAPROOM_TEST_PG_URL unset");
+        return;
+    };
+    let pool = PgPoolOptions::new().connect(&url).await.unwrap();
+    sqlx::raw_sql("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+        .execute(&pool)
+        .await
+        .unwrap();
+    // Replay the pre-0004 schema exactly (typeless `embedding vector` column lives in
+    // 0002), then record 1-3 as applied so the runner sees only 0004 pending.
+    for sql in [
+        include_str!("../../../migrations_pg/0001_init.sql"),
+        include_str!("../../../migrations_pg/0002_code_embeddings.sql"),
+        include_str!("../../../migrations_pg/0003_indexes.sql"),
+    ] {
+        sqlx::raw_sql(sql).execute(&pool).await.unwrap();
+    }
+    sqlx::raw_sql(
+        "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, \
+         applied_at TIMESTAMPTZ NOT NULL DEFAULT now()); \
+         INSERT INTO schema_migrations (version, name) \
+         VALUES (1,'init'),(2,'code_embeddings'),(3,'indexes');",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Populate the OLD way: straight into the typeless `embedding` column, at two dims.
+    let v768: Vec<f32> = (0..768).map(|i| (i % 5) as f32 * 0.2).collect();
+    let v1536: Vec<f32> = (0..1536).map(|i| (i % 3) as f32 * 0.5).collect();
+    for (blob, v, dim) in [("BF768", &v768, 768i32), ("BF1536", &v1536, 1536)] {
+        sqlx::query(
+            "INSERT INTO code_embeddings (blob_sha, embedding, embedding_dim, model_version) \
+             VALUES ($1, $2::vector, $3, $4)",
+        )
+        .bind(blob)
+        .bind(pgvec_literal(v))
+        .bind(dim)
+        .bind("m")
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    // Apply the remaining migration (0004): backfill into typed columns + drop typeless.
+    let store = PostgresStore::from_pool(pool).await.unwrap();
+
+    // Every vector is preserved in its typed column and still readable.
+    let got768 = store.get_embedding("BF768").await.unwrap().unwrap();
+    assert_eq!(got768.len(), 768);
+    for (a, b) in v768.iter().zip(&got768) {
+        assert!((a - b).abs() <= 1e-5, "768 backfill value {a} vs {b}");
+    }
+    let got1536 = store.get_embedding("BF1536").await.unwrap().unwrap();
+    assert_eq!(got1536.len(), 1536);
+    for (a, b) in v1536.iter().zip(&got1536) {
+        assert!((a - b).abs() <= 1e-5, "1536 backfill value {a} vs {b}");
+    }
+
+    // The typeless `embedding` column no longer exists.
+    let embedding_col: Option<i32> = sqlx::query_scalar(
+        "SELECT 1 FROM information_schema.columns \
+         WHERE table_schema = 'public' AND table_name = 'code_embeddings' \
+         AND column_name = 'embedding'",
+    )
+    .fetch_optional(&store.pool)
+    .await
+    .unwrap();
+    assert!(
+        embedding_col.is_none(),
+        "typeless `embedding` column must be dropped after 0004"
+    );
+    eprintln!("backfill_preserves_live: 0004 backfill preserved vectors and dropped typeless column");
+}
+
+/// Spec S3.1/S3.2 (unit, no DB): the KNN session GUC sets `hnsw.ef_search` from
+/// config (clamped up to k) and never disables `statement_timeout`.
+#[test]
+fn knn_session_sql_sets_ef_search_not_timeout() {
+    // Config value wins when it already covers k.
+    assert_eq!(
+        PostgresStore::knn_session_sql(100, 10),
+        "SET LOCAL hnsw.ef_search = 100"
+    );
+    // ef_search is clamped UP to k so the ANN scan can return k rows.
+    assert_eq!(
+        PostgresStore::knn_session_sql(40, 60),
+        "SET LOCAL hnsw.ef_search = 60"
+    );
+    // ...but never above pgvector's hard max of 1000, whether the pressure comes from
+    // a large config value or a large k (hybrid over-fetches k*3) — else the SET LOCAL
+    // errors and aborts the whole KNN query.
+    assert_eq!(
+        PostgresStore::knn_session_sql(40, 5000),
+        "SET LOCAL hnsw.ef_search = 1000",
+        "large k must clamp to pgvector's 1000 ceiling"
+    );
+    assert_eq!(
+        PostgresStore::knn_session_sql(9000, 10),
+        "SET LOCAL hnsw.ef_search = 1000",
+        "large configured ef_search must clamp to 1000"
+    );
+    // Degenerate k (0 / negative) floors to a valid ef (>= 1).
+    assert_eq!(
+        PostgresStore::knn_session_sql(40, 0),
+        "SET LOCAL hnsw.ef_search = 40"
+    );
+    // The `statement_timeout = 0` workaround is gone (S3.1): the KNN runs under the
+    // real tuned-pool cap.
+    let sql = PostgresStore::knn_session_sql(40, 10);
+    assert!(
+        !sql.contains("statement_timeout"),
+        "KNN must run under the real tuned-pool timeout, not disable it"
+    );
+}
+
+/// Spec S3.2 Gherkin (live): the KNN session GUC actually takes effect — pgvector
+/// accepts `hnsw.ef_search` and the value is live inside the transaction, and the
+/// scan runs under a non-zero `statement_timeout` (no `SET LOCAL statement_timeout = 0`).
+#[tokio::test]
+#[ignore]
+async fn knn_ef_search_applies_live() {
+    let Some(url) = test_url() else {
+        eprintln!("skipping knn_ef_search_applies_live: MAPROOM_TEST_PG_URL unset");
+        return;
+    };
+    let store = fresh_store(&url).await;
+    let sql = PostgresStore::knn_session_sql(123, 10); // 123 > 10 -> stays 123
+    assert_eq!(sql, "SET LOCAL hnsw.ef_search = 123");
+    let mut tx = store.pool.begin().await.unwrap();
+    sqlx::query(&sql).execute(&mut *tx).await.unwrap();
+    let ef: String = sqlx::query_scalar("SHOW hnsw.ef_search")
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+    assert_eq!(ef, "123", "pgvector applied the configured ef_search");
+    // statement_timeout is the tuned-pool cap (non-zero), NOT disabled for the scan.
+    let st: String = sqlx::query_scalar("SHOW statement_timeout")
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+    assert_ne!(st, "0", "statement_timeout must not be disabled for the KNN scan");
+    tx.commit().await.unwrap();
+    eprintln!("knn_ef_search_applies_live: ef_search GUC applied, statement_timeout not disabled");
+}
+
+/// Spec S2.1 (live automated guard): migration 0004 creates the three PARTIAL cosine
+/// HNSW indexes on the pool. Complements the MANUAL EXPLAIN transcript in the PR that
+/// shows the planner USING the index on a non-trivial corpus (planner choice is
+/// corpus/version-sensitive, so this pins index EXISTENCE, not the plan).
+#[tokio::test]
+#[ignore]
+async fn hnsw_indexes_exist_live() {
+    let Some(url) = test_url() else {
+        eprintln!("skipping hnsw_indexes_exist_live: MAPROOM_TEST_PG_URL unset");
+        return;
+    };
+    let store = fresh_store(&url).await;
+    for (idx, col) in [
+        ("idx_code_embeddings_hnsw_768", "embedding_768"),
+        ("idx_code_embeddings_hnsw_1024", "embedding_1024"),
+        ("idx_code_embeddings_hnsw_1536", "embedding_1536"),
+    ] {
+        let def: Option<String> = sqlx::query_scalar(
+            "SELECT indexdef FROM pg_indexes \
+             WHERE schemaname = 'public' AND tablename = 'code_embeddings' AND indexname = $1",
+        )
+        .bind(idx)
+        .fetch_optional(&store.pool)
+        .await
+        .unwrap();
+        let def = def.unwrap_or_else(|| panic!("missing HNSW index {idx}"));
+        assert!(def.contains("USING hnsw"), "{idx} must be HNSW: {def}");
+        assert!(
+            def.contains("vector_cosine_ops"),
+            "{idx} must use cosine ops: {def}"
+        );
+        assert!(
+            def.to_lowercase().contains("where"),
+            "{idx} must be partial (WHERE ... IS NOT NULL): {def}"
+        );
+        assert!(def.contains(col), "{idx} must index {col}: {def}");
+    }
+    eprintln!("hnsw_indexes_exist_live: three partial cosine HNSW indexes present");
 }
 
 fn looks_like_ts(s: &str) -> bool {
