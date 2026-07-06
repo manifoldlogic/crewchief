@@ -98,16 +98,15 @@ fn load_ground_truth() -> anyhow::Result<HashMap<usize, GroundTruthEntry>> {
     Ok(ground_truth)
 }
 
-/// Execute a search query and return ranked results
+/// Execute a search query and return ranked results.
 ///
-/// This is a mock implementation for demonstration.
-/// In production, this would call the actual search pipeline.
+/// SUPERSEDED (F75): this is a MOCK that returns `vec![]` — the `#[ignore]`d threshold
+/// tests below only "pass" because they assert against these empty results. The real
+/// dual-backend quality/latency benchmark that runs one corpus through both SQLite and
+/// Postgres and scores it with the same `evaluation::metrics` lives in
+/// `tests/backend_benchmark.rs`. This mock is retained only so the metric-machinery unit
+/// tests in this file keep compiling; do NOT treat its threshold tests as real signal.
 fn execute_search_query(_query: &str) -> Vec<RankedResult> {
-    // Mock implementation: returns empty results
-    // In production, this would:
-    // 1. Connect to database
-    // 2. Execute hybrid search (FTS + vector + metadata signals)
-    // 3. Return ranked results with chunk IDs
     vec![]
 }
 
