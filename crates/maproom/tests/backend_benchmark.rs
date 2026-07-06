@@ -123,16 +123,10 @@ async fn backends() -> Vec<(&'static str, Arc<dyn Store + Send + Sync>)> {
     #[cfg(feature = "postgres")]
     {
         if let Ok(url) = std::env::var("MAPROOM_TEST_PG_URL") {
-            // Fresh schema so the benchmark corpus is isolated from other rows.
-            let pool = sqlx::postgres::PgPoolOptions::new()
-                .connect(&url)
-                .await
-                .expect("pg pool");
-            sqlx::raw_sql("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
-                .execute(&pool)
-                .await
-                .expect("reset pg schema");
-            pool.close().await;
+            // NO schema reset: a `DROP SCHEMA CASCADE` here would race sibling PG test
+            // binaries (which cargo runs in parallel) and wipe their tables mid-run. The
+            // benchmark isolates itself the way store_parity does — process-unique repo
+            // names + repo-scoped search — so other rows in the shared DB never interfere.
             let pg = maproom::db::postgres::PostgresStore::connect(&url)
                 .await
                 .expect("postgres connect");
@@ -264,6 +258,20 @@ async fn run_backend(
 ) -> Vec<Row> {
     let mut rows = Vec::new();
 
+    // Warmup: absorb the first-query cold-start (connection acquire, plan / prepared-
+    // statement compile) for BOTH paths before timing either — otherwise whichever mode
+    // runs first unfairly absorbs the warmup and looks slower (review finding #3).
+    if let Some(q0) = queries.first() {
+        let _ = store
+            .search_chunks_fts(repo, Some("main"), &q0.text, TOP_K, false, None, None)
+            .await;
+        if store.has_vector_extension() {
+            let _ = store
+                .search_chunks_vector(repo, Some("main"), &q0.emb, TOP_K, false, None, None)
+                .await;
+        }
+    }
+
     // FTS
     let (mut fts_ms, mut fts_lat) = (Vec::new(), Vec::new());
     for q in queries {
@@ -364,7 +372,13 @@ fn render_report(rows: &[Row], pg_present: bool) {
 
 /// F75 — run the corpus through both backends, report the comparison, and assert
 /// tolerant quality thresholds (never exact-order on the approximate PG vector path).
+///
+/// `#[ignore]`d like every other real-DB PG test in the crate: it connects to
+/// `MAPROOM_TEST_PG_URL` when set, so it must not run in the default parallel suite.
+/// Run it on demand: `cargo test --test backend_benchmark --ignored -- --nocapture`
+/// (add `--features postgres` + `MAPROOM_TEST_PG_URL` for the Postgres arm).
 #[tokio::test]
+#[ignore]
 async fn backend_search_benchmark() {
     let (docs, queries) = build_corpus();
     let bes = backends().await;
@@ -400,6 +414,22 @@ async fn backend_search_benchmark() {
             sq_vec.metrics.ndcg_at_k[&5] > 0.8,
             "SQLite vector nDCG@5 should be high (strong chunks sit on the centroid; got {:.3})",
             sq_vec.metrics.ndcg_at_k[&5]
+        );
+    }
+
+    // A backend that HAS the vector extension must produce a real vector result — a
+    // STANDALONE Postgres floor so a degraded/misindexed PG vector path fails on its own,
+    // and a guard so the tolerant comparison below can't be asymmetrically skipped.
+    if let Some(pg_vec) = get("postgres", "vector") {
+        assert!(
+            pg_vec.metrics.ndcg_at_k[&5] > 0.8,
+            "Postgres vector nDCG@5 should be high on the engineered corpus (got {:.3})",
+            pg_vec.metrics.ndcg_at_k[&5]
+        );
+        assert!(
+            get("sqlite", "vector").is_some(),
+            "Postgres produced a vector row but SQLite did not — the tolerant vector \
+             comparison would be silently skipped, hiding a regression"
         );
     }
 

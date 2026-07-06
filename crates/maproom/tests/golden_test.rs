@@ -100,8 +100,9 @@ fn load_ground_truth() -> anyhow::Result<HashMap<usize, GroundTruthEntry>> {
 
 /// Execute a search query and return ranked results.
 ///
-/// SUPERSEDED (F75): this is a MOCK that returns `vec![]` — the `#[ignore]`d threshold
-/// tests below only "pass" because they assert against these empty results. The real
+/// SUPERSEDED (F75): this is a MOCK that returns `vec![]`, so the threshold tests below
+/// compute ALL-ZERO metrics and their `assert!(p10 > 0.7)`-style checks would FAIL — they
+/// avoid failing CI only because they are `#[ignore]`d, not because they pass. The real
 /// dual-backend quality/latency benchmark that runs one corpus through both SQLite and
 /// Postgres and scores it with the same `evaluation::metrics` lives in
 /// `tests/backend_benchmark.rs`. This mock is retained only so the metric-machinery unit
