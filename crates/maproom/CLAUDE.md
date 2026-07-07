@@ -68,11 +68,11 @@ The SQLite-vs-Postgres search benchmark runs ONE engineered corpus through both 
 and reports quality (P@k / recall@k / nDCG@k / MRR via `evaluation::metrics`) + latency:
 
 ```
-# SQLite only (default suite):
-cargo test -p maproom --test backend_benchmark backend_search_benchmark -- --nocapture
+# SQLite only (the benchmark is #[ignore]d — run it on demand):
+cargo test -p maproom --test backend_benchmark backend_search_benchmark -- --ignored --nocapture
 # Both backends:
 MAPROOM_TEST_PG_URL=postgres://user@host/db \
-  cargo test -p maproom --features postgres --test backend_benchmark backend_search_benchmark -- --nocapture
+  cargo test -p maproom --features postgres --test backend_benchmark backend_search_benchmark -- --ignored --nocapture
 ```
 
 It is test-only (no production path) and asserts **tolerant** quality thresholds, never
