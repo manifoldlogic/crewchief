@@ -62,6 +62,25 @@ The crate version lives in **one place**: `version` in `crates/maproom/Cargo.tom
 - The npm packages (`@crewchief/cli`, etc.) version independently via `release-config.json`; they bundle the compiled binary but don't pin the crate's semver.
 - Bump policy: this is a `0.x` crate, so a breaking public-API change uses a **minor** bump (`0.1.0 → 0.2.0`); additive/fixes use a patch bump.
 
+## Benchmarking (F75)
+
+The SQLite-vs-Postgres search benchmark runs ONE engineered corpus through both backends
+and reports quality (P@k / recall@k / nDCG@k / MRR via `evaluation::metrics`) + latency:
+
+```
+# SQLite only (the benchmark is #[ignore]d — run it on demand):
+cargo test -p maproom --test backend_benchmark backend_search_benchmark -- --ignored --nocapture
+# Both backends:
+MAPROOM_TEST_PG_URL=postgres://user@host/db \
+  cargo test -p maproom --features postgres --test backend_benchmark backend_search_benchmark -- --ignored --nocapture
+```
+
+It is test-only (no production path) and asserts **tolerant** quality thresholds, never
+exact-order equality (Postgres vector search is approximate — see the HNSW note above).
+Ground truth is by natural key (`symbol_name`), never a raw chunk_id. The old
+`tests/golden_test.rs` `execute_search_query` is a superseded `vec![]` mock — use this.
+The instrument is ready for a larger/real corpus to locate the latency crossover.
+
 ## Docs
 
 - Agent integration: `docs/agent-usage.md`
