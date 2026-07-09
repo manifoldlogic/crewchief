@@ -309,8 +309,8 @@ Changing weights only affects score calculation, which is O(n) where n = number 
 
 ### What DOES Affect Performance
 
-- **Database indexes** (GIN for FTS, ivfflat/HNSW for vectors)
-- **Index parameters** (ivfflat lists, HNSW m/ef_construction)
+- **Database indexes** (GIN for FTS, HNSW for vectors via pgvector)
+- **Index parameters** (HNSW ef_search via `MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH`)
 - **Query complexity** (number of terms, embedding size)
 - **Result limit** (k value)
 

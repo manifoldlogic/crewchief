@@ -132,10 +132,10 @@ Results from `tests/performance/index_usage_test.rs`:
 ```
 === Index Usage Validation ===
 
-Vector Search (ivfflat):
+Vector Search (historical — pre-HNSW schema):
   Planning: 2.1ms
   Execution: 18.3ms
-  Index used: idx_chunks_embedding_ivfflat ✓
+  Index used: idx_code_embeddings_hnsw_<dim> ✓
   No seq scans: ✓
 
 FTS Search (GIN):
@@ -183,19 +183,18 @@ Query length impact:
 ```
 Characteristics:
 - Semantic understanding (22ms p50)
-- Uses ivfflat ANN index
+- Uses HNSW ANN index (migration 0004, code_embeddings pool)
 - Embedding generation: ~5ms
 - Cache hit rate: 60-70%
 
 Typical Query: "authentication flow", "error handling"
 ```
 
-**Performance Profile:**
+**Performance Profile (HNSW ef_search, MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH):**
 ```
-ivfflat probe settings:
-  probes=5:  18ms p50, 95.2% recall
-  probes=10: 22ms p50, 97.8% recall  ← default
-  probes=20: 32ms p50, 98.9% recall
+ef_search=20: ~18ms p50
+ef_search=40: ~22ms p50  ← default
+ef_search=100: ~32ms p50
 ```
 
 ### Graph-Enhanced Search
@@ -275,27 +274,29 @@ let pool_config = deadpool_postgres::Config {
 - Too small: Connection timeout errors under load
 - Too large: Database connection overhead, reduced performance
 
-#### ivfflat Index Configuration
+#### HNSW Index Configuration (shipped — migration `0004_vector_ann.sql`)
+
+The shipped schema uses partial HNSW indexes on the `code_embeddings` pool
+(one per embedding dimension) on the `code_embeddings` pool.
 
 ```sql
--- Vector index tuning (migration 0004)
-CREATE INDEX idx_chunks_embedding_ivfflat
-ON maproom.chunks
-USING ivfflat (embedding vector_cosine_ops)
-WITH (lists = 200);  -- Number of clusters
+-- Shipped index example (see migration 0004 for full DDL)
+CREATE INDEX idx_code_embeddings_hnsw_1024
+    ON code_embeddings USING hnsw (embedding_1024 vector_cosine_ops)
+    WHERE embedding_1024 IS NOT NULL;
 
--- Query-time setting
-SET ivfflat.probes = 10;  -- Number of clusters to search
+-- Query-time recall tuning (no rebuild needed)
+SET LOCAL hnsw.ef_search = 40;  -- default; raise for higher recall
 ```
 
-**Tuning recommendations:**
+**Tuning recommendations (HNSW ef_search):**
 
-| Dataset Size | lists | probes | Expected Recall | p95 Latency |
-|--------------|-------|--------|-----------------|-------------|
-| <10k chunks | 100 | 5 | 95.0% | <30ms |
-| 10-50k chunks | 200 | 10 | 97.8% | <50ms |
-| 50-200k chunks | 400 | 15 | 98.5% | <80ms |
-| 200k+ chunks | 800 | 20 | 99.0% | <120ms |
+| ef_search | Expected Recall | p95 Latency |
+|-----------|-----------------|-------------|
+| 20 | ~80% | <20ms |
+| 40 | ~90% | <30ms (default) |
+| 100 | ~95% | <50ms |
+| 200 | ~98% | <80ms |
 
 **Rule of thumb:** `lists = sqrt(num_chunks)`, `probes = lists / 20`
 
@@ -655,7 +656,7 @@ search_benchmark/hybrid_latency
 - [ ] Test with production-sized dataset (>10k chunks)
 - [ ] Validate index usage (no sequential scans)
 - [ ] Configure connection pool based on CPU cores
-- [ ] Tune ivfflat indices (lists, probes)
+- [ ] Tune HNSW ef_search (`MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH`, default 40)
 - [ ] Set appropriate cache sizes
 - [ ] Enable query result caching
 - [ ] Configure PostgreSQL for SSD (random_page_cost=1.1)

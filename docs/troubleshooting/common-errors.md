@@ -75,6 +75,10 @@ MAPROOM_EMBEDDING_PARALLEL_SUB_BATCH_SIZE=25 maproom scan
 
 ## SQLite Errors
 
+> The errors in this section apply to the **SQLite backend only** (the default when no
+> `MAPROOM_DATABASE_URL` is set). For Postgres backend issues, see
+> [PostgreSQL Errors](#postgresql-errors) below.
+
 ### Error: Database is locked
 
 **Symptoms:**
@@ -89,7 +93,7 @@ MAPROOM_EMBEDDING_PARALLEL_SUB_BATCH_SIZE=25 maproom scan
 
 **Solutions:**
 ```bash
-# 1. Check for other processes
+# 1. Check for other processes (SQLite backend only)
 lsof ~/.maproom/maproom.db
 
 # 2. Wait and retry (usually resolves automatically)
@@ -100,6 +104,9 @@ pgrep -f maproom
 pkill -f "maproom serve"  # Kill stuck daemon
 ```
 
+> **Tip**: If you see frequent lock errors, consider switching to the PostgreSQL backend
+> which supports concurrent multi-process writes.
+
 ### Error: Database file not found
 
 **Symptoms:**
@@ -108,7 +115,7 @@ pkill -f "maproom serve"  # Kill stuck daemon
 
 **Solutions:**
 ```bash
-# 1. Check database location
+# 1. Check database location (SQLite backend only)
 ls -la ~/.maproom/
 
 # 2. Create directory if missing
@@ -130,7 +137,7 @@ The sqlite-vec extension should be statically linked, but may fail on some platf
 
 **Solutions:**
 ```bash
-# 1. Check if extension is available
+# 1. Check if extension is available (SQLite backend only)
 sqlite3 ~/.maproom/maproom.db "SELECT vec_version()"
 
 # 2. Rebuild with correct features
@@ -138,6 +145,60 @@ cargo build --release --features sqlite
 
 # 3. Fall back to FTS-only mode
 # Search with mode: "fts" instead of "hybrid"
+```
+
+---
+
+## PostgreSQL Errors
+
+> These errors apply only when using the PostgreSQL backend
+> (`MAPROOM_DATABASE_URL=postgres://...`).
+
+### Error: PostgreSQL connection refused
+
+**Symptoms:**
+- `connection refused` at `maproom-postgres:5432` or `localhost:5433`
+- Maproom starts but immediately fails
+
+**Causes:**
+1. The `maproom-postgres` Docker container is not running
+2. Wrong hostname for your context (see the hostname table in DATABASE_ARCHITECTURE.md)
+3. Firewall blocking the port
+
+**Solutions:**
+```bash
+# 1. Check the container
+docker ps | grep maproom-postgres
+
+# 2. Start it
+cd /path/to/maproom-mcp/config && docker compose up -d
+
+# 3. Verify from the current network context
+psql "postgresql://maproom:maproom@maproom-postgres:5432/maproom" -c "SELECT 1"
+# If the above fails and you are on the host machine:
+psql "postgresql://maproom:maproom@localhost:5433/maproom" -c "SELECT 1"
+```
+
+### Error: pg_stat_activity — finding blocked queries
+
+**Symptom**: Maproom commands hang; you suspect a long-running PG transaction.
+
+**Diagnosis:**
+```bash
+psql "$MAPROOM_DATABASE_URL" -c "
+  SELECT pid, now() - query_start AS duration, state,
+         left(query, 120) as query_preview
+  FROM pg_stat_activity
+  WHERE datname = 'maproom'
+    AND state != 'idle'
+  ORDER BY duration DESC;
+"
+```
+
+**Terminate a specific backend:**
+```bash
+# Replace <pid> with the pid from the query above
+psql "$MAPROOM_DATABASE_URL" -c "SELECT pg_terminate_backend(<pid>);"
 ```
 
 ---
@@ -213,7 +274,12 @@ maproom upsert --paths "src/changed.ts" --commit HEAD
 maproom scan /path/to/repo
 
 # 3. Check file timestamps vs index
-sqlite3 ~/.maproom/maproom.db "SELECT path, indexed_at FROM files ORDER BY indexed_at DESC LIMIT 10"
+# SQLite backend:
+sqlite3 ~/.maproom/maproom.db \
+  "SELECT path, indexed_at FROM files ORDER BY indexed_at DESC LIMIT 10"
+# PostgreSQL backend:
+psql "$MAPROOM_DATABASE_URL" \
+  -c "SELECT path, indexed_at FROM files ORDER BY indexed_at DESC LIMIT 10"
 ```
 
 ---
@@ -228,7 +294,7 @@ sqlite3 ~/.maproom/maproom.db "SELECT path, indexed_at FROM files ORDER BY index
 - All MCP requests fail
 
 **Causes:**
-1. Database corruption
+1. Database corruption (SQLite) or connection failure (Postgres)
 2. Out of memory
 3. Configuration error
 
@@ -238,11 +304,19 @@ sqlite3 ~/.maproom/maproom.db "SELECT path, indexed_at FROM files ORDER BY index
 RUST_LOG=debug maproom serve
 
 # 2. Test database integrity
+# SQLite backend:
 sqlite3 ~/.maproom/maproom.db "PRAGMA integrity_check"
+# PostgreSQL backend:
+psql "$MAPROOM_DATABASE_URL" -c "
+  SELECT tablename, n_live_tup, n_dead_tup
+  FROM pg_stat_user_tables ORDER BY tablename;
+"
 
 # 3. Reset database if corrupted
+# SQLite backend:
 rm ~/.maproom/maproom.db
 maproom scan /path/to/repo
+# PostgreSQL backend: see 'Hard Reset' in debugging.md
 ```
 
 ### Error: Request timeout
@@ -300,7 +374,9 @@ pkill -f "maproom serve"
 When something doesn't work:
 
 1. **Check Ollama:** `curl http://localhost:11434/api/tags`
-2. **Check database:** `ls -la ~/.maproom/maproom.db`
+2. **Check database:**
+   - SQLite backend: `ls -la ~/.maproom/maproom.db`
+   - Postgres backend: `psql "$MAPROOM_DATABASE_URL" -c "SELECT 1"`
 3. **Check index:** Use `status` MCP tool
 4. **Enable debug:** `RUST_LOG=debug`
 5. **Kill stuck processes:** `pkill -f maproom`

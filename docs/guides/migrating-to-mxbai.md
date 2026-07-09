@@ -80,6 +80,12 @@ export MAPROOM_EMBEDDING_MODEL=nomic-embed-text
 export MAPROOM_EMBEDDING_DIMENSION=768
 ```
 
+> **Shared PostgreSQL deployment**: If you are sharing a `maproom-postgres` instance
+> across multiple developers or repos, all clients must agree on the embedding model
+> for new content — the `code_embeddings` pool stores typed columns per dim
+> (`embedding_768`, `embedding_1024`, `embedding_1536`). Mixed-dim search works, but
+> setting a consistent model avoids splitting the pool unnecessarily.
+
 ### VSCode Extension Users
 
 The VSCode extension respects the same environment variables. Set them in your shell profile, or create a `.env` file in your project root:
@@ -110,6 +116,10 @@ Configure environment variables in your MCP client settings:
   }
 }
 ```
+
+For the shared PostgreSQL backend, replace the `MAPROOM_DATABASE_URL` value with the
+appropriate Postgres connection string (see
+[Database Architecture](../architecture/DATABASE_ARCHITECTURE.md) for hostname choices).
 
 ### Verify Your Configuration
 
