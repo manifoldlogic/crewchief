@@ -392,7 +392,11 @@ pub async fn run(warmup: Option<CacheWarmupSpec>, cache_ttl_secs: u64) -> Result
 }
 
 async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> JsonRpcResponse {
-    let id = request.id.clone().flatten().unwrap_or(serde_json::Value::Null);
+    let id = request
+        .id
+        .clone()
+        .flatten()
+        .unwrap_or(serde_json::Value::Null);
 
     // R19 / R-RPC-2 (OD-10): the version field must be exactly "2.0". For a
     // notification the run loop suppresses this reply anyway (a malformed
@@ -426,36 +430,42 @@ async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> Jso
             // R18 / R-WTF-1: validate the worktree name BEFORE execute_search
             // (all execute_search errors collapse to -32000). An unknown
             // worktree used to be silently unscoped -> wrong-scope results.
-            if let Some(ref w) = params.worktree {
-                let known = match worktree_exists(&state, &params.repo, w).await {
-                    Ok(known) => known,
-                    Err(e) => {
-                        // Review [11]/[38]: a store failure during validation
-                        // is a retryable server error (-32000, like every
-                        // other store failure in this dispatch) — NOT a
-                        // -32602 "unknown worktree" verdict that makes agents
-                        // permanently drop a perfectly valid scope filter.
-                        error!("Worktree validation failed: {}", e);
+            // Worktree scoping is only meaningful for single-repo requests;
+            // multi-repo (repos/all_repos) silently ignores the worktree filter.
+            if let (Some(ref w), Some(ref repo_name)) = (&params.worktree, &params.repo) {
+                let has_repos = params.repos.as_ref().is_some_and(|v| !v.is_empty());
+                let has_all = params.all_repos.unwrap_or(false);
+                if !has_repos && !has_all {
+                    let known = match worktree_exists(&state, repo_name.as_str(), w).await {
+                        Ok(known) => known,
+                        Err(e) => {
+                            // Review [11]/[38]: a store failure during validation
+                            // is a retryable server error (-32000, like every
+                            // other store failure in this dispatch) — NOT a
+                            // -32602 "unknown worktree" verdict that makes agents
+                            // permanently drop a perfectly valid scope filter.
+                            error!("Worktree validation failed: {}", e);
+                            return JsonRpcResponse::error(
+                                id,
+                                -32000,
+                                "Internal error".to_string(),
+                                Some(serde_json::json!(format!(
+                                    "worktree validation failed: {e:#}"
+                                ))),
+                            );
+                        }
+                    };
+                    if !known {
                         return JsonRpcResponse::error(
                             id,
-                            -32000,
-                            "Internal error".to_string(),
+                            -32602,
+                            "Invalid params".to_string(),
                             Some(serde_json::json!(format!(
-                                "worktree validation failed: {e:#}"
+                                "unknown worktree '{}' for repo '{}'",
+                                w, repo_name
                             ))),
                         );
                     }
-                };
-                if !known {
-                    return JsonRpcResponse::error(
-                        id,
-                        -32602,
-                        "Invalid params".to_string(),
-                        Some(serde_json::json!(format!(
-                            "unknown worktree '{}' for repo '{}'",
-                            w, params.repo
-                        ))),
-                    );
                 }
             }
 
@@ -697,7 +707,9 @@ async fn warm_queries(
     for query in queries {
         let sp = SearchParams {
             query: query.clone(),
-            repo: repo.to_string(),
+            repo: Some(repo.to_string()),
+            repos: None,
+            all_repos: None,
             worktree: worktree.map(String::from),
             limit: k,
             threshold: None,
@@ -747,6 +759,8 @@ fn search_cache_key(params: &SearchParams) -> String {
     serde_json::json!({
         "q": params.query,
         "repo": params.repo,
+        "repos": params.repos,
+        "all_repos": params.all_repos.unwrap_or(false),
         "wt": params.worktree,
         "limit": params.limit.unwrap_or(10),
         "threshold": params.threshold,
@@ -762,10 +776,7 @@ fn search_cache_key(params: &SearchParams) -> String {
 /// F69: the cached search path — consult the daemon cache, fall through to
 /// a real execution on miss, populate on success. `cache.warm` runs the
 /// SAME function, so a warmed query is by construction a later cache hit.
-async fn cached_search(
-    state: Arc<DaemonState>,
-    params: SearchParams,
-) -> Result<serde_json::Value> {
+async fn cached_search(state: Arc<DaemonState>, params: SearchParams) -> Result<serde_json::Value> {
     let key = search_cache_key(&params);
     if let Some(cached) = state.search_cache.get(&key) {
         return Ok(cached);
@@ -782,10 +793,55 @@ async fn cached_search(
     Ok(result)
 }
 
+/// D-8a: Resolved search scope for a request.
+#[derive(Debug)]
+enum RepoScope {
+    /// Single repo by name (legacy path).
+    Single(String),
+    /// Named list of repos (multi-repo path).
+    List(Vec<String>),
+    /// Every repo in the index.
+    All,
+}
+
+/// D-8a: Validate and resolve the repo scope from SearchParams.
+///
+/// Exactly one of repo/repos/all_repos must be present.  Returns a
+/// structured error (anyhow with a "-32602" prefix) on violation so the
+/// caller can map it to a JSON-RPC InvalidParams response.
+fn resolve_repo_scope(params: &SearchParams) -> anyhow::Result<RepoScope> {
+    let has_repo = params.repo.as_ref().is_some_and(|s| !s.is_empty());
+    let has_repos = params.repos.as_ref().is_some_and(|v| !v.is_empty());
+    let has_all = params.all_repos.unwrap_or(false);
+
+    match (has_repo, has_repos, has_all) {
+        (true, false, false) => Ok(RepoScope::Single(
+            params.repo.clone().expect("checked above"),
+        )),
+        (false, true, false) => Ok(RepoScope::List(
+            params.repos.clone().expect("checked above"),
+        )),
+        (false, false, true) => Ok(RepoScope::All),
+        (false, false, false) => anyhow::bail!(
+            "-32602: exactly one of `repo`, `repos`, or `all_repos` must be supplied; none were"
+        ),
+        _ => anyhow::bail!(
+            "-32602: exactly one of `repo`, `repos`, or `all_repos` must be supplied; \
+             multiple were provided (repo={:?}, repos={:?}, all_repos={:?})",
+            params.repo,
+            params.repos,
+            params.all_repos,
+        ),
+    }
+}
+
 async fn execute_search(
     state: Arc<DaemonState>,
     params: SearchParams,
 ) -> Result<serde_json::Value> {
+    // D-8a: validate scope first — structured error, not panic.
+    let scope = resolve_repo_scope(&params)?;
+
     // Determine search mode (default to "hybrid" for backward compatibility)
     let mode = params.mode.as_deref().unwrap_or("hybrid");
 
@@ -797,143 +853,223 @@ async fn execute_search(
         );
     }
 
+    let k = params.limit.unwrap_or(10) as i64;
+    let deduplicate = params.deduplicate.unwrap_or(true);
+
+    // Fetch extra results when deduplication is enabled (single-repo path only;
+    // multi-repo uses k-per-repo so over-fetching here would over-count).
+    let fetch_k_single = if deduplicate { k * 3 } else { k };
+
+    // D-8g: multi-repo only supports FTS; vector/hybrid return a structured error.
+    let is_multi = !matches!(scope, RepoScope::Single(_));
+    if is_multi && !matches!(mode, "fts") {
+        anyhow::bail!(
+            "-32602: multi-repo search (repos/all_repos) only supports mode=fts; \
+             vector/hybrid multi-repo is deferred (D-8g). Use mode=fts or search one repo at a time."
+        );
+    }
+
     // Review: the response reports the EFFECTIVE mode — a hybrid request
     // that degrades to FTS must say "fts", both for client honesty and so
     // cached_search can refuse to cache degraded responses.
     let mut effective_mode = mode;
 
-    let k = params.limit.unwrap_or(10) as i64;
-    let deduplicate = params.deduplicate.unwrap_or(true);
-
-    // Fetch extra results when deduplication is enabled
-    let fetch_k = if deduplicate { k * 3 } else { k };
-
     // Use VectorStore trait methods for all search operations
     // The trait methods handle repo/worktree resolution internally
-    let raw_hits: Vec<SearchHit> = match mode {
-        "fts" => {
-            // FTS mode: Full-text search only (no embeddings required)
-            let (hits, _total_count) = state
+    let raw_hits: Vec<SearchHit> = match scope {
+        // ── Multi-repo / all-repos path (FTS only, D-8g) ────────────────────
+        RepoScope::List(_) | RepoScope::All => {
+            // Resolve repo names → repo_ids in one list_repos() call.
+            let all_db_repos = state
                 .store
-                .search_chunks_fts(
-                    &params.repo,
-                    params.worktree.as_deref(),
-                    &params.query,
-                    fetch_k,
-                    false, // debug
-                    params.kind.as_deref(),
-                    params.lang.as_deref(),
-                )
+                .list_repos()
                 .await
-                .context("FTS search execution failed")?;
-            hits
-        }
-        "vector" => {
-            // Vector mode: Semantic search using embeddings. R-LAZY-3: the
-            // lazy accessor's failure flows into the existing structured error
-            // path (classified EmbeddingProvider via its context string).
-            let query_embedding = state
-                .embedding_service()
-                .await?
-                .embed_text(&params.query)
-                .await
-                .context("Failed to generate query embedding")?;
+                .context("Failed to list repos for multi-repo search")?;
 
-            state
-                .store
-                .search_chunks_vector(
-                    &params.repo,
-                    params.worktree.as_deref(),
-                    &query_embedding,
-                    fetch_k,
-                    false, // debug
-                    params.kind.as_deref(),
-                    params.lang.as_deref(),
-                )
-                .await
-                .context("Vector search execution failed")?
-        }
-        "hybrid" => {
-            // Hybrid mode: Try to get embedding for hybrid search.
-            // R-LAZY-4: a lazy-init failure folds into the same FTS fallback
-            // as an embed_text failure — the daemon's default mode degrades
-            // gracefully in provider-less environments.
-            let query_embedding_result = match state.embedding_service().await {
-                Ok(svc) => svc.embed_text(&params.query).await.map_err(anyhow::Error::from),
-                Err(e) => Err(e),
+            let repo_ids: Vec<i64> = if matches!(scope, RepoScope::All) {
+                all_db_repos.iter().map(|r| r.id).collect()
+            } else {
+                // Match by exact name or suffix (same fuzzy as single-repo path).
+                let names = match scope {
+                    RepoScope::List(ref v) => v.clone(),
+                    _ => unreachable!(),
+                };
+                let mut ids = Vec::new();
+                for name in &names {
+                    let name_lower = name.to_ascii_lowercase();
+                    let suffix = format!("/{name_lower}");
+                    let matched: Vec<i64> = all_db_repos
+                        .iter()
+                        .filter(|r| {
+                            r.name.eq_ignore_ascii_case(name)
+                                || r.name.to_ascii_lowercase().ends_with(&suffix)
+                        })
+                        .map(|r| r.id)
+                        .collect();
+                    if matched.is_empty() {
+                        anyhow::bail!("Repository not found: {name}");
+                    }
+                    ids.extend(matched);
+                }
+                ids
             };
 
-            match query_embedding_result {
-                Ok(query_embedding) => {
-                    // Embeddings available, use hybrid search
-                    match state
-                        .store
-                        .search_chunks_hybrid(
-                            &params.repo,
-                            params.worktree.as_deref(),
-                            &params.query,
-                            &query_embedding,
-                            fetch_k,
-                            false, // debug
-                            params.kind.as_deref(),
-                            params.lang.as_deref(),
-                        )
+            if repo_ids.is_empty() {
+                return Ok(serde_json::json!({
+                    "hits": [],
+                    "total": 0,
+                    "query": params.query,
+                    "mode": "fts",
+                    "requested_mode": mode,
+                    "k": k,
+                    "threshold": params.threshold,
+                    "deduplicate": deduplicate,
+                }));
+            }
+
+            effective_mode = "fts";
+            state
+                .store
+                .search_fts_multi_repo(
+                    &repo_ids,
+                    &params.query,
+                    k, // per-repo cap (D-8c)
+                    params.kind.as_deref(),
+                    params.lang.as_deref(),
+                )
+                .await
+                .context("Multi-repo FTS search failed")?
+        }
+
+        // ── Single-repo path (existing behavior, unchanged) ──────────────────
+        RepoScope::Single(ref repo) => match mode {
+            "fts" => {
+                // FTS mode: Full-text search only (no embeddings required)
+                let (hits, _total_count) = state
+                    .store
+                    .search_chunks_fts(
+                        repo,
+                        params.worktree.as_deref(),
+                        &params.query,
+                        fetch_k_single,
+                        false, // debug
+                        params.kind.as_deref(),
+                        params.lang.as_deref(),
+                    )
+                    .await
+                    .context("FTS search execution failed")?;
+                hits
+            }
+            "vector" => {
+                // Vector mode: Semantic search using embeddings. R-LAZY-3: the
+                // lazy accessor's failure flows into the existing structured error
+                // path (classified EmbeddingProvider via its context string).
+                let query_embedding = state
+                    .embedding_service()
+                    .await?
+                    .embed_text(&params.query)
+                    .await
+                    .context("Failed to generate query embedding")?;
+
+                state
+                    .store
+                    .search_chunks_vector(
+                        repo,
+                        params.worktree.as_deref(),
+                        &query_embedding,
+                        fetch_k_single,
+                        false, // debug
+                        params.kind.as_deref(),
+                        params.lang.as_deref(),
+                    )
+                    .await
+                    .context("Vector search execution failed")?
+            }
+            "hybrid" => {
+                // Hybrid mode: Try to get embedding for hybrid search.
+                // R-LAZY-4: a lazy-init failure folds into the same FTS fallback
+                // as an embed_text failure — the daemon's default mode degrades
+                // gracefully in provider-less environments.
+                let query_embedding_result = match state.embedding_service().await {
+                    Ok(svc) => svc
+                        .embed_text(&params.query)
                         .await
-                    {
-                        Ok(hits) => hits,
-                        // F15: user-input errors (unknown/ambiguous repo)
-                        // must surface, not silently widen to empty.
-                        Err(e) if e.downcast_ref::<crate::db::StoreError>().is_some() => {
-                            return Err(e);
-                        }
-                        Err(e) => {
-                            // Capability failure: run the REAL FTS fallback
-                            // (the old path returned Ok(vec![]) under a
-                            // comment claiming a fallback that didn't exist).
-                            tracing::warn!("hybrid search failed; falling back to FTS: {e:#}");
-                            effective_mode = "fts";
-                            let (hits, _total_count) = state
-                                .store
-                                .search_chunks_fts(
-                                    &params.repo,
-                                    params.worktree.as_deref(),
-                                    &params.query,
-                                    fetch_k,
-                                    false, // debug
-                                    params.kind.as_deref(),
-                                    params.lang.as_deref(),
-                                )
-                                .await
-                                .context("FTS fallback execution failed")?;
-                            hits
+                        .map_err(anyhow::Error::from),
+                    Err(e) => Err(e),
+                };
+
+                match query_embedding_result {
+                    Ok(query_embedding) => {
+                        // Embeddings available, use hybrid search
+                        match state
+                            .store
+                            .search_chunks_hybrid(
+                                repo,
+                                params.worktree.as_deref(),
+                                &params.query,
+                                &query_embedding,
+                                fetch_k_single,
+                                false, // debug
+                                params.kind.as_deref(),
+                                params.lang.as_deref(),
+                            )
+                            .await
+                        {
+                            Ok(hits) => hits,
+                            // F15: user-input errors (unknown/ambiguous repo)
+                            // must surface, not silently widen to empty.
+                            Err(e) if e.downcast_ref::<crate::db::StoreError>().is_some() => {
+                                return Err(e);
+                            }
+                            Err(e) => {
+                                // Capability failure: run the REAL FTS fallback
+                                // (the old path returned Ok(vec![]) under a
+                                // comment claiming a fallback that didn't exist).
+                                tracing::warn!("hybrid search failed; falling back to FTS: {e:#}");
+                                effective_mode = "fts";
+                                let (hits, _total_count) = state
+                                    .store
+                                    .search_chunks_fts(
+                                        repo,
+                                        params.worktree.as_deref(),
+                                        &params.query,
+                                        fetch_k_single,
+                                        false, // debug
+                                        params.kind.as_deref(),
+                                        params.lang.as_deref(),
+                                    )
+                                    .await
+                                    .context("FTS fallback execution failed")?;
+                                hits
+                            }
                         }
                     }
-                }
-                Err(_) => {
-                    // No embeddings available, use FTS directly
-                    effective_mode = "fts";
-                    let (hits, _total_count) = state
-                        .store
-                        .search_chunks_fts(
-                            &params.repo,
-                            params.worktree.as_deref(),
-                            &params.query,
-                            fetch_k,
-                            false, // debug
-                            params.kind.as_deref(),
-                            params.lang.as_deref(),
-                        )
-                        .await
-                        .context("FTS search execution failed")?;
-                    hits
+                    Err(_) => {
+                        // No embeddings available, use FTS directly
+                        effective_mode = "fts";
+                        let (hits, _total_count) = state
+                            .store
+                            .search_chunks_fts(
+                                repo,
+                                params.worktree.as_deref(),
+                                &params.query,
+                                fetch_k_single,
+                                false, // debug
+                                params.kind.as_deref(),
+                                params.lang.as_deref(),
+                            )
+                            .await
+                            .context("FTS search execution failed")?;
+                        hits
+                    }
                 }
             }
-        }
-        _ => unreachable!("Mode validation should prevent this"),
+            _ => unreachable!("Mode validation should prevent this"),
+        },
     };
 
-    // Apply deduplication if enabled
-    let hits = if deduplicate {
+    // Apply deduplication if enabled (single-repo only; multi-repo uses per-repo k cap)
+    let hits = if deduplicate && !is_multi {
         deduplicate_search_hits(raw_hits, k as usize)
     } else {
         raw_hits
@@ -1220,7 +1356,9 @@ mod r16_lazy_embedding_tests {
         };
         let resp = handle_request(req, state).await;
         std::env::remove_var("MAPROOM_EMBEDDING_PROVIDER");
-        let err = resp.error.expect("vector search without provider must be a JSON-RPC error");
+        let err = resp
+            .error
+            .expect("vector search without provider must be a JSON-RPC error");
         assert_eq!(err.code, -32000);
         // Classified as an embedding-provider problem, with the process alive.
         let data = serde_json::to_string(&err.data).unwrap_or_default();
@@ -1405,5 +1543,80 @@ mod tests {
 
         assert_eq!(json["source_count"], 1);
         assert_eq!(json["is_exact_match"], true);
+    }
+
+    // ── D-8a: resolve_repo_scope validation tests ────────────────────────────
+
+    fn make_search_params_for_scope(
+        repo: Option<&str>,
+        repos: Option<Vec<&str>>,
+        all_repos: Option<bool>,
+    ) -> SearchParams {
+        SearchParams {
+            query: "test".to_string(),
+            repo: repo.map(|s| s.to_string()),
+            repos: repos.map(|v| v.into_iter().map(|s| s.to_string()).collect()),
+            all_repos,
+            worktree: None,
+            limit: None,
+            threshold: None,
+            mode: None,
+            deduplicate: Some(true),
+            kind: None,
+            lang: None,
+            include_confidence: None,
+        }
+    }
+
+    #[test]
+    fn test_resolve_scope_single_repo() {
+        let p = make_search_params_for_scope(Some("crewchief"), None, None);
+        let scope = resolve_repo_scope(&p).expect("single repo should resolve");
+        assert!(matches!(scope, RepoScope::Single(ref r) if r == "crewchief"));
+    }
+
+    #[test]
+    fn test_resolve_scope_repo_list() {
+        let p = make_search_params_for_scope(None, Some(vec!["alpha", "beta"]), None);
+        let scope = resolve_repo_scope(&p).expect("repo list should resolve");
+        assert!(
+            matches!(scope, RepoScope::List(ref v) if v.len() == 2),
+            "expected List with 2 entries"
+        );
+    }
+
+    #[test]
+    fn test_resolve_scope_all_repos() {
+        let p = make_search_params_for_scope(None, None, Some(true));
+        let scope = resolve_repo_scope(&p).expect("all_repos should resolve");
+        assert!(matches!(scope, RepoScope::All));
+    }
+
+    #[test]
+    fn test_resolve_scope_none_supplied_is_error() {
+        let p = make_search_params_for_scope(None, None, None);
+        let err = resolve_repo_scope(&p).expect_err("none supplied should error");
+        assert!(
+            err.to_string().contains("-32602"),
+            "error should contain -32602 code: {err}"
+        );
+    }
+
+    #[test]
+    fn test_resolve_scope_multiple_supplied_is_error() {
+        let p = make_search_params_for_scope(Some("crewchief"), Some(vec!["maproom"]), None);
+        let err = resolve_repo_scope(&p).expect_err("multiple supplied should error");
+        assert!(
+            err.to_string().contains("-32602"),
+            "error should contain -32602 code: {err}"
+        );
+    }
+
+    #[test]
+    fn test_resolve_scope_empty_repo_treated_as_absent() {
+        // An empty string in `repo` should be treated the same as None.
+        let p = make_search_params_for_scope(Some(""), None, Some(true));
+        let scope = resolve_repo_scope(&p).expect("empty repo + all_repos=true should resolve");
+        assert!(matches!(scope, RepoScope::All));
     }
 }

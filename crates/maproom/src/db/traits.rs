@@ -471,6 +471,22 @@ pub trait StoreSearch: Send + Sync {
         k: i64,
     ) -> anyhow::Result<Vec<SearchHit>>;
 
+    /// Multi-repo FTS: search across a set of repo_ids in a single query.
+    ///
+    /// D-8b: results are grouped by repo, up to `k` hits per repo.
+    /// D-8c: `k` is per-repo cap in multi-repo mode.
+    /// D-8g: vector/hybrid multi-repo is deferred; this is the FTS-only path.
+    ///
+    /// `repo_ids` must be non-empty; an empty slice returns an empty result.
+    async fn search_fts_multi_repo(
+        &self,
+        repo_ids: &[i64],
+        query: &str,
+        k: i64,
+        kind_filter: Option<&[String]>,
+        lang_filter: Option<&[String]>,
+    ) -> anyhow::Result<Vec<SearchHit>>;
+
     /// Vector search for chunks, resolving repo/worktree by name.
     async fn search_chunks_vector(
         &self,

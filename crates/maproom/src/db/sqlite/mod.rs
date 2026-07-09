@@ -389,7 +389,10 @@ impl StoreCore for SqliteStore {
             // -content FTS index, blank ALL content columns (incl. metadata, which can
             // carry raw initializer text), and drop the context cache (its bundle_json
             // embeds raw code read from disk). Vector-only from here.
-            tx.execute("INSERT INTO fts_chunks(fts_chunks) VALUES('delete-all')", [])?;
+            tx.execute(
+                "INSERT INTO fts_chunks(fts_chunks) VALUES('delete-all')",
+                [],
+            )?;
             tx.execute(
                 "UPDATE chunks SET preview = '', signature = NULL, docstring = NULL, \
                  ts_doc_text = NULL, metadata = NULL",
@@ -2160,6 +2163,155 @@ impl StoreSearch for SqliteStore {
                 for row in rows {
                     hits.push(row?);
                 }
+            }
+            Ok(hits)
+        })
+        .await
+    }
+
+    /// Multi-repo FTS search: one SQL query, k hits per repo, grouped by repo (D-8b/c).
+    async fn search_fts_multi_repo(
+        &self,
+        repo_ids: &[i64],
+        query: &str,
+        k: i64,
+        kind_filter: Option<&[String]>,
+        lang_filter: Option<&[String]>,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        if repo_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        // Build the FTS query once, outside the closure.
+        let fts_query = crate::db::sqlite::fts::build_fts_query(query);
+        if fts_query.is_empty() {
+            return Ok(Vec::new());
+        }
+        let repo_ids = repo_ids.to_vec();
+        let kind_filter: Option<Vec<String>> = kind_filter.map(|v| v.to_vec());
+        let lang_filter: Option<Vec<String>> = lang_filter.map(|v| v.to_vec());
+
+        self.run(move |conn| {
+            // Build IN placeholders for repo_ids: ?1, ?2, ..., ?N
+            let repo_placeholders: String = (1..=repo_ids.len())
+                .map(|i| format!("?{}", i))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            // Parameter index starts after repo_ids; next is the FTS query,
+            // then kind/lang filters, then k (the LIMIT).
+            let fts_param_idx = repo_ids.len() + 1;
+            let mut next_param = fts_param_idx + 1; // after FTS query
+            let mut filter_conditions: Vec<String> = Vec::new();
+
+            if let Some(ref kinds) = kind_filter {
+                if !kinds.is_empty() {
+                    let placeholders = (0..kinds.len())
+                        .map(|i| format!("?{}", next_param + i))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    filter_conditions.push(format!("c.kind IN ({})", placeholders));
+                    next_param += kinds.len();
+                }
+            }
+            if let Some(ref langs) = lang_filter {
+                if !langs.is_empty() {
+                    let placeholders = (0..langs.len())
+                        .map(|i| format!("?{}", next_param + i))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    filter_conditions.push(format!("f.language IN ({})", placeholders));
+                    next_param += langs.len();
+                }
+            }
+            let filter_clause = if filter_conditions.is_empty() {
+                String::new()
+            } else {
+                format!(" AND {}", filter_conditions.join(" AND "))
+            };
+
+            // k placeholder comes after all filters
+            let k_placeholder = format!("?{}", next_param);
+
+            // D-8b: GROUP BY repo, k per repo via window ROW_NUMBER.
+            // SQLite's window functions are available since 3.25.0 (bundled version is 3.45).
+            // The outer query caps at k hits per repo_id.
+            let sql = format!(
+                r#"
+                SELECT id, start_line, end_line, symbol_name, kind, relpath, score, repo_id
+                FROM (
+                    SELECT
+                        c.id,
+                        c.start_line,
+                        c.end_line,
+                        c.symbol_name,
+                        c.kind,
+                        f.relpath,
+                        fts_chunks.rank AS score,
+                        f.repo_id,
+                        ROW_NUMBER() OVER (PARTITION BY f.repo_id ORDER BY fts_chunks.rank ASC) AS rn
+                    FROM fts_chunks
+                    JOIN chunks c ON c.id = fts_chunks.rowid
+                    JOIN files f ON f.id = c.file_id
+                    WHERE fts_chunks MATCH ?{fts_idx}
+                      AND f.repo_id IN ({repo_phs})
+                      {filters}
+                )
+                WHERE rn <= {k_ph}
+                ORDER BY repo_id, score ASC
+                "#,
+                fts_idx = fts_param_idx,
+                repo_phs = repo_placeholders,
+                filters = filter_clause,
+                k_ph = k_placeholder,
+            );
+
+            // Build parameter list
+            let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+            for rid in &repo_ids {
+                param_values.push(Box::new(*rid));
+            }
+            param_values.push(Box::new(fts_query.clone()));
+            if let Some(ref kinds) = kind_filter {
+                for k_val in kinds {
+                    param_values.push(Box::new(k_val.clone()));
+                }
+            }
+            if let Some(ref langs) = lang_filter {
+                for l_val in langs {
+                    param_values.push(Box::new(l_val.clone()));
+                }
+            }
+            param_values.push(Box::new(k));
+
+            let params_refs: Vec<&dyn rusqlite::ToSql> =
+                param_values.iter().map(|p| p.as_ref()).collect();
+
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt.query_map(params_refs.as_slice(), |row| {
+                let score: f64 = row.get(6)?;
+                let symbol_name: Option<String> = row.get(3)?;
+                // Carry repo_id in preview slot is not correct — we emit it via
+                // the SearchHit file_relpath prefix approach: repo info is surfaced
+                // by the caller (file_relpath already uniquely identifies the file).
+                Ok(SearchHit {
+                    chunk_id: row.get(0)?,
+                    start_line: row.get(1)?,
+                    end_line: row.get(2)?,
+                    symbol_name,
+                    kind: row.get(4)?,
+                    file_relpath: row.get(5)?,
+                    // FTS5 rank is negative; negate for positive score
+                    score: -score,
+                    base_score: None,
+                    kind_mult: None,
+                    exact_mult: None,
+                    preview: None,
+                })
+            })?;
+
+            let mut hits = Vec::new();
+            for row in rows {
+                hits.push(row?);
             }
             Ok(hits)
         })
@@ -4274,8 +4426,14 @@ mod tests {
     async fn test_content_minimization_suppresses_and_purges() {
         let store = setup_test_store().await;
         let repo = store.get_or_create_repo("acme/min", "/m").await.unwrap();
-        let wt = store.get_or_create_worktree(repo, "main", "/m").await.unwrap();
-        let commit = store.get_or_create_commit(repo, "sha1", None).await.unwrap();
+        let wt = store
+            .get_or_create_worktree(repo, "main", "/m")
+            .await
+            .unwrap();
+        let commit = store
+            .get_or_create_commit(repo, "sha1", None)
+            .await
+            .unwrap();
         let file = store
             .upsert_file(&crate::db::FileRecord {
                 repo_id: repo,
@@ -4370,7 +4528,10 @@ mod tests {
             })
             .await
             .unwrap();
-        assert_eq!(fts_matches, 0, "no content searchable via FTS under minimization");
+        assert_eq!(
+            fts_matches, 0,
+            "no content searchable via FTS under minimization"
+        );
 
         // Marker persisted (sticky — a reconnect would read it).
         let marker: String = store

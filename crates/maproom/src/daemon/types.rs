@@ -32,10 +32,27 @@ pub struct JsonRpcRequest {
     pub id: Option<Option<serde_json::Value>>,
 }
 
+/// D-8a: repo scope for a search request.
+///
+/// Exactly one of `repo` (single), `repos` (list), or `all_repos` (flag) MUST
+/// be present; the server enforces this with a structured validation error
+/// (JSON-RPC -32602) rather than a panic.  Old clients that always send `repo`
+/// remain byte-compatible (D-8e additive change).
 #[derive(Debug, Deserialize)]
 pub struct SearchParams {
     pub query: String,
-    pub repo: String,
+    /// Single-repo scope (legacy / default).  Relaxed from `String` to
+    /// `Option<String>` so new clients can omit it and use `repos`/`all_repos`
+    /// instead.  Old clients always send this field, so backward compatibility
+    /// is preserved (D-8e additive change).
+    #[serde(default)]
+    pub repo: Option<String>,
+    /// Multi-repo scope: search these repos in one query (D-8a).
+    #[serde(default)]
+    pub repos: Option<Vec<String>>,
+    /// All-repos scope: search every repo in the index (D-8a, D-8d).
+    #[serde(default)]
+    pub all_repos: Option<bool>,
     pub worktree: Option<String>,
     pub limit: Option<usize>,
     pub threshold: Option<f32>,
@@ -256,7 +273,7 @@ mod tests {
 
         assert_eq!(params.chunk_id, "12345");
         assert_eq!(params.budget_tokens, 6000); // Default
-        // F81: relationship expansion defaults ON when absent
+                                                // F81: relationship expansion defaults ON when absent
         assert!(params.expand.callers);
         assert!(params.expand.callees);
         assert!(params.expand.tests);
@@ -361,6 +378,8 @@ mod tests {
         let json = r#"{"query": "test", "repo": "myrepo", "include_confidence": true}"#;
         let params: SearchParams = serde_json::from_str(json).unwrap();
         assert_eq!(params.include_confidence, Some(true));
+        // Old-shape compat: repo is still parsed
+        assert_eq!(params.repo, Some("myrepo".to_string()));
     }
 
     #[test]
@@ -376,5 +395,40 @@ mod tests {
         let json = r#"{"query": "test", "repo": "myrepo"}"#;
         let params: SearchParams = serde_json::from_str(json).unwrap();
         assert_eq!(params.include_confidence, None);
+    }
+
+    // D-8e: old-shape backward compatibility test
+    #[test]
+    fn test_search_params_old_shape_compat() {
+        // Clients that always send `repo` should be byte-compatible
+        let json = r#"{"query": "embedding pipeline", "repo": "crewchief", "limit": 5}"#;
+        let params: SearchParams = serde_json::from_str(json).unwrap();
+        assert_eq!(params.query, "embedding pipeline");
+        assert_eq!(params.repo, Some("crewchief".to_string()));
+        assert!(params.repos.is_none());
+        assert!(params.all_repos.is_none());
+        assert_eq!(params.limit, Some(5));
+    }
+
+    // D-8a: multi-repo new shapes
+    #[test]
+    fn test_search_params_repos_list() {
+        let json = r#"{"query": "auth", "repos": ["crewchief", "maproom"]}"#;
+        let params: SearchParams = serde_json::from_str(json).unwrap();
+        assert!(params.repo.is_none());
+        assert_eq!(
+            params.repos,
+            Some(vec!["crewchief".to_string(), "maproom".to_string()])
+        );
+        assert!(params.all_repos.is_none());
+    }
+
+    #[test]
+    fn test_search_params_all_repos() {
+        let json = r#"{"query": "embedding pipeline", "all_repos": true}"#;
+        let params: SearchParams = serde_json::from_str(json).unwrap();
+        assert!(params.repo.is_none());
+        assert!(params.repos.is_none());
+        assert_eq!(params.all_repos, Some(true));
     }
 }
