@@ -5,12 +5,11 @@ Single-purpose MCP server for semantic code search via stdio.
 ## MCP Tools
 
 - `search` — Semantic search (FTS/vector/hybrid)
-- `open` — Get code with line ranges
+- `open` — Get code with line ranges (resolves path from daemon status, not process CWD)
 - `context` — Context assembly via daemon (imports, callers, tests, React components)
 - `status` — Index stats
-- `scan` — Full repo indexing (via daemon)
-- `upsert` — Update specific files
-- `explain` — Symbol documentation
+
+Note: `scan`, `upsert`, and `explain` are NOT implemented in this MCP server. Use the `maproom` CLI directly for indexing operations.
 
 ## Pitfalls
 

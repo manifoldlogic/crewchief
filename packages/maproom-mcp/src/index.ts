@@ -5,6 +5,41 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { resolveDatabaseConfig } from './utils/resolve-database.js'
 import { getDaemonClient } from './daemon.js'
+import type { StatusResult } from './daemon-client/client.js'
+
+// R1: Cache for daemon status lookups — keyed by repo name, value is the full StatusResult.
+// Populated once per process lifetime on first status call.
+let _statusCache: StatusResult | null = null
+
+/**
+ * Get daemon status with cache (populated on first call).
+ * Used by handleOpen to resolve worktree abs_path without an extra RPC per file open.
+ */
+async function getCachedStatus(): Promise<StatusResult> {
+  if (_statusCache) return _statusCache
+  const daemon = getDaemonClient()
+  _statusCache = await daemon.status({})
+  return _statusCache
+}
+
+/**
+ * Resolve the absolute path for a named worktree inside a named repo.
+ * Returns null if the repo/worktree is not found in the status index.
+ * Caches the status result for the process lifetime (R1 program decision).
+ */
+async function resolveWorktreeAbsPath(repo: string, worktreeName: string): Promise<string | null> {
+  const statusResult = await getCachedStatus()
+  for (const r of statusResult.repos) {
+    if (r.name === repo) {
+      for (const wt of r.worktrees) {
+        if (wt.name === worktreeName) {
+          return wt.path
+        }
+      }
+    }
+  }
+  return null
+}
 
 // IMPORTANT: Never write logs to stdout; MCP JSON-RPC must be the only stdout output.
 // Route pino logs to stderr to avoid corrupting the protocol stream.
@@ -358,13 +393,23 @@ async function handleStatus(params: any): Promise<any> {
       ? { backendType: 'sqlite' as const, sqlitePath: dbConfig.path }
       : { backendType: 'postgres' as const, databaseUrl: dbConfig.redactedUrl }
 
-    // Fallback to empty response on error
+    // R4: Differentiate binary-not-found (genuine setup issue) from other daemon errors.
+    // Never present repos:[] as "no data" when the real cause is a startup failure.
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const isBinaryNotFound = errorMessage.includes('binary not found') ||
+      errorMessage.includes('Maproom binary not found') ||
+      errorMessage.includes('ENOENT')
+    const hint = isBinaryNotFound
+      ? `Maproom binary not found.\n\nTroubleshooting:\n1. Ensure maproom is installed (run: maproom --version)\n2. Set MAPROOM_BIN to the binary path\n3. Add maproom to your PATH\n\nRaw error: ${errorMessage}`
+      : `Daemon error: ${errorMessage}\n\nThis may be a transient error. Try again or check daemon logs.`
+
     return {
       repos: [],
       totalRepos: 0,
       totalFiles: 0,
       totalChunks: 0,
-      hint: `Failed to query status: ${error instanceof Error ? error.message : String(error)}`,
+      hint,
+      daemonError: true,
       ...backendFields,
       searchTips: [
         'Use simple terms: "auth" instead of "authentication_handler"',
@@ -496,27 +541,79 @@ export async function handleSearch(params: any): Promise<any> {
 }
 
 async function handleOpen(params: any): Promise<any> {
-  // Filesystem read is backend-agnostic: works the same for sqlite and postgres backends.
-  // We read from the filesystem using the relative path from the search result.
-  const fs = await import('node:fs/promises')
-  const path = await import('node:path')
+  // R1: open honors `worktree` by resolving the repo/worktree abs_path via daemon status,
+  // then joining relpath against that abs_path. Security check is relative to abs_path, NOT cwd.
+  const fsPromises = await import('node:fs/promises')
+  const pathMod = await import('node:path')
 
   try {
-    const { relpath, range } = params
+    const { relpath, range, repo, worktree } = params
 
-    // Try to read from current working directory
-    const cwd = process.cwd()
-    const fullPath = path.resolve(cwd, relpath)
+    // Validate relpath is present
+    if (!relpath || typeof relpath !== 'string' || relpath.trim() === '') {
+      return { error: 'INVALID_PARAMS', message: 'relpath parameter is required' }
+    }
 
-    // Security: ensure path is within cwd
-    if (!fullPath.startsWith(cwd)) {
+    let resolvedRoot: string
+
+    if (worktree) {
+      // R1: Look up the worktree abs_path from the daemon's live index.
+      // Fall back to cwd only when neither repo nor worktree resolves (bare-minimum compat).
+      const repoName: string | undefined = repo || undefined
+      let absPath: string | null = null
+
+      if (repoName) {
+        absPath = await resolveWorktreeAbsPath(repoName, worktree)
+      } else {
+        // No repo given — scan all repos in status for a matching worktree name
+        try {
+          const statusResult = await getCachedStatus()
+          for (const r of statusResult.repos) {
+            for (const wt of r.worktrees) {
+              if (wt.name === worktree) {
+                absPath = wt.path
+                break
+              }
+            }
+            if (absPath) break
+          }
+        } catch (_) {
+          // fallthrough to cwd
+        }
+      }
+
+      if (absPath) {
+        resolvedRoot = absPath
+        log.debug({ worktree, repo: repoName, absPath }, 'R1: resolved worktree abs_path from daemon status')
+      } else {
+        // Worktree not found in index — cannot safely resolve path
+        log.warn({ worktree, repo: repoName }, 'R1: worktree not found in daemon index; cannot resolve path')
+        return {
+          error: 'WORKTREE_NOT_FOUND',
+          message: `Worktree '${worktree}' not found in the daemon index. Use the status tool to list indexed worktrees.`,
+        }
+      }
+    } else {
+      // No worktree specified — fall back to cwd (legacy behavior when worktree omitted)
+      resolvedRoot = process.cwd()
+    }
+
+    // Normalize the relpath and build the full path
+    const normalizedRelpath = pathMod.normalize(relpath)
+    const fullPath = pathMod.join(resolvedRoot, normalizedRelpath)
+
+    // R1: Security check relative to resolvedRoot (not process.cwd())
+    const normalizedRoot = resolvedRoot.endsWith(pathMod.sep)
+      ? resolvedRoot
+      : resolvedRoot + pathMod.sep
+    if (!fullPath.startsWith(normalizedRoot) && fullPath !== resolvedRoot) {
       return {
         error: 'INVALID_PATH',
         message: 'Path traversal not allowed',
       }
     }
 
-    let content = await fs.readFile(fullPath, 'utf8')
+    let content = await fsPromises.readFile(fullPath, 'utf8')
 
     // Apply line range if specified
     if (range && range.start && range.end) {
@@ -529,6 +626,7 @@ async function handleOpen(params: any): Promise<any> {
     return {
       content,
       relpath,
+      resolvedFrom: resolvedRoot,
       ...(range && { range }),
     }
   } catch (error: any) {
@@ -644,7 +742,12 @@ async function handleMessage(msg: JsonRpcRequest) {
       } else if (name === 'open') {
         try {
           const res = await handleOpen(args)
-          respond(msg.id ?? null, { content: [{ type: 'text', text: res.content }] })
+          if (res.error) {
+            // handleOpen returns error objects (not throws) — serialize as text for MCP
+            respond(msg.id ?? null, { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] })
+          } else {
+            respond(msg.id ?? null, { content: [{ type: 'text', text: res.content }] })
+          }
           log.info({ id: msg.id, tool: name }, 'sent tool result')
         } catch (error) {
           const { formatOpenError } = await import('./tools/open.js')
