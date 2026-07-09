@@ -25,9 +25,8 @@ export function validateMaproomEnvironment(): ValidationResult {
   const errors: string[] = []
   const warnings: string[] = []
 
-  // Database URL validation - maproom uses ~/.maproom/maproom.db by default
-  // MAPROOM_DATABASE_URL can optionally override this location
-  // No validation needed - the default is always available
+  // Database URL validation - maproom accepts sqlite:// or postgres:// via MAPROOM_DATABASE_URL.
+  // No validation performed here; the binary enforces the URL format and surfaces errors directly.
 
   // Embedding provider validation - defaults to Ollama (auto-detected)
   // MAPROOM_EMBEDDING_PROVIDER can optionally override to "openai" or "google"
