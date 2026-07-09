@@ -308,8 +308,8 @@ RUST_LOG=debug maproom serve
 sqlite3 ~/.maproom/maproom.db "PRAGMA integrity_check"
 # PostgreSQL backend:
 psql "$MAPROOM_DATABASE_URL" -c "
-  SELECT tablename, n_live_tup, n_dead_tup
-  FROM pg_stat_user_tables ORDER BY tablename;
+  SELECT relname, n_live_tup, n_dead_tup
+  FROM pg_stat_user_tables ORDER BY relname;
 "
 
 # 3. Reset database if corrupted

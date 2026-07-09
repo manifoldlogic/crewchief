@@ -298,8 +298,6 @@ SET LOCAL hnsw.ef_search = 40;  -- default; raise for higher recall
 | 100 | ~95% | <50ms |
 | 200 | ~98% | <80ms |
 
-**Rule of thumb:** `lists = sqrt(num_chunks)`, `probes = lists / 20`
-
 #### GIN Index Configuration
 
 ```sql

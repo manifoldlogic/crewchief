@@ -377,8 +377,8 @@ LIMIT $3;
 -- Check HNSW index usage and sizes
 SELECT
   schemaname,
-  tablename,
-  indexname,
+  relname,
+  indexrelname,
   pg_size_pretty(pg_relation_size(indexrelid)) as index_size,
   idx_scan as times_used,
   idx_tup_read as tuples_read,
@@ -388,7 +388,7 @@ SELECT
     ELSE 0
   END as avg_tuples_per_scan
 FROM pg_stat_user_indexes
-WHERE indexname LIKE '%hnsw%'
+WHERE indexrelname LIKE '%hnsw%'
 ORDER BY pg_relation_size(indexrelid) DESC;
 ```
 
@@ -402,7 +402,7 @@ ORDER BY pg_relation_size(indexrelid) DESC;
 -- Check table health and statistics freshness
 SELECT
   schemaname,
-  tablename,
+  relname,
   n_live_tup as live_rows,
   n_dead_tup as dead_rows,
   round(100.0 * n_dead_tup / NULLIF(n_live_tup + n_dead_tup, 0), 2) as dead_pct,
@@ -411,7 +411,7 @@ SELECT
   last_analyze,
   last_autoanalyze
 FROM pg_stat_user_tables
-WHERE tablename IN ('code_embeddings', 'chunks', 'files')
+WHERE relname IN ('code_embeddings', 'chunks', 'files')
 ORDER BY n_live_tup DESC;
 ```
 
@@ -426,14 +426,14 @@ ORDER BY n_live_tup DESC;
 -- Find tables with excessive sequential scans (vector search should use HNSW)
 SELECT
   schemaname,
-  tablename,
+  relname,
   seq_scan,
   seq_tup_read,
   idx_scan,
   n_live_tup,
   round(100.0 * seq_scan / NULLIF(seq_scan + idx_scan, 0), 2) as seq_scan_pct
 FROM pg_stat_user_tables
-WHERE tablename = 'code_embeddings'
+WHERE relname = 'code_embeddings'
   AND n_live_tup > 1000
 ORDER BY seq_tup_read DESC;
 ```
@@ -477,8 +477,13 @@ LIMIT 20;
 
 **Diagnosis:**
 ```sql
--- Check ef_search for the current session
-SHOW hnsw.ef_search;
+-- Check ef_search for the current session.
+-- Note: hnsw.ef_search is a session-local GUC set by the application before each
+-- KNN query (SET LOCAL hnsw.ef_search = N). SHOW only works after a SET has been
+-- issued in the same session; a fresh psql session will report "unrecognized
+-- configuration parameter". To inspect the default used by the application, check
+-- MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH (env var, default 40) instead.
+SHOW hnsw.ef_search;  -- only works after SET hnsw.ef_search = N in this session
 
 -- Check HNSW index usage
 EXPLAIN (ANALYZE, BUFFERS)
@@ -504,8 +509,9 @@ LIMIT 10;
 
 **Diagnosis:**
 ```sql
--- Check ef_search
-SHOW hnsw.ef_search;
+-- Check ef_search (session-local GUC; SHOW only works after SET in the same session).
+-- Check MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH env var for the configured default instead.
+SHOW hnsw.ef_search;  -- only works after SET hnsw.ef_search = N in this session
 
 -- Check recall with a known good pair
 SELECT
@@ -597,7 +603,7 @@ large pools it may exhaust `maintenance_work_mem`.
 SELECT n_live_tup, n_dead_tup,
        last_vacuum, last_autovacuum
 FROM pg_stat_user_tables
-WHERE tablename = 'code_embeddings';
+WHERE relname = 'code_embeddings';
 ```
 
 **Solutions:**

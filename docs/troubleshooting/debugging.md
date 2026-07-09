@@ -158,7 +158,7 @@ sqlite3 ~/.maproom/maproom.db "PRAGMA integrity_check"
 ```bash
 # Check for bloat and dead rows
 psql "$MAPROOM_DATABASE_URL" -c "
-  SELECT tablename, n_live_tup, n_dead_tup,
+  SELECT relname, n_live_tup, n_dead_tup,
          round(100.0 * n_dead_tup / NULLIF(n_live_tup + n_dead_tup, 0), 1) as dead_pct,
          last_vacuum, last_analyze
   FROM pg_stat_user_tables
@@ -187,7 +187,7 @@ psql "$MAPROOM_DATABASE_URL" -c "
 
 # Index usage statistics
 psql "$MAPROOM_DATABASE_URL" -c "
-  SELECT indexname, idx_scan, idx_tup_read,
+  SELECT indexrelname, idx_scan, idx_tup_read,
          pg_size_pretty(pg_relation_size(indexrelid)) as size
   FROM pg_stat_user_indexes
   ORDER BY pg_relation_size(indexrelid) DESC
