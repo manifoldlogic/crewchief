@@ -264,6 +264,21 @@ describe('resolveDatabaseConfig', () => {
       process.env.MAPROOM_DATABASE_URL = '/path/to/database.db'
       expect(() => resolveDatabaseConfig()).toThrow('Unsupported database URL scheme')
     })
+
+    test('error message never contains credentials from unrecognised URL (D-2)', () => {
+      // MUST-FIX: raw URL with embedded password must not appear in error.message
+      process.env.MAPROOM_DATABASE_URL = 'mysql://root:s3cr3t@db.prod/mydb'
+      let errorMessage = ''
+      try {
+        resolveDatabaseConfig()
+      } catch (err) {
+        errorMessage = String((err as Error).message)
+      }
+      expect(errorMessage).toContain('Unsupported database URL scheme')
+      expect(errorMessage).not.toContain('s3cr3t')
+      expect(errorMessage).not.toContain('root:')
+      expect(errorMessage).toContain('mysql://[redacted]')
+    })
   })
 
   // --- Resolution priority --------------------------------------------------

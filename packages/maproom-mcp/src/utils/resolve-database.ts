@@ -29,7 +29,7 @@ export type DatabaseConfig =
   | {
       /** PostgreSQL backend */
       type: 'postgres'
-      /** Full database URL (with credentials redacted for logging) */
+      /** Full database URL — MAY contain credentials; never log or return in responses. Use redactedUrl for display. */
       url: string
       /** Redacted URL safe for logging/display (host+port+dbname only) */
       redactedUrl: string
@@ -136,8 +136,10 @@ export function resolveDatabaseConfig(): DatabaseConfig {
     if (isPostgresUrl(url)) {
       return parsePostgresUrl(url)
     }
+    // Redact credentials before embedding URL in error message (D-2: never echo the password)
+    const schemeOnly = url.includes('://') ? `${url.split('://')[0]}://[redacted]` : '[redacted]'
     throw new Error(
-      `Unsupported database URL scheme: ${url}\n` +
+      `Unsupported database URL scheme: ${schemeOnly}\n` +
         'Supported schemes: sqlite:///path/to/database.db, postgres://host/db, postgresql://host/db'
     )
   }
@@ -155,7 +157,10 @@ export function resolveDatabaseConfig(): DatabaseConfig {
  * Resolve database URL using environment-based hierarchy
  *
  * @returns Database connection string
- * @deprecated Use resolveDatabaseConfig() for access to backend type information
+ * @deprecated Use resolveDatabaseConfig() for access to backend type information.
+ *   IMPORTANT: for PostgreSQL configs, the returned string contains credentials
+ *   (it is resolveDatabaseConfig().url, NOT the credential-safe .redactedUrl).
+ *   Never log or return this value to clients — use resolveDatabaseConfig().redactedUrl instead.
  */
 export function resolveDatabase(): string {
   return resolveDatabaseConfig().url
