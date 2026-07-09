@@ -3,23 +3,31 @@ import { spawn } from 'node:child_process'
 import { Readable } from 'node:stream'
 import path from 'node:path'
 import fs from 'node:fs'
-import { resolveDatabaseConfig } from './utils/resolve-database.js'
+import { resolveDatabaseConfig, redactPostgresUrl } from './utils/resolve-database.js'
 import { getDaemonClient } from './daemon.js'
 import type { StatusResult } from './daemon-client/client.js'
 
 // R1: Cache for daemon status lookups — keyed by repo name, value is the full StatusResult.
-// Populated once per process lifetime on first status call.
+// Only populated when the daemon returns at least one repo (non-empty index).
+// Empty results (repos:[]) are NOT cached: they arise when the daemon is healthy but indexing
+// is still in progress. Caching an empty result would permanently break open for the process
+// lifetime while status (which queries live) would correctly show populated repos.
 let _statusCache: StatusResult | null = null
 
 /**
- * Get daemon status with cache (populated on first call).
+ * Get daemon status with cache (populated on first call that returns repos).
  * Used by handleOpen to resolve worktree abs_path without an extra RPC per file open.
+ * Empty results are not cached so that subsequent calls retry once indexing completes.
  */
 async function getCachedStatus(): Promise<StatusResult> {
-  if (_statusCache) return _statusCache
+  if (_statusCache && _statusCache.repos.length > 0) return _statusCache
   const daemon = getDaemonClient()
-  _statusCache = await daemon.status({})
-  return _statusCache
+  const result = await daemon.status({})
+  // Only cache if we got actual repo data — avoids permanent cache poisoning on empty index
+  if (result.repos.length > 0) {
+    _statusCache = result
+  }
+  return result
 }
 
 /**
@@ -147,7 +155,8 @@ const promptSchemas = [
 ]
 
 // Tool declarations for tools/list
-const toolSchemas = [
+// Exported for regression tests (R3: tests verify only the four implemented tools are present)
+export const toolSchemas = [
   {
     name: 'search',
     description: `Semantic code search optimized for AI agents - BEST FOR: finding functions/classes by concept, understanding code relationships, exploring unfamiliar codebases. FASTER THAN: Grep for conceptual searches. USE WHEN: searching for functionality rather than exact text matches.
@@ -261,10 +270,11 @@ DEBUG: Set debug=true to see score breakdowns`,
   },
   {
     name: 'open',
-    description: 'Retrieve specific code from indexed files - USE AFTER: getting search results. REQUIRES: exact relpath and worktree from search results. SUPPORTS: line ranges (from start_line/end_line in results) and context lines. TIP: Use the exact relpath and worktree values from search results.',
+    description: 'Retrieve specific code from indexed files - USE AFTER: getting search results. REQUIRES: exact relpath and worktree from search results. SUPPORTS: line ranges (from start_line/end_line in results) and context lines. TIP: Use the exact relpath and worktree values from search results. Pass repo to disambiguate when multiple repos share the same worktree name.',
     inputSchema: {
       type: 'object',
       properties: {
+        repo: { type: 'string', description: 'Repository name (copy from search results or status). Required in multi-repo setups to disambiguate when multiple repos share the same worktree name.' },
         relpath: { type: 'string', description: 'Relative path to the file (copy exactly from search results)' },
         range: {
           type: 'object',
@@ -322,7 +332,8 @@ DEBUG: Set debug=true to see score breakdowns`,
 ]
 
 
-async function handleStatus(params: any): Promise<any> {
+// Exported for regression tests (R4: tests verify daemonError flag and hint differentiation)
+export async function handleStatus(params: any): Promise<any> {
   const { repo } = params
 
   // Resolve database configuration — works for both sqlite and postgres backends
@@ -395,7 +406,15 @@ async function handleStatus(params: any): Promise<any> {
 
     // R4: Differentiate binary-not-found (genuine setup issue) from other daemon errors.
     // Never present repos:[] as "no data" when the real cause is a startup failure.
-    const errorMessage = error instanceof Error ? error.message : String(error)
+    const rawErrorMessage = error instanceof Error ? error.message : String(error)
+    // Redact any postgres credentials that may appear in daemon error messages.
+    // Daemon errors can include the connection URL (e.g. "connection refused: postgres://user:pass@host/db").
+    // Replace any postgres:// or postgresql:// URL with a redacted form using redactPostgresUrl,
+    // which is already imported at the top of this file for use in backendFields.
+    const errorMessage = rawErrorMessage.replace(
+      /postgres(?:ql)?:\/\/[^\s"']*/gi,
+      (match) => redactPostgresUrl(match)
+    )
     const isBinaryNotFound = errorMessage.includes('binary not found') ||
       errorMessage.includes('Maproom binary not found') ||
       errorMessage.includes('ENOENT')

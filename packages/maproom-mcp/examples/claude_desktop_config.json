@@ -90,7 +90,7 @@
           "budget_tokens": "(optional) Max tokens in context bundle (default: 6000)",
           "expand": "(optional) Expansion config for related chunks"
         }
-      },
+      }
     ],
     "_note_tools_not_available": "scan, upsert, and explain are NOT implemented in this MCP server. Use the maproom CLI directly for indexing operations.",
     "troubleshooting": {

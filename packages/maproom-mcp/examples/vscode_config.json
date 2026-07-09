@@ -103,7 +103,7 @@
         "description": "Get contextual code around a chunk",
         "use_case": "Understand code in context with related functions and imports",
         "example": "Use chunk_id from search results to get surrounding context"
-      },
+      }
     ],
     "_note_tools_not_available": "scan, upsert, and explain are NOT implemented in this MCP server. Use the maproom CLI directly for indexing operations.",
     "vscode_specific_features": {
