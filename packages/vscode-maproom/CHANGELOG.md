@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This extension is officially retired as of 0.4.x. The source tree is preserved in-tree for
 historical reference and a future revive path remains available; no code has been deleted.
 
+### What 0.4.x was
+
+The extension auto-indexed workspace files into a local SQLite database, watched for file changes
+and re-indexed incrementally, spawned the Maproom daemon and MCP server internally, and exposed
+semantic code search via the VS Code Command Palette. It supported Ollama, OpenAI, and Google
+Gemini embedding providers and stored credentials via VS Code SecretStorage. It was hardwired to
+a single SQLite database and `workspaceFolders[0]`.
+
 ### Why retired
 
 - Every capability (search, status, context — against both SQLite and PostgreSQL) is now covered
