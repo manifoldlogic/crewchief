@@ -1,164 +1,91 @@
-# Maproom Semantic Search
+# Maproom Semantic Search (RETIRED)
 
-> **Note: This package is no longer actively maintained.** It may still work but is not receiving updates or bug fixes. For semantic code search, use the [`maproom`](https://crates.io/crates/maproom) binary directly via [`@crewchief/cli`](https://www.npmjs.com/package/@crewchief/cli).
+> **RETIRED — This extension is no longer maintained and should not be installed by new users.**
+>
+> All capabilities (search, status, context — SQLite and PostgreSQL) are now covered by
+> [`@crewchief/maproom-mcp`](../maproom-mcp/README.md), which works with any MCP-aware editor
+> including VS Code. See [Migration to maproom-mcp](#migration-to-maproom-mcp) below.
+>
+> The source tree is kept in-tree for history and a future revive path. No code has been deleted.
 
-Search your code by meaning, not just text. Find functions by what they do, not what they're called.
+---
 
-## Before You Install
+## Migration to maproom-mcp
 
-**Start Ollama first** for the smoothest experience:
+Replace this extension with the `@crewchief/maproom-mcp` MCP server.
 
-```bash
-# Install Ollama from https://ollama.ai/download, then:
-ollama pull mxbai-embed-large
-ollama serve
+### VS Code / Cursor
+
+Add `.vscode/mcp.json` to your workspace (or user-level MCP config):
+
+```json
+{
+  "servers": {
+    "maproom": {
+      "command": "npx",
+      "args": ["-y", "@crewchief/maproom-mcp"],
+      "env": {
+        "MAPROOM_DATABASE_URL": "sqlite://~/.maproom/maproom.db",
+        "MAPROOM_EMBEDDING_PROVIDER": "ollama"
+      }
+    }
+  }
+}
 ```
 
-This downloads the embedding model (~670MB) upfront so the extension activates quickly.
+For PostgreSQL or OpenAI/Google embedding providers, see the full configuration reference in
+[`packages/maproom-mcp/README.md`](../maproom-mcp/README.md).
 
-## Quick Start
+### Claude Code / other MCP-capable editors
 
-1. **Ensure Ollama is running** (see above)
-2. **Install the extension** from marketplace
-3. **Open a git repository** in VSCode
-4. **Wait for indexing** - watch the status bar for progress
+Add the same `maproom` server block to your editor's MCP settings file. The `@crewchief/maproom-mcp`
+package is published to npm and supports stdio transport, so it works wherever MCP is supported.
 
-The extension auto-indexes your workspace and starts watching for changes. No manual CLI commands needed.
+---
 
-## What Happens on First Run
+## Historical information (as of 0.4.x, now retired)
 
-1. Extension detects Ollama on `localhost:11434`
-2. Creates database at `~/.maproom/maproom.db`
-3. Scans and indexes your codebase (progress shown in status bar)
-4. Starts watching for file changes
+The sections below document what the extension did. They are kept for reference only.
 
-**Large codebases**: Initial scan can take several minutes for repositories with thousands of files. Subsequent updates are incremental and fast.
+### What it did
 
-## Platform Support
+- Auto-indexed workspace files into a local SQLite database
+- Watched for file changes and re-indexed incrementally
+- Exposed search via VS Code Command Palette
+- Spawned the Maproom daemon and MCP server internally
+
+### Why it was retired
+
+- Hardwired to a single SQLite database and `workspaceFolders[0]` — incompatible with the
+  shared-PostgreSQL, multi-repo architecture shipped in the maproom ecosystem (2026).
+- Every capability is now covered by `@crewchief/maproom-mcp` working natively in any
+  MCP-capable editor without a VS Code extension wrapper.
+- Was self-described as `[DEPRECATED]` in its own metadata and not installed in the
+  development environment.
+
+### Platform support (historical)
 
 | Platform              | Status          |
 | --------------------- | --------------- |
-| macOS (Apple Silicon) | Full support    |
-| macOS (Intel)         | Full support    |
-| Linux (x64)           | Full support    |
-| Linux (arm64)         | Full support    |
-| Windows (x64)         | Limited support |
+| macOS (Apple Silicon) | Was supported   |
+| macOS (Intel)         | Was supported   |
+| Linux (x64)           | Was supported   |
+| Linux (arm64)         | Was supported   |
+| Windows (x64)         | Was experimental|
 
-**Windows users**: Experimental support only. Process shutdown and file watching may not work reliably. Please report issues you encounter.
-
-## DevContainer / Remote Development
-
-The extension auto-detects Ollama on `host.docker.internal:11434` for Docker Desktop users (Mac/Windows).
-
-**Linux Docker users**: You'll need to configure the endpoint manually:
-
-1. Open Settings (`Cmd+,` / `Ctrl+,`)
-2. Search for "maproom ollama"
-3. Set `maproom.ollama.endpoint` to your host's IP (e.g., `http://172.17.0.1:11434`)
-
-## Embedding Providers
-
-### Ollama (Default)
-
-Free, private, runs locally. Recommended for most users.
-
-**Requirements**:
-
-- Ollama installed and running
-- ~4GB RAM for embedding model
-- ~670MB disk space for `mxbai-embed-large` model
-
-### OpenAI
-
-Fast cloud-based embeddings. Requires API key and costs per request.
-
-1. Run `Maproom: Setup` from Command Palette
-2. Select OpenAI
-3. Enter your API key from https://platform.openai.com/api-keys
-
-### Google Vertex AI
-
-Cloud-based alternative. Requires API key and Google Cloud setup.
-
-1. Run `Maproom: Setup` from Command Palette
-2. Select Google
-3. Enter your API key
-
-## Commands
-
-| Command                     | Description                           |
-| --------------------------- | ------------------------------------- |
-| `Maproom: Setup`            | Change embedding provider or API keys |
-| `Maproom: Show Output`      | View detailed logs                    |
-| `Maproom: Show Status`      | Check database and process status     |
-| `Maproom: Restart Watchers` | Restart file monitoring               |
-
-## Status Bar
-
-The status bar shows current state:
-
-- **Starting...** - Services initializing
-- **Indexing: N files** - Initial scan in progress
-- **Watching: N files** - Ready and monitoring changes
-- **Error** - Click to view details
-
-## Settings
+### Settings (historical)
 
 | Setting                       | Description          | Default                  |
 | ----------------------------- | -------------------- | ------------------------ |
 | `maproom.database.sqlitePath` | Custom database path | `~/.maproom/maproom.db`  |
 | `maproom.ollama.endpoint`     | Ollama API URL       | `http://127.0.0.1:11434` |
 
-## Troubleshooting
-
-### "Ollama is not running"
-
-```bash
-# Check if Ollama is running
-curl http://localhost:11434/api/tags
-
-# Start Ollama
-ollama serve
-```
-
-### "Binary not found" or "Permission denied"
-
-The extension should auto-fix permissions, but if needed:
-
-```bash
-chmod +x ~/.vscode/extensions/manifoldlogic.vscode-maproom-*/bin/*/maproom
-```
-
-### Extension seems stuck on "Starting..."
-
-1. Open Output panel: `Maproom: Show Output`
-2. Look for error messages
-3. Check if Ollama is running and the model is pulled
-4. Try `Maproom: Restart Watchers`
-
-### Slow initial indexing
-
-Normal for large codebases. The status bar shows progress. Subsequent file changes are indexed incrementally and much faster.
-
-## Requirements
-
-- **Git**: Required (workspace must be a git repository)
-- **VSCode**: 1.85.0+
-- **RAM**: 2GB minimum, 4GB recommended
-- **Disk**: 500MB for extension + database
-
-## Known Limitations
-
-- Windows support is experimental
-- Only git repositories are supported
-- Binary files are not indexed
-- Initial scan of very large repos (>10k files) takes time
-- OpenAI/Google providers require internet connection
+---
 
 ## Support
 
 - **Issues**: https://github.com/manifoldlogic/crewchief/issues
-- **Documentation**: https://github.com/manifoldlogic/crewchief
+- **maproom-mcp**: [`packages/maproom-mcp`](../maproom-mcp/README.md)
 
 ## License
 

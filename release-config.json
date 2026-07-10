@@ -27,7 +27,7 @@
       "dependencies": [],
       "schemaVersion": 1,
       "deprecated": true,
-      "notes": "VSCode extension - bundles own binary, self-contained"
+      "notes": "VSCode extension - RETIRED (2026-07-10). Source kept in-tree. Replaced by @crewchief/maproom-mcp. Not in releaseOrder; will not be published."
     }
   },
   "rustBinary": {
