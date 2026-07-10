@@ -325,7 +325,9 @@ export async function handleSearchTool(
     query,
     ...(repo !== undefined && { repo }),
     ...(repos !== undefined && { repos }),
-    ...(allRepos !== undefined && { all_repos: allRepos }),
+    // Only send all_repos:true — all_repos:false is treated as "not provided" per spec.
+    // Sending all_repos:false is an extraneous field that violates the exactly-one-of contract.
+    ...(allRepos === true && { all_repos: true }),
     worktree,
     limit,
     // F02: the daemon dispatches fts/vector/hybrid natively; pass the
@@ -344,9 +346,11 @@ export async function handleSearchTool(
     // R6: if the daemon rejects the new fields (pre-0.3.0 binary), surface a clear
     // "requires maproom >= 0.3.0" error instead of a raw protocol error.
     if (isCrossRepo && error instanceof RpcError) {
-      const code = (error as any).code;
-      // -32602 = InvalidParams: daemon rejected the new fields (old binary)
-      if (code === -32602 || error.message.includes("exactly one of")) {
+      // -32602 = InvalidParams: daemon rejected the new fields (old binary).
+      // RpcError stores the JSON-RPC numeric code in .rpcCode (NOT .code, which is
+      // the string 'RPC_ERROR' inherited from DaemonError). Use .isInvalidParams()
+      // which does `return this.rpcCode === -32602`.
+      if (error.isInvalidParams()) {
         throw new ProcessError(
           "Cross-repo search requires maproom >= 0.3.0. " +
             "The running daemon rejected the repos/all_repos parameter.\n\n" +
@@ -485,7 +489,9 @@ export async function handleSearchTool(
     hits,
     total: hits.length,
     query,
-    mode,
+    // D-8g: report the effective mode actually used on the wire (may differ from
+    // the requested mode when vector/hybrid was coerced to fts for cross-repo calls).
+    mode: effectiveMode,
     repo,
     worktree,
     metadata,

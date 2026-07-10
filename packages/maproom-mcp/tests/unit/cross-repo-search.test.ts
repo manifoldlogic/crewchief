@@ -8,7 +8,7 @@
  * R6: REQUIRES_MAPROOM_030 error code on 0.2.x daemon rejection
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
 import { SearchParamsSchema, validateSearchParams } from '../../src/tools/search_schema.js'
 
@@ -230,10 +230,71 @@ describe('SearchResult includes repo field (R3)', () => {
 })
 
 // ---------------------------------------------------------------------------
-// R6: REQUIRES_MAPROOM_030 error code check (unit-level; no daemon needed)
+// R6: REQUIRES_MAPROOM_030 — end-to-end catch-branch coverage
+//
+// The primary guard was `(error as any).code === -32602`, which always
+// returned false because DaemonError sets `.code = 'RPC_ERROR'` (string) and
+// RpcError stores the numeric JSON-RPC code in `.rpcCode`. This test suite
+// exercises the actual catch-block in handleSearchTool so that regression is
+// caught immediately.
 // ---------------------------------------------------------------------------
-describe('R6: graceful degradation error code', () => {
-  it('ProcessError can carry REQUIRES_MAPROOM_030 code', async () => {
+vi.mock('../../src/daemon.js', () => {
+  const mockSearch = vi.fn()
+  return {
+    getDaemonClient: () => ({ search: mockSearch }),
+    __mockSearch: mockSearch,
+  }
+})
+
+describe('R6: graceful degradation — handleSearchTool catch-branch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('throws REQUIRES_MAPROOM_030 when daemon rejects repos with -32602 (old binary)', async () => {
+    const { RpcError } = await import('../../src/daemon-client/errors.js')
+    const { handleSearchTool } = await import('../../src/tools/search.js')
+    const daemonModule = await import('../../src/daemon.js')
+    // Access the mocked search function through the factory
+    const mockDaemon = (daemonModule.getDaemonClient as ReturnType<typeof vi.fn>)()
+    mockDaemon.search.mockRejectedValueOnce(new RpcError("missing field `repo`", -32602))
+
+    await expect(
+      handleSearchTool({ query: 'test', repos: ['crewchief', 'specs'] }, null)
+    ).rejects.toMatchObject({
+      code: 'REQUIRES_MAPROOM_030',
+    })
+  })
+
+  it('throws REQUIRES_MAPROOM_030 when daemon rejects allRepos:true with -32602 (old binary)', async () => {
+    const { RpcError } = await import('../../src/daemon-client/errors.js')
+    const { handleSearchTool } = await import('../../src/tools/search.js')
+    const daemonModule = await import('../../src/daemon.js')
+    const mockDaemon = (daemonModule.getDaemonClient as ReturnType<typeof vi.fn>)()
+    mockDaemon.search.mockRejectedValueOnce(new RpcError("missing field `repo`", -32602))
+
+    await expect(
+      handleSearchTool({ query: 'test', allRepos: true }, null)
+    ).rejects.toMatchObject({
+      code: 'REQUIRES_MAPROOM_030',
+    })
+  })
+
+  it('does NOT suppress -32602 for single-repo calls (not a cross-repo issue)', async () => {
+    const { RpcError } = await import('../../src/daemon-client/errors.js')
+    const { handleSearchTool } = await import('../../src/tools/search.js')
+    const daemonModule = await import('../../src/daemon.js')
+    const mockDaemon = (daemonModule.getDaemonClient as ReturnType<typeof vi.fn>)()
+    mockDaemon.search.mockRejectedValueOnce(new RpcError('Invalid params', -32602))
+
+    await expect(
+      handleSearchTool({ query: 'test', repo: 'crewchief' }, null)
+    ).rejects.toMatchObject({
+      code: 'RPC_ERROR',
+    })
+  })
+
+  it('ProcessError can carry REQUIRES_MAPROOM_030 code (class-level sanity)', async () => {
     const { ProcessError } = await import('../../src/utils/process.js')
     const err = new ProcessError(
       'Cross-repo search requires maproom >= 0.3.0.',

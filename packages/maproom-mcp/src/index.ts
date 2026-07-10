@@ -212,6 +212,10 @@ SEARCH MODES:
 - "vector" (semantic search): Best for conceptual queries, similar code
 - "hybrid" (default): Combines both for optimal results
 
+Note (D-8g): when using repos or allRepos scope, mode is automatically coerced
+to "fts" — vector/hybrid multi-repo search is deferred in maproom 0.3.0.
+The response "mode" field reflects the effective mode used, not the requested value.
+
 NOT FOR:
 - Exact string matching: "TODO", "FIXME"
 - File paths (use Glob instead)
