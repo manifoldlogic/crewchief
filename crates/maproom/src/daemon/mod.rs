@@ -474,6 +474,16 @@ async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> Jso
                 Err(e) => {
                     error!("Search failed: {}", e);
 
+                    // D-8a / R3: resolve_repo_scope() signals InvalidParams by prefixing
+                    // the anyhow message with "-32602:".  Detect that prefix here and
+                    // emit the correct JSON-RPC code instead of the generic -32000.
+                    let msg = e.to_string();
+                    if msg.starts_with("-32602:") {
+                        // Strip the prefix so the message is clean for the client.
+                        let clean_msg = msg.trim_start_matches("-32602:").trim().to_string();
+                        return JsonRpcResponse::error(id, -32602, clean_msg, None);
+                    }
+
                     // Try to extract PipelineError from anyhow error chain
                     let error_details = if let Some(pipeline_err) =
                         e.downcast_ref::<crate::search::pipeline::PipelineError>()
@@ -496,9 +506,7 @@ async fn handle_request(request: JsonRpcRequest, state: Arc<DaemonState>) -> Jso
                     };
 
                     JsonRpcResponse::error(
-                        id,
-                        -32000,
-                        e.to_string(), // Preserve human-readable message
+                        id, -32000, msg, // Preserve human-readable message
                         error_data,
                     )
                 }
@@ -1391,6 +1399,7 @@ mod tests {
             kind_mult: None,
             exact_mult,
             preview: None,
+            repo_name: None,
         }
     }
 

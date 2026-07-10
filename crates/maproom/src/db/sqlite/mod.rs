@@ -1952,6 +1952,7 @@ impl StoreSearch for SqliteStore {
                     kind_mult: None,
                     exact_mult: None,
                     preview: Some(row.get(7)?),
+                    repo_name: None,
                 })
             })?;
             for row in rows {
@@ -2136,6 +2137,7 @@ impl StoreSearch for SqliteStore {
                         kind_mult: None,
                         exact_mult: Some(exact_mult),
                         preview: None,
+                        repo_name: None,
                     })
                 })?;
                 for row in rows {
@@ -2158,6 +2160,7 @@ impl StoreSearch for SqliteStore {
                         kind_mult: None,
                         exact_mult: Some(exact_mult),
                         preview: None,
+                        repo_name: None,
                     })
                 })?;
                 for row in rows {
@@ -2235,9 +2238,11 @@ impl StoreSearch for SqliteStore {
             // D-8b: GROUP BY repo, k per repo via window ROW_NUMBER.
             // SQLite's window functions are available since 3.25.0 (bundled version is 3.45).
             // The outer query caps at k hits per repo_id.
+            // R2: JOIN repos to surface repo_name on every hit (D-8b).
+            // SHOULD-FIX: include preview for parity with single-repo and Postgres backends.
             let sql = format!(
                 r#"
-                SELECT id, start_line, end_line, symbol_name, kind, relpath, score, repo_id
+                SELECT id, start_line, end_line, symbol_name, kind, relpath, score, repo_name, preview
                 FROM (
                     SELECT
                         c.id,
@@ -2247,17 +2252,19 @@ impl StoreSearch for SqliteStore {
                         c.kind,
                         f.relpath,
                         fts_chunks.rank AS score,
-                        f.repo_id,
+                        r.name AS repo_name,
+                        c.preview,
                         ROW_NUMBER() OVER (PARTITION BY f.repo_id ORDER BY fts_chunks.rank ASC) AS rn
                     FROM fts_chunks
                     JOIN chunks c ON c.id = fts_chunks.rowid
                     JOIN files f ON f.id = c.file_id
+                    JOIN repos r ON r.id = f.repo_id
                     WHERE fts_chunks MATCH ?{fts_idx}
                       AND f.repo_id IN ({repo_phs})
                       {filters}
                 )
                 WHERE rn <= {k_ph}
-                ORDER BY repo_id, score ASC
+                ORDER BY repo_name, score ASC
                 "#,
                 fts_idx = fts_param_idx,
                 repo_phs = repo_placeholders,
@@ -2290,9 +2297,8 @@ impl StoreSearch for SqliteStore {
             let rows = stmt.query_map(params_refs.as_slice(), |row| {
                 let score: f64 = row.get(6)?;
                 let symbol_name: Option<String> = row.get(3)?;
-                // Carry repo_id in preview slot is not correct — we emit it via
-                // the SearchHit file_relpath prefix approach: repo info is surfaced
-                // by the caller (file_relpath already uniquely identifies the file).
+                let repo_name: String = row.get(7)?;
+                let preview: Option<String> = row.get(8)?;
                 Ok(SearchHit {
                     chunk_id: row.get(0)?,
                     start_line: row.get(1)?,
@@ -2305,7 +2311,8 @@ impl StoreSearch for SqliteStore {
                     base_score: None,
                     kind_mult: None,
                     exact_mult: None,
-                    preview: None,
+                    preview,
+                    repo_name: Some(repo_name),
                 })
             })?;
 
@@ -2398,6 +2405,7 @@ impl StoreSearch for SqliteStore {
                         kind_mult: None,
                         exact_mult: None,
                         preview: None,
+                    repo_name: None,
                     })
                 })?;
                 for row in rows {
@@ -2418,6 +2426,7 @@ impl StoreSearch for SqliteStore {
                         kind_mult: None,
                         exact_mult: None,
                         preview: None,
+                    repo_name: None,
                     })
                 })?;
                 for row in rows {
@@ -2516,6 +2525,7 @@ impl StoreSearch for SqliteStore {
                                 kind_mult: None, // TODO: Apply kind multipliers like PostgreSQL
                                 exact_mult: None,
                                 preview: Some(row.get(5)?),
+                                repo_name: None,
                             })
                         },
                     )
@@ -2546,6 +2556,7 @@ impl StoreSearch for SqliteStore {
                                 kind_mult: None, // TODO: Apply kind multipliers like PostgreSQL
                                 exact_mult: None,
                                 preview: Some(row.get(5)?),
+                                repo_name: None,
                             })
                         },
                     )
@@ -2669,6 +2680,7 @@ impl StoreSearch for SqliteStore {
                                 kind_mult: None, // RRF score already incorporates semantic ranking
                                 exact_mult: None,
                                 preview: None,
+                                repo_name: None,
                             })
                         },
                     )
@@ -2699,6 +2711,7 @@ impl StoreSearch for SqliteStore {
                                 kind_mult: None, // RRF score already incorporates semantic ranking
                                 exact_mult: None,
                                 preview: None,
+                                repo_name: None,
                             })
                         },
                     )
@@ -3143,6 +3156,7 @@ impl StoreGraph for SqliteStore {
                     kind_mult: None,
                     exact_mult: None,
                     preview: None,
+                    repo_name: None,
                 })
             })?;
             for row in rows {
@@ -3219,6 +3233,7 @@ impl StoreGraph for SqliteStore {
                             kind_mult: None,
                             exact_mult: None,
                             preview: None,
+                            repo_name: None,
                         })
                     },
                 )?;
@@ -3241,6 +3256,7 @@ impl StoreGraph for SqliteStore {
                             kind_mult: None,
                             exact_mult: None,
                             preview: None,
+                            repo_name: None,
                         })
                     },
                 )?;
@@ -3342,6 +3358,7 @@ impl StoreGraph for SqliteStore {
                     kind_mult: None,
                     exact_mult: None,
                     preview: None,
+                    repo_name: None,
                 })
             })?;
             for row in rows {
@@ -4024,6 +4041,7 @@ impl SqliteStore {
                         kind_mult: None,
                         exact_mult: None,
                         preview: None,
+                        repo_name: None,
                     })
                 })?;
                 for row in rows {
@@ -4043,6 +4061,7 @@ impl SqliteStore {
                         kind_mult: None,
                         exact_mult: None,
                         preview: None,
+                        repo_name: None,
                     })
                 })?;
                 for row in rows {
@@ -4232,6 +4251,7 @@ impl SqliteStore {
                             kind_mult: None,
                             exact_mult: None,
                             preview: None,
+                            repo_name: None,
                         })
                     },
                 )?;
@@ -4261,6 +4281,7 @@ impl SqliteStore {
                             kind_mult: None,
                             exact_mult: None,
                             preview: None,
+                            repo_name: None,
                         })
                     },
                 )?;

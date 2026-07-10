@@ -150,6 +150,14 @@ async fn test_single_repo_scope() {
             !hits.is_empty(),
             "[{backend}] expected at least one hit for single-repo scope"
         );
+        // R2: single-repo via search_fts_multi_repo also returns repo_name.
+        for hit in &hits {
+            assert!(
+                hit.repo_name.is_some(),
+                "[{backend}] single-repo multi_repo call must carry repo_name (R2); path: {:?}",
+                hit.file_relpath
+            );
+        }
         eprintln!("[{backend}] test_single_repo_scope: {} hit(s)", hits.len());
     }
 }
@@ -191,12 +199,37 @@ async fn test_multi_repo_list_scope() {
             hits.len()
         );
 
-        // Verify hits are ordered by repo_id groups (D-8b)
-        // Group consecutive hits: each repo's hits should be contiguous.
-        // (We can't assert repo_id directly from SearchHit, but chunk_ids are distinct.)
+        // D-8b / R2: every multi-repo hit must carry repo_name.
+        for hit in &hits {
+            assert!(
+                hit.repo_name.is_some(),
+                "[{backend}] every hit must have repo_name (R2/D-8b); got: {:?}",
+                hit.file_relpath
+            );
+        }
+
+        // D-8b: hits must be grouped by repo (no interleaving).
+        // Collect repo_names in order and verify they form contiguous runs.
+        let repo_names: Vec<&str> = hits
+            .iter()
+            .map(|h| h.repo_name.as_deref().unwrap_or(""))
+            .collect();
+        let mut prev = "";
+        let mut seen = std::collections::HashSet::new();
+        for name in &repo_names {
+            if *name != prev {
+                assert!(
+                    seen.insert(name),
+                    "[{backend}] D-8b grouping violated: repo_name '{name}' appeared non-contiguously in {repo_names:?}"
+                );
+                prev = name;
+            }
+        }
+
         eprintln!(
-            "[{backend}] test_multi_repo_list_scope: {} hit(s)",
-            hits.len()
+            "[{backend}] test_multi_repo_list_scope: {} hit(s), repos: {:?}",
+            hits.len(),
+            repo_names,
         );
     }
 }
@@ -244,6 +277,14 @@ async fn test_all_repos_scope() {
             "[{backend}] expected >=2 hits (one per seeded repo), got {}",
             hits.len()
         );
+        // R2: all hits must carry repo_name in all-repos mode.
+        for hit in &hits {
+            assert!(
+                hit.repo_name.is_some(),
+                "[{backend}] all-repos hit must carry repo_name (R2); path: {:?}",
+                hit.file_relpath
+            );
+        }
         eprintln!("[{backend}] test_all_repos_scope: {} hit(s)", hits.len());
     }
 }

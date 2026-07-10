@@ -2017,6 +2017,10 @@ async fn real_main() -> anyhow::Result<()> {
 
             let store = handle_agent_error!(db::connect().await, format);
 
+            // F01: track effective mode (may degrade from hybrid→fts in single-repo path).
+            // Declared before the if/else so it's in scope for the metadata output below.
+            let mut effective_mode = mode;
+
             // ── Multi-repo / all-repos path ──────────────────────────────────
             let (hits, total_count) = if is_multi {
                 // Resolve repo names -> repo IDs
@@ -2073,7 +2077,7 @@ async fn real_main() -> anyhow::Result<()> {
                 // provider failure degrades hybrid to fts (stderr notice, honest
                 // effective-mode metadata) and hard-errors vector — the user
                 // asked for semantics only vectors can deliver.
-                let mut effective_mode = mode;
+                // `effective_mode` is declared before the if/else block.
                 let query_embedding: Option<Vec<f32>> = match mode {
                     SearchMode::Fts => None,
                     SearchMode::Vector | SearchMode::Hybrid => {
@@ -2194,14 +2198,13 @@ async fn real_main() -> anyhow::Result<()> {
 
             // Resolve effective_mode string for metadata.
             // In multi-repo path, mode is always fts (validated above).
-            // In single-repo path, effective_mode may have degraded from hybrid
-            // to fts inside the else branch (printed to stderr already); we
-            // report the requested mode name here as an approximation —
-            // acceptable because degradation is always surfaced to stderr.
+            // In single-repo path, use `effective_mode` (which may have degraded
+            // from hybrid to fts inside the else branch) — not the requested `mode`.
+            // F01: honest effective-mode reporting (search_hybrid_degrades_without_provider).
             let effective_mode_str = if is_multi {
                 "fts"
             } else {
-                match mode {
+                match effective_mode {
                     SearchMode::Fts => "fts",
                     SearchMode::Vector => "vector",
                     SearchMode::Hybrid => "hybrid",

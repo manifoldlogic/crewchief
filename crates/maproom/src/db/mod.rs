@@ -159,6 +159,10 @@ pub struct SearchHit {
     pub exact_mult: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preview: Option<String>,
+    /// Repository name — populated only in multi-repo search results (R2/D-8b).
+    /// None for single-repo searches to preserve backward-compatible output.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo_name: Option<String>,
 }
 
 /// Typed store errors callers can downcast for classification (F15).
@@ -356,6 +360,7 @@ mod tests {
             kind_mult: None,
             exact_mult: None,
             preview: None,
+            repo_name: None,
         };
 
         let json = serde_json::to_string(&hit).unwrap();
@@ -377,6 +382,7 @@ mod tests {
             kind_mult: None,
             exact_mult: None,
             preview: Some("sample text".to_string()),
+            repo_name: None,
         };
 
         let json = serde_json::to_string(&hit).unwrap();
@@ -398,6 +404,7 @@ mod tests {
             kind_mult: None,
             exact_mult: None,
             preview: Some("".to_string()),
+            repo_name: None,
         };
 
         let json = serde_json::to_string(&hit).unwrap();

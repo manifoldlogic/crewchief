@@ -35,6 +35,7 @@ fn create_search_hit(
         kind_mult: None,
         exact_mult: None,
         preview: None,
+        repo_name: None,
     }
 }
 

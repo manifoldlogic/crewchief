@@ -220,10 +220,22 @@ fn config_error_exit_is_format_independent() {
     let agent = maproom_cmd()
         .env("MAPROOM_EMBEDDING_PROVIDER", "invalid")
         .env("MAPROOM_DATABASE_URL", &db)
-        .args(["vector-search", "--repo", "x", "--query", "y", "--format", "agent"])
+        .args([
+            "vector-search",
+            "--repo",
+            "x",
+            "--query",
+            "y",
+            "--format",
+            "agent",
+        ])
         .output()
         .unwrap();
-    assert_eq!(json.status.code(), Some(2), "json format must classify config errors (was 1)");
+    assert_eq!(
+        json.status.code(),
+        Some(2),
+        "json format must classify config errors (was 1)"
+    );
     assert_eq!(agent.status.code(), Some(2));
 }
 
@@ -233,7 +245,10 @@ fn vector_search_missing_credentials_exits_2_json() {
     let dir = tempfile::TempDir::new().unwrap();
     let out = maproom_cmd()
         .env("MAPROOM_EMBEDDING_PROVIDER", "openai") // no OPENAI_API_KEY (scrubbed)
-        .env("MAPROOM_DATABASE_URL", format!("sqlite://{}/x.db", dir.path().display()))
+        .env(
+            "MAPROOM_DATABASE_URL",
+            format!("sqlite://{}/x.db", dir.path().display()),
+        )
         .args(["vector-search", "--repo", "x", "--query", "y"])
         .output()
         .unwrap();
@@ -301,13 +316,20 @@ async fn db_migrate_damaged_db_exits_1_names_table() {
         .args(["db", "migrate"])
         .output()
         .unwrap();
-    assert_eq!(out.status.code(), Some(1), "structural damage is a runtime error");
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "structural damage is a runtime error"
+    );
     let all = format!(
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
-    assert!(all.contains("chunks"), "must name the missing table; got: {all}");
+    assert!(
+        all.contains("chunks"),
+        "must name the missing table; got: {all}"
+    );
 }
 
 /// R12: empty --database-url flag exits 2.
@@ -376,7 +398,15 @@ fn search_unknown_repo_is_repository_not_found() {
 
     let out = maproom_cmd()
         .env("MAPROOM_DATABASE_URL", &url)
-        .args(["search", "--repo", "definitely-a-typo", "--query", "x", "--format", "agent"])
+        .args([
+            "search",
+            "--repo",
+            "definitely-a-typo",
+            "--query",
+            "x",
+            "--format",
+            "agent",
+        ])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -385,7 +415,10 @@ fn search_unknown_repo_is_repository_not_found() {
         stdout.contains("type=repository_not_found"),
         "typed classification required (F15); got: {stdout}"
     );
-    assert!(stdout.contains("maproom status"), "suggestion names the fix: {stdout}");
+    assert!(
+        stdout.contains("maproom status"),
+        "suggestion names the fix: {stdout}"
+    );
 }
 
 /// F01: `search --mode hybrid` degrades to FTS (exit 0, honest mode
@@ -407,8 +440,11 @@ fn search_hybrid_degrades_without_provider() {
         assert!(out.status.success());
     };
     git(&["init", "-q", "-b", "main"]);
-    std::fs::write(repo.path().join("a.ts"), "export function hybridProbe() { return 1; }\n")
-        .unwrap();
+    std::fs::write(
+        repo.path().join("a.ts"),
+        "export function hybridProbe() { return 1; }\n",
+    )
+    .unwrap();
     git(&["add", "a.ts"]);
     git(&["commit", "-qm", "i"]);
     let url = format!("sqlite://{}/f01.db", db.path().display());
@@ -427,16 +463,38 @@ fn search_hybrid_degrades_without_provider() {
         .env("MAPROOM_DATABASE_URL", &url)
         .env("MAPROOM_EMBEDDING_PROVIDER", "google")
         .env("GOOGLE_APPLICATION_CREDENTIALS", "/nonexistent")
-        .args(["search", "--repo", "fx", "--query", "hybridProbe", "--mode", "hybrid", "--format", "json"])
+        .args([
+            "search",
+            "--repo",
+            "fx",
+            "--query",
+            "hybridProbe",
+            "--mode",
+            "hybrid",
+            "--format",
+            "json",
+        ])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert_eq!(out.status.code(), Some(0), "hybrid must degrade, not die; stderr: {stderr}");
-    assert!(stdout.contains("hybridProbe"), "FTS results served: {stdout}");
-    assert!(stdout.contains("\"mode\": \"fts\"") || stdout.contains("\"mode\":\"fts\""),
-        "metadata reports the EFFECTIVE mode: {stdout}");
-    assert!(stderr.contains("degraded to FTS"), "notice required: {stderr}");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "hybrid must degrade, not die; stderr: {stderr}"
+    );
+    assert!(
+        stdout.contains("hybridProbe"),
+        "FTS results served: {stdout}"
+    );
+    assert!(
+        stdout.contains("\"mode\": \"fts\"") || stdout.contains("\"mode\":\"fts\""),
+        "metadata reports the EFFECTIVE mode: {stdout}"
+    );
+    assert!(
+        stderr.contains("degraded to FTS"),
+        "notice required: {stderr}"
+    );
 }
 
 /// F01: `--mode vector` with a broken provider is a hard config error
@@ -456,10 +514,111 @@ fn search_vector_broken_provider_exits_2() {
         .env("MAPROOM_DATABASE_URL", &url)
         .env("MAPROOM_EMBEDDING_PROVIDER", "google")
         .env("GOOGLE_APPLICATION_CREDENTIALS", "/nonexistent")
-        .args(["search", "--repo", "fx", "--query", "x", "--mode", "vector", "--format", "agent"])
+        .args([
+            "search", "--repo", "fx", "--query", "x", "--mode", "vector", "--format", "agent",
+        ])
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(2));
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("type=embedding_provider"), "{stdout}");
+}
+
+// ── R5: D-8a / exactly-one-of CLI validation ──────────────────────────────
+
+/// D-8a: `search` with no --repo and no --all-repos exits 2 (config error).
+#[test]
+fn search_no_repo_scope_exits_2() {
+    let db = tempfile::TempDir::new().unwrap();
+    let url = format!("sqlite://{}/scope.db", db.path().display());
+    // No repo or all-repos → should exit 2 without even touching the DB.
+    let out = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args(["search", "--query", "anything", "--format", "agent"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "no repo scope must be exit 2 (config error); stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("at least one --repo") || stderr.contains("all-repos"),
+        "error message must name the fix; stderr: {stderr}"
+    );
+}
+
+/// D-8g: `search --all-repos --mode vector` exits 2 because multi-repo
+/// vector/hybrid is not supported (only FTS is implemented for multi-repo).
+#[test]
+fn search_all_repos_vector_mode_exits_2() {
+    let db = tempfile::TempDir::new().unwrap();
+    let url = format!("sqlite://{}/d8g.db", db.path().display());
+    let mig = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args(["db", "migrate"])
+        .output()
+        .unwrap();
+    assert!(mig.status.success());
+
+    // --all-repos + --mode vector must exit 2 (D-8g structured error)
+    let out = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args([
+            "search",
+            "--all-repos",
+            "--query",
+            "anything",
+            "--mode",
+            "vector",
+            "--format",
+            "agent",
+        ])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "multi-repo vector mode must be exit 2 (D-8g); stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("fts") || stderr.contains("D-8g") || stderr.contains("multi-repo"),
+        "error must explain FTS-only constraint; stderr: {stderr}"
+    );
+}
+
+/// D-8a: `search --all-repos --mode hybrid` exits 2 for the same reason (D-8g).
+#[test]
+fn search_all_repos_hybrid_mode_exits_2() {
+    let db = tempfile::TempDir::new().unwrap();
+    let url = format!("sqlite://{}/d8g_hyb.db", db.path().display());
+    let mig = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args(["db", "migrate"])
+        .output()
+        .unwrap();
+    assert!(mig.status.success());
+
+    let out = maproom_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args([
+            "search",
+            "--all-repos",
+            "--query",
+            "anything",
+            "--mode",
+            "hybrid",
+            "--format",
+            "agent",
+        ])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "multi-repo hybrid mode must be exit 2 (D-8g); stderr: {stderr}"
+    );
 }

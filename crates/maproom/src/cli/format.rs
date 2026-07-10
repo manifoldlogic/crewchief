@@ -80,8 +80,15 @@ pub fn format_hits_agent(hits: &[db::SearchHit], meta: &SearchMetadata) -> Strin
     for hit in hits.iter() {
         output.push('\n');
 
-        // Segment 1: file:line
-        let _ = write!(output, "{}:{}", hit.file_relpath, hit.start_line);
+        // Segment 1: [repo:]file:line  (R2 / D-8b: repo prefix in multi-repo mode)
+        match &hit.repo_name {
+            Some(repo) if !repo.is_empty() => {
+                let _ = write!(output, "{}:{}:{}", repo, hit.file_relpath, hit.start_line);
+            }
+            _ => {
+                let _ = write!(output, "{}:{}", hit.file_relpath, hit.start_line);
+            }
+        }
 
         // Segment 2: kind [symbol]
         let kind_segment = match &hit.symbol_name {
@@ -376,6 +383,7 @@ mod tests {
             kind_mult: None,
             exact_mult: None,
             preview: preview.map(|s| s.to_string()),
+            repo_name: None,
         }
     }
 
@@ -651,6 +659,7 @@ mod tests {
             kind_mult: None,
             exact_mult: None,
             preview: preview.map(|s| s.to_string()),
+            repo_name: None,
         }
     }
 
