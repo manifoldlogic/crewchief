@@ -61,26 +61,50 @@ This shows you:
 
 **Purpose**: Semantic code search across indexed repositories
 **When to Use**: Finding code by concept or functionality
-**Parameters**:
-- `repo` (required): Repository name
+
+**Repository Scope** (exactly one required):
+- `repo` (string): Single-repo scope — preferred for focused queries
+- `repos` (string[]): Multi-repo scope — one call searches multiple repos (requires maproom >= 0.3.0)
+- `allRepos` (boolean): All-repos scope — searches every indexed repo (requires maproom >= 0.3.0; use sparingly)
+
+**Other Parameters**:
 - `query` (required): Search query (1-3 words work best)
 - `worktree` (optional): Limit to specific worktree
 - `filter` (optional): File type filter (`all`, `code`, `docs`, `config`)
-- `k` (optional): Number of results (default: 10, max: 20)
+- `limit` (optional): Number of results per repo (default: 20; is a per-repo cap in multi-repo mode)
 
-**Example**:
+**Single-repo Example**:
 ```json
 {
   "repo": "crewchief",
   "query": "authentication flow",
   "filter": "code",
-  "k": 5
+  "limit": 5
+}
+```
+
+**Multi-repo Example** (requires maproom >= 0.3.0):
+```json
+{
+  "repos": ["crewchief", "specs"],
+  "query": "authentication flow",
+  "limit": 3
+}
+```
+
+**All-repos Example** (requires maproom >= 0.3.0; use sparingly):
+```json
+{
+  "allRepos": true,
+  "query": "authentication flow",
+  "limit": 3
 }
 ```
 
 **Returns**: Array of chunks with:
 - `chunk_id`: UUID for use in context tool
 - `relpath`: File path for use in open tool
+- `repo`: Repository name this hit came from (always present)
 - `worktree`: Worktree name for use in open tool
 - `start_line`, `end_line`: Line range
 - `score`: Relevance score
@@ -91,6 +115,8 @@ This shows you:
 - Use conceptual terms: "authentication", "database connection"
 - Add context words: "user login validation" not just "login"
 - Filter by type for faster, more relevant results
+- Prefer `repo` over `repos`/`allRepos` for targeted queries — single-repo calls are faster
+- Use `repos:[...]` when you know the repos to compare; avoid `allRepos:true` on large indices
 
 ---
 
@@ -584,14 +610,27 @@ This shows you:
 
 ---
 
-### Pattern 10: Cross-Repository Learning
+### Pattern 10: Cross-Repository Search (Single Call)
 
-**Goal**: Learn patterns from multiple projects
+**Goal**: Search across multiple repos in one call using maproom >= 0.3.0
+
+**Prerequisites**: maproom >= 0.3.0 daemon. The `repo` field on every hit tells you the source.
 
 **Steps**:
 1. Index multiple repositories
 
-2. Search pattern in repo A
+2. Search across repos in one call
+   ```json
+   Tool: search
+   {
+     "repos": ["project-a", "project-b"],
+     "query": "error handling pattern",
+     "limit": 5
+   }
+   ```
+   Results are grouped by repo; each hit carries a `repo` field.
+
+3. When you know *where* to look, use single-repo for speed
    ```json
    Tool: search
    {
@@ -599,33 +638,39 @@ This shows you:
      "query": "error handling pattern"
    }
    ```
+   Single-repo calls are always faster than `repos`/`allRepos` for targeted queries.
 
-3. Search same pattern in repo B
+4. Use `allRepos:true` only for genuine exploration across all indexed repos
    ```json
    Tool: search
    {
-     "repo": "project-b",
-     "query": "error handling pattern"
+     "allRepos": true,
+     "query": "error handling pattern",
+     "limit": 3
    }
    ```
 
-4. Compare implementations
+5. Open interesting files (use `repo` and `worktree` from hit)
    ```json
    Tool: open
-   { "relpath": "src/errors.ts", "worktree": "main" }
+   { "relpath": "src/errors.ts", "worktree": "main", "repo": "project-a" }
    ```
 
-5. Get context for interesting chunks
+6. Get context for interesting chunks
    ```json
    Tool: context
-   { "chunk_id": "chunk-from-each-repo", "budget_tokens": 8000 }
+   { "chunk_id": "chunk-from-search", "budget_tokens": 8000 }
    ```
 
 **Use Cases**:
-- Learning best practices
+- Comparing error handling patterns across projects (one call, not N)
 - Standardizing patterns across projects
-- Finding reusable components
-- Technology comparison
+- Finding reusable components across repos
+- Technology comparison without N-process overhead
+
+**Note on old pattern**: If you are on maproom < 0.3.0, the only option is multiple
+single-repo calls (`repo:"project-a"` then `repo:"project-b"`). The multi-repo parameters
+(`repos`, `allRepos`) require the 0.3.0 daemon and will return a clear error on older versions.
 
 ---
 

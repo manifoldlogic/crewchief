@@ -236,11 +236,13 @@ async function fetchChunkIds(
 /**
  * Execute search tool handler
  *
- * Calls the Rust binary via subprocess to perform FTS search, then enriches
- * results with chunk IDs from the database.
+ * Calls the Rust daemon to perform semantic search. Supports three scope modes:
+ * - Single-repo: {repo: "name"} (backward-compatible)
+ * - Multi-repo: {repos: ["a","b"]} (requires maproom >= 0.3.0)
+ * - All-repos: {allRepos: true} (requires maproom >= 0.3.0)
  *
  * @param params - Tool parameters
- * @param client - Database client (legacy, not used with SQLite)
+ * @param client - Database client (legacy, not used with daemon-based search)
  * @returns SearchBundle with results
  * @throws ValidationError for invalid parameters
  * @throws ProcessError for binary execution failures
@@ -249,24 +251,27 @@ export async function handleSearchTool(
   params: unknown,
   client: any,
 ): Promise<SearchBundle> {
-  // Validate parameters with Zod schema
+  // Validate parameters with Zod schema (enforces exactly-one-of scope)
   const validatedParams = validateSearchParams(params);
   const {
     query,
     repo,
+    repos,
+    allRepos,
     worktree,
     limit,
     mode,
     debug,
     deduplicate,
     include_confidence,
-    // R2: phantom no-op field removed from destructuring
   } = validatedParams;
 
   log.debug(
     {
       query,
       repo,
+      repos,
+      allRepos,
       worktree,
       limit,
       mode,
@@ -288,14 +293,6 @@ export async function handleSearchTool(
     );
   }
 
-  // Validate repo parameter is provided
-  if (!repo) {
-    throw new ValidationError(
-      "repo parameter is required for search",
-      "MISSING_REPO",
-    );
-  }
-
   // ============================================================================
   // MIGRATION NOTE (DAEMIGR-2001):
   // Replaced process spawning with daemon client for 20-50x performance improvement.
@@ -303,30 +300,63 @@ export async function handleSearchTool(
   // ============================================================================
 
   log.debug(
-    { mode, query, repo, worktree, limit, debug },
+    { mode, query, repo, repos, allRepos, worktree, limit, debug },
     "Calling daemon for search",
   );
 
   // Get daemon client singleton
   const daemon = getDaemonClient();
 
+  // D-8g: multi-repo search (repos/all_repos) only supports mode=fts in 0.3.0;
+  // vector/hybrid multi-repo is deferred. Auto-coerce to fts for cross-repo requests
+  // to avoid a confusing daemon error when the user leaves mode at its default (hybrid).
+  const isCrossRepo = repos !== undefined || allRepos === true;
+  const effectiveMode = isCrossRepo && mode !== "fts" ? "fts" : mode;
+  if (isCrossRepo && mode !== "fts" && mode !== undefined) {
+    log.info(
+      { requestedMode: mode, effectiveMode: "fts" },
+      "D-8g: cross-repo search coerced to mode=fts (vector/hybrid multi-repo deferred)",
+    );
+  }
+
+  // Build wire-shape params (snake_case on the wire, matching Rust serde defaults).
+  // Exactly one of {repo, repos, all_repos} will be set (validated above).
+  const wireParams = {
+    query,
+    ...(repo !== undefined && { repo }),
+    ...(repos !== undefined && { repos }),
+    ...(allRepos !== undefined && { all_repos: allRepos }),
+    worktree,
+    limit,
+    // F02: the daemon dispatches fts/vector/hybrid natively; pass the
+    // effective mode (auto-coerced to fts for cross-repo per D-8g).
+    mode: effectiveMode,
+    debug,
+    deduplicate,
+    include_confidence: include_confidence ?? false,
+  };
+
   // Call daemon search method
   let daemonResult: Awaited<ReturnType<typeof daemon.search>>;
   try {
-    daemonResult = await daemon.search({
-      query,
-      repo,
-      worktree,
-      limit,
-      // F02: the daemon dispatches fts/vector/hybrid natively; pass the
-      // requested mode through instead of silently dropping it.
-      mode,
-      debug,
-      deduplicate,
-      include_confidence: include_confidence ?? false,
-      // R2: phantom no-op field not sent to daemon
-    });
+    daemonResult = await daemon.search(wireParams);
   } catch (error) {
+    // R6: if the daemon rejects the new fields (pre-0.3.0 binary), surface a clear
+    // "requires maproom >= 0.3.0" error instead of a raw protocol error.
+    if (isCrossRepo && error instanceof RpcError) {
+      const code = (error as any).code;
+      // -32602 = InvalidParams: daemon rejected the new fields (old binary)
+      if (code === -32602 || error.message.includes("exactly one of")) {
+        throw new ProcessError(
+          "Cross-repo search requires maproom >= 0.3.0. " +
+            "The running daemon rejected the repos/all_repos parameter.\n\n" +
+            "Upgrade the maproom binary and restart the daemon, then retry.\n\n" +
+            "To search a single repo with the current binary, use: {repo: \"name\", query: \"...\"}",
+          "REQUIRES_MAPROOM_030",
+        );
+      }
+    }
+
     // Convert daemon errors to MCP-friendly errors
     if (error instanceof DaemonStartError) {
       throw new ProcessError(
@@ -347,8 +377,9 @@ export async function handleSearchTool(
       if (
         error.message.includes("query returned an unexpected number of rows")
       ) {
+        const scopeLabel = repo ?? (repos ? repos.join(",") : "all");
         throw new ValidationError(
-          `Repository '${repo}' not found or no data indexed.`,
+          `Repository '${scopeLabel}' not found or no data indexed.`,
           "REPO_NOT_FOUND",
         );
       }
@@ -413,6 +444,15 @@ export async function handleSearchTool(
       // Will be added in Phase 2
     };
 
+    // D-8b/c: propagate repo_name from daemon hit onto result.repo
+    // Present on every hit in cross-repo results; may also be present in single-repo 0.3.0.
+    if (daemonHit.repo_name) {
+      result.repo = daemonHit.repo_name;
+    } else if (repo) {
+      // Single-repo fallback: echo the requested repo so callers always have it
+      result.repo = repo;
+    }
+
     // Add confidence signals if present (MRIMP-4: confidence scoring)
     if (daemonHit.confidence) {
       result.confidence = daemonHit.confidence;
@@ -457,6 +497,8 @@ export async function handleSearchTool(
       hits: hits.length,
       mode,
       repo,
+      repos,
+      allRepos,
       worktree,
       has_metadata: !!metadata,
     },

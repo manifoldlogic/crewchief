@@ -20,11 +20,21 @@ import type {
 } from "./types.js";
 
 /**
- * Search parameters for daemon search method
+ * Search parameters for daemon search method.
+ *
+ * Wire-shape synced with crates/maproom/src/daemon/types.rs::SearchParams (cc#70).
+ * Field names are snake_case on the wire (Rust serde default).
+ * Exactly one of {repo, repos, all_repos} MUST be set; the daemon enforces this
+ * with -32602 InvalidParams. Client-side validation (search_schema.ts) mirrors it.
  */
 export interface SearchParams {
   query: string;
-  repo: string;
+  /** Single-repo scope (legacy / default). Option<String> in Rust — omit for multi-repo. */
+  repo?: string;
+  /** Multi-repo scope: search these repos in one query (D-8a, cc#70). */
+  repos?: string[];
+  /** All-repos scope: search every repo in the index (D-8a, D-8d, cc#70). */
+  all_repos?: boolean;
   worktree?: string;
   limit?: number;
   threshold?: number;
@@ -35,13 +45,12 @@ export interface SearchParams {
   deduplicate?: boolean;
   /** Include confidence signals for result quality assessment (default: false) */
   include_confidence?: boolean;
-  // R2: phantom no-op field removed. Wave 3 adds real cross-repo support.
 }
 
 /**
  * Search result from daemon
  *
- * Sync with: crates/maproom/src/db/mod.rs SearchHit
+ * Sync with: crates/maproom/src/db/mod.rs SearchHit (cc#70 adds repo_name for cross-repo).
  */
 export interface SearchResult {
   hits: Array<{
@@ -53,6 +62,8 @@ export interface SearchResult {
     kind: string;
     content: string;
     score: number;
+    /** Repo name for this hit (present on every hit in cross-repo results; D-8b/c). */
+    repo_name?: string;
     /** Confidence signals for result quality assessment (present when include_confidence=true) */
     confidence?: ConfidenceSignals;
   }>;

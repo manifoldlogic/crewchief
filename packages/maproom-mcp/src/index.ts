@@ -161,7 +161,18 @@ export const toolSchemas = [
     name: 'search',
     description: `Semantic code search optimized for AI agents - BEST FOR: finding functions/classes by concept, understanding code relationships, exploring unfamiliar codebases. FASTER THAN: Grep for conceptual searches. USE WHEN: searching for functionality rather than exact text matches.
 
-🤖 AI AGENT QUERY FORMULATION:
+REPOSITORY SCOPE (exactly one required):
+  repo: "name"               — single-repo search (preferred for focused queries)
+  repos: ["a", "b"]         — multi-repo search in one call (requires maproom >= 0.3.0);
+                               limit is per-repo cap; results grouped and labelled by repo
+  allRepos: true            — search every indexed repo (requires maproom >= 0.3.0;
+                               use with caution on large indices; always prefer repo/repos
+                               for targeted queries to avoid scanning 170k+ chunks)
+
+Note: omitting all three scope forms is an error. Provide exactly one.
+For single-repo queries, repo:"name" is always preferred over allRepos for performance.
+
+AI AGENT QUERY FORMULATION:
 
 Transform natural language questions into optimal search queries:
 
@@ -177,13 +188,13 @@ EXAMPLES:
   "Where is WebSocket disconnect?" → "WebSocket disconnect"
 
 QUERY BEST PRACTICES:
-✅ Good: 2-3 words, concepts, code terms
+Good: 2-3 words, concepts, code terms
   - "error handling"
   - "cart validation"
   - "WebSocket disconnect"
   - "processCheckout"
 
-❌ Avoid: Full sentences, questions, special chars
+Avoid: Full sentences, questions, special chars
   - "How do I handle errors in the checkout?"
   - "function_that_validates_cart_items"
   - "src/cart/checkout.ts"
@@ -201,7 +212,7 @@ SEARCH MODES:
 - "vector" (semantic search): Best for conceptual queries, similar code
 - "hybrid" (default): Combines both for optimal results
 
-⚠️ NOT FOR:
+NOT FOR:
 - Exact string matching: "TODO", "FIXME"
 - File paths (use Glob instead)
 - Very long queries (>4 words)
@@ -213,10 +224,6 @@ Examples:
   filters: {file_type: "ts,tsx,js"}   → TypeScript or JavaScript files
   filters: {file_type: "md,mdx"}      → Markdown documentation
   filters: {file_type: "rs"}          → Rust source files
-  filters: {
-    file_type: "ts,tsx",
-    recency_threshold: "7 days"
-  }                                   → Recent TypeScript files only
 
 FILTER SYNTAX:
 - Comma-separated for multiple types: "ts,tsx,js"
@@ -228,10 +235,23 @@ DEBUG: Set debug=true to see score breakdowns`,
     inputSchema: {
       type: 'object',
       properties: {
-        repo: { type: 'string', description: 'Repository name to search in (use "crewchief" for this codebase)' },
+        repo: {
+          type: 'string',
+          description: 'Single-repo scope: repository name to search (e.g., "crewchief"). Mutually exclusive with repos and allRepos.'
+        },
+        repos: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Multi-repo scope: list of repository names to search in one call (requires maproom >= 0.3.0). Results are grouped by repo with up to limit hits each. Mutually exclusive with repo and allRepos.'
+        },
+        allRepos: {
+          type: 'boolean',
+          description: 'All-repos scope: search every indexed repository (requires maproom >= 0.3.0). Use with caution — may match across 170k+ chunks. Prefer repo or repos for targeted queries. Mutually exclusive with repo and repos.'
+        },
         worktree: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'Optional worktree name to limit search scope' },
         query: { type: 'string', description: 'Search query - can be concepts, function names, or multiple terms. Works best with 1-3 words. Examples: "maproom search", "worktree create", "message bus"' },
-        k: { type: 'integer', minimum: 1, default: 10, description: 'Number of results to return (default: 10, max useful: 20)' },
+        limit: { type: 'integer', minimum: 1, default: 20, description: 'Number of results to return (default: 20). In multi-repo mode this is a per-repo cap.' },
+        k: { type: 'integer', minimum: 1, default: 20, description: 'Alias for limit (default: 20)' },
         mode: {
           type: 'string',
           enum: ['fts', 'vector', 'hybrid'],
@@ -265,7 +285,7 @@ DEBUG: Set debug=true to see score breakdowns`,
           description: 'Deduplicate results across worktrees. When true, results with the same file path, symbol name, and line number are grouped, returning only the highest-scoring instance. Set false to see all results including duplicates. (default: true)'
         }
       },
-      required: ['repo', 'query']
+      required: ['query']
     }
   },
   {
@@ -534,20 +554,37 @@ export function buildFilterClauses(filters: any, filter: string, args: any[]): s
 export async function handleSearch(params: any): Promise<any> {
   const {
     repo,
+    repos,
+    allRepos,
     worktree,
     query,
     k = 10,
+    limit,
     filter = 'all',
     mode = 'hybrid', // F02: match the daemon default (fts/vector/hybrid all dispatch natively)
     filters = {},
-    debug = false
+    debug = false,
+    deduplicate,
+    include_confidence,
   } = params
 
   // All search modes use the daemon-based search via Rust binary
   const { handleSearchTool } = await import('./tools/search.js')
 
   const result = await handleSearchTool(
-    { query, repo, worktree, limit: k, mode, debug },
+    {
+      query,
+      // Pass exactly one scope form through; schema validation enforces exactly-one-of
+      ...(repo !== undefined && { repo }),
+      ...(repos !== undefined && { repos }),
+      ...(allRepos !== undefined && { allRepos }),
+      worktree,
+      limit: limit ?? k,
+      mode,
+      debug,
+      deduplicate,
+      include_confidence,
+    },
     null as any // Client not used by daemon-based search
   )
   // Transform SearchBundle to old format for backward compatibility
