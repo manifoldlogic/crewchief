@@ -358,8 +358,8 @@ impl SocketServer {
         // timeout (was a fixed 60s tick that quantized --idle-timeout 5 into
         // ~69s: idle_since set up to 60s late, then checked at 60s grain).
         // Worst-case overshoot is ~2 ticks <= timeout/2 for sub-60s timeouts.
-        let tick = (self.config.idle_timeout / 4)
-            .clamp(Duration::from_secs(1), Duration::from_secs(60));
+        let tick =
+            (self.config.idle_timeout / 4).clamp(Duration::from_secs(1), Duration::from_secs(60));
         let mut idle_check = interval(tick);
         let mut idle_since: Option<Instant> = Some(Instant::now());
 
@@ -703,7 +703,7 @@ mod tests {
     }
 
     #[tokio::test]
-        async fn test_multiple_clients_concurrent() {
+    async fn test_multiple_clients_concurrent() {
         use tokio::net::UnixStream;
 
         let temp_dir = TempDir::new().unwrap();
@@ -795,7 +795,7 @@ mod tests {
     }
 
     #[tokio::test]
-        async fn test_session_cleanup_on_disconnect() {
+    async fn test_session_cleanup_on_disconnect() {
         use tokio::net::UnixStream;
 
         let temp_dir = TempDir::new().unwrap();
@@ -876,7 +876,7 @@ mod tests {
     }
 
     #[tokio::test]
-        async fn test_active_client_prevents_idle_timeout() {
+    async fn test_active_client_prevents_idle_timeout() {
         use tokio::net::UnixStream;
 
         let temp_dir = TempDir::new().unwrap();
@@ -922,7 +922,7 @@ mod tests {
     }
 
     #[tokio::test]
-        async fn test_graceful_shutdown_waits_for_sessions() {
+    async fn test_graceful_shutdown_waits_for_sessions() {
         use tokio::net::UnixStream;
 
         let temp_dir = TempDir::new().unwrap();

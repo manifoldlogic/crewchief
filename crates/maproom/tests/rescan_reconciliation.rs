@@ -27,7 +27,11 @@ fn git(dir: &Path, args: &[&str]) {
         .env("GIT_COMMITTER_EMAIL", "t@t")
         .output()
         .unwrap();
-    assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 
 fn maproom(db_url: &str, args: &[&str], path_arg: Option<&Path>) -> std::process::Output {
@@ -65,7 +69,9 @@ async fn force_rescan_does_not_accumulate_chunks() {
     setup(repo.path());
     let url = format!("sqlite://{}/w.db", db.path().display());
 
-    assert!(maproom(&url, &["scan", "--repo", "fx"], Some(repo.path())).status.success());
+    assert!(maproom(&url, &["scan", "--repo", "fx"], Some(repo.path()))
+        .status
+        .success());
     let n1 = chunk_count(db.path()).await;
 
     // Replace the file content, commit, force-rescan TWICE (E2E: 10 -> 20).
@@ -76,8 +82,20 @@ async fn force_rescan_does_not_accumulate_chunks() {
     .unwrap();
     git(repo.path(), &["add", "a.ts"]);
     git(repo.path(), &["commit", "-qm", "edit"]);
-    assert!(maproom(&url, &["scan", "--repo", "fx", "--force"], Some(repo.path())).status.success());
-    assert!(maproom(&url, &["scan", "--repo", "fx", "--force"], Some(repo.path())).status.success());
+    assert!(maproom(
+        &url,
+        &["scan", "--repo", "fx", "--force"],
+        Some(repo.path())
+    )
+    .status
+    .success());
+    assert!(maproom(
+        &url,
+        &["scan", "--repo", "fx", "--force"],
+        Some(repo.path())
+    )
+    .status
+    .success());
     let n2 = chunk_count(db.path()).await;
 
     assert!(
@@ -101,20 +119,46 @@ async fn deleted_file_unsearchable_after_rescan() {
     git(repo.path(), &["commit", "-qm", "add b"]);
     let url = format!("sqlite://{}/w.db", db.path().display());
 
-    assert!(maproom(&url, &["scan", "--repo", "fx"], Some(repo.path())).status.success());
-    let found = maproom(&url, &["search", "--repo", "fx", "--query", "doomedFn", "--format", "agent"], None);
-    assert!(String::from_utf8_lossy(&found.stdout).contains("doomedFn"), "baseline: doomedFn indexed");
+    assert!(maproom(&url, &["scan", "--repo", "fx"], Some(repo.path()))
+        .status
+        .success());
+    let found = maproom(
+        &url,
+        &[
+            "search", "--repo", "fx", "--query", "doomedFn", "--format", "agent",
+        ],
+        None,
+    );
+    assert!(
+        String::from_utf8_lossy(&found.stdout).contains("doomedFn"),
+        "baseline: doomedFn indexed"
+    );
 
     // Delete the file, commit, rescan (R-GC-5 walk reconciliation).
     std::fs::remove_file(repo.path().join("b.ts")).unwrap();
     git(repo.path(), &["add", "-A"]);
     git(repo.path(), &["commit", "-qm", "rm b"]);
-    assert!(maproom(&url, &["scan", "--repo", "fx", "--force"], Some(repo.path())).status.success());
+    assert!(maproom(
+        &url,
+        &["scan", "--repo", "fx", "--force"],
+        Some(repo.path())
+    )
+    .status
+    .success());
 
-    let after = maproom(&url, &["search", "--repo", "fx", "--query", "doomedFn", "--format", "json"], None);
+    let after = maproom(
+        &url,
+        &[
+            "search", "--repo", "fx", "--query", "doomedFn", "--format", "json",
+        ],
+        None,
+    );
     let stdout = String::from_utf8_lossy(&after.stdout);
     let json: serde_json::Value = serde_json::from_str(stdout.trim()).expect("json output");
-    let n = json["hits"].as_array().map(|a| a.len()).unwrap_or(usize::MAX);
+    let n = json["hits"]
+        .as_array()
+        .map(|a| a.len())
+        .unwrap_or(usize::MAX);
     assert_eq!(
         n, 0,
         "deleted file's chunks must be unsearchable after rescan; got:\n{stdout}"
@@ -128,13 +172,30 @@ async fn status_language_counts_stable_across_rescans() {
     setup(repo.path());
     let url = format!("sqlite://{}/w.db", db.path().display());
 
-    assert!(maproom(&url, &["scan", "--repo", "fx"], Some(repo.path())).status.success());
+    assert!(maproom(&url, &["scan", "--repo", "fx"], Some(repo.path()))
+        .status
+        .success());
     let n1 = chunk_count(db.path()).await;
     // Unchanged content: two more force rescans must not inflate anything.
-    assert!(maproom(&url, &["scan", "--repo", "fx", "--force"], Some(repo.path())).status.success());
-    assert!(maproom(&url, &["scan", "--repo", "fx", "--force"], Some(repo.path())).status.success());
+    assert!(maproom(
+        &url,
+        &["scan", "--repo", "fx", "--force"],
+        Some(repo.path())
+    )
+    .status
+    .success());
+    assert!(maproom(
+        &url,
+        &["scan", "--repo", "fx", "--force"],
+        Some(repo.path())
+    )
+    .status
+    .success());
     let n2 = chunk_count(db.path()).await;
-    assert_eq!(n1, n2, "identical content must be chunk-count stable across force rescans");
+    assert_eq!(
+        n1, n2,
+        "identical content must be chunk-count stable across force rescans"
+    );
 }
 
 // ============================================================================
@@ -147,18 +208,57 @@ async fn language_filtered_rescan_does_not_wipe_other_languages() {
     let repo = tempfile::TempDir::new().unwrap();
     let db = tempfile::TempDir::new().unwrap();
     setup(repo.path());
-    std::fs::write(repo.path().join("m.py"), "def python_probe_fn():\n    return 1\n").unwrap();
+    std::fs::write(
+        repo.path().join("m.py"),
+        "def python_probe_fn():\n    return 1\n",
+    )
+    .unwrap();
     git(repo.path(), &["add", "m.py"]);
     git(repo.path(), &["commit", "-qm", "py"]);
     let url = format!("sqlite://{}/w.db", db.path().display());
 
-    assert!(maproom(&url, &["scan", "--repo", "fx"], Some(repo.path())).status.success());
-    let baseline = maproom(&url, &["search", "--repo", "fx", "--query", "python_probe_fn", "--format", "agent"], None);
-    assert!(String::from_utf8_lossy(&baseline.stdout).contains("python_probe_fn"), "baseline: py indexed");
+    assert!(maproom(&url, &["scan", "--repo", "fx"], Some(repo.path()))
+        .status
+        .success());
+    let baseline = maproom(
+        &url,
+        &[
+            "search",
+            "--repo",
+            "fx",
+            "--query",
+            "python_probe_fn",
+            "--format",
+            "agent",
+        ],
+        None,
+    );
+    assert!(
+        String::from_utf8_lossy(&baseline.stdout).contains("python_probe_fn"),
+        "baseline: py indexed"
+    );
 
     // Language-scoped rescan: ts only. The H1 bug wiped everything not walked.
-    assert!(maproom(&url, &["scan", "--repo", "fx", "--force", "--languages", "ts"], Some(repo.path())).status.success());
-    let after = maproom(&url, &["search", "--repo", "fx", "--query", "python_probe_fn", "--format", "agent"], None);
+    assert!(maproom(
+        &url,
+        &["scan", "--repo", "fx", "--force", "--languages", "ts"],
+        Some(repo.path())
+    )
+    .status
+    .success());
+    let after = maproom(
+        &url,
+        &[
+            "search",
+            "--repo",
+            "fx",
+            "--query",
+            "python_probe_fn",
+            "--format",
+            "agent",
+        ],
+        None,
+    );
     assert!(
         String::from_utf8_lossy(&after.stdout).contains("python_probe_fn"),
         "filtered scan must NOT unmap out-of-scope languages (H1)"
@@ -171,16 +271,34 @@ async fn subdirectory_rescan_does_not_wipe_worktree_index() {
     let db = tempfile::TempDir::new().unwrap();
     setup(repo.path());
     std::fs::create_dir(repo.path().join("sub")).unwrap();
-    std::fs::write(repo.path().join("sub/s.ts"), "export function subFn() { return 9; }\n").unwrap();
+    std::fs::write(
+        repo.path().join("sub/s.ts"),
+        "export function subFn() { return 9; }\n",
+    )
+    .unwrap();
     git(repo.path(), &["add", "sub/s.ts"]);
     git(repo.path(), &["commit", "-qm", "sub"]);
     let url = format!("sqlite://{}/w.db", db.path().display());
 
-    assert!(maproom(&url, &["scan", "--repo", "fx"], Some(repo.path())).status.success());
+    assert!(maproom(&url, &["scan", "--repo", "fx"], Some(repo.path()))
+        .status
+        .success());
     // Rescan from the SUBDIRECTORY (registered root is the repo root).
-    assert!(maproom(&url, &["scan", "--repo", "fx", "--force"], Some(&repo.path().join("sub"))).status.success());
+    assert!(maproom(
+        &url,
+        &["scan", "--repo", "fx", "--force"],
+        Some(&repo.path().join("sub"))
+    )
+    .status
+    .success());
 
-    let after = maproom(&url, &["search", "--repo", "fx", "--query", "alphaOne", "--format", "agent"], None);
+    let after = maproom(
+        &url,
+        &[
+            "search", "--repo", "fx", "--query", "alphaOne", "--format", "agent",
+        ],
+        None,
+    );
     assert!(
         String::from_utf8_lossy(&after.stdout).contains("alphaOne"),
         "subdir scan must NOT wipe the rest of the worktree's index (H1)"

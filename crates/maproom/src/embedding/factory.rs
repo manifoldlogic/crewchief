@@ -1638,7 +1638,10 @@ mod tests {
         clear_ollama_env();
         env::set_var("MAPROOM_OLLAMA_URL", "http://winner:11434");
         env::set_var("OLLAMA_URL", "http://loser:11434");
-        assert_eq!(resolve_ollama_endpoint(None), "http://winner:11434/api/embed");
+        assert_eq!(
+            resolve_ollama_endpoint(None),
+            "http://winner:11434/api/embed"
+        );
         clear_ollama_env();
     }
 
@@ -1648,7 +1651,10 @@ mod tests {
         clear_ollama_env();
         env::set_var("OLLAMA_URL", "http://winner:11434");
         env::set_var("OLLAMA_HOST", "loser:11434");
-        assert_eq!(resolve_ollama_endpoint(None), "http://winner:11434/api/embed");
+        assert_eq!(
+            resolve_ollama_endpoint(None),
+            "http://winner:11434/api/embed"
+        );
         clear_ollama_env();
     }
 
@@ -1668,7 +1674,10 @@ mod tests {
     #[serial]
     fn api_endpoint_var_still_wins_over_all() {
         clear_ollama_env();
-        env::set_var("MAPROOM_EMBEDDING_API_ENDPOINT", "http://top:11434/api/embed");
+        env::set_var(
+            "MAPROOM_EMBEDDING_API_ENDPOINT",
+            "http://top:11434/api/embed",
+        );
         env::set_var("MAPROOM_OLLAMA_URL", "http://mid:11434");
         env::set_var("OLLAMA_URL", "http://low:11434");
         assert_eq!(resolve_ollama_endpoint(None), "http://top:11434/api/embed");

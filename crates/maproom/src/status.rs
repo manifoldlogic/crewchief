@@ -201,10 +201,7 @@ pub fn format_text(status: &StatusResponse, verbose: bool) -> String {
                         .iter()
                         .map(|d| format!("{}d ({})", d.dim, format_number(d.count)))
                         .collect();
-                    output.push_str(&format!(
-                        "    Embedding dims: {}\n",
-                        dims_str.join(", ")
-                    ));
+                    output.push_str(&format!("    Embedding dims: {}\n", dims_str.join(", ")));
                     if worktree.embedding_dims.len() > 1 {
                         let dims_only: Vec<String> = worktree
                             .embedding_dims
@@ -582,7 +579,10 @@ mod tests {
         assert_eq!(worktree_status.embedding_dims[0].count, 3);
         let text = format_text(&status, false);
         assert!(text.contains("Embedding dims: 1024d (3)"), "{text}");
-        assert!(!text.contains("WARNING"), "single dim must not warn: {text}");
+        assert!(
+            !text.contains("WARNING"),
+            "single dim must not warn: {text}"
+        );
     }
 
     /// F76: mixed embedding dimensions produce a per-dim breakdown and an
@@ -596,7 +596,10 @@ mod tests {
             .get_or_create_worktree(repo_id, "main", "/mix")
             .await
             .unwrap();
-        let commit_id = store.get_or_create_commit(repo_id, "c1", None).await.unwrap();
+        let commit_id = store
+            .get_or_create_commit(repo_id, "c1", None)
+            .await
+            .unwrap();
         let file = FileRecord {
             repo_id,
             worktree_id,
@@ -647,9 +650,20 @@ mod tests {
 
         let status = get_status(store.clone(), None, None, false).await.unwrap();
         let wt = &status.repos[0].worktrees[0];
-        assert_eq!(wt.embedding_dims.len(), 2, "two distinct dims: {:?}", wt.embedding_dims);
-        assert_eq!((wt.embedding_dims[0].dim, wt.embedding_dims[0].count), (768, 2));
-        assert_eq!((wt.embedding_dims[1].dim, wt.embedding_dims[1].count), (1024, 1));
+        assert_eq!(
+            wt.embedding_dims.len(),
+            2,
+            "two distinct dims: {:?}",
+            wt.embedding_dims
+        );
+        assert_eq!(
+            (wt.embedding_dims[0].dim, wt.embedding_dims[0].count),
+            (768, 2)
+        );
+        assert_eq!(
+            (wt.embedding_dims[1].dim, wt.embedding_dims[1].count),
+            (1024, 1)
+        );
 
         let text = format_text(&status, false);
         assert!(

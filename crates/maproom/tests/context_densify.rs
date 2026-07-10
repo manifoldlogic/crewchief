@@ -32,7 +32,9 @@ async fn fixture() -> (tempfile::TempDir, Arc<dyn Store + Send + Sync>, i64) {
     let src_dir = dir.path().join("src");
     std::fs::create_dir_all(&src_dir).unwrap();
     // 100 numbered lines so every chunk range resolves to real content
-    let content: String = (1..=100).map(|i| format!("// line {i} of fixture\n")).collect();
+    let content: String = (1..=100)
+        .map(|i| format!("// line {i} of fixture\n"))
+        .collect();
     std::fs::write(src_dir.join("lib.rs"), content).unwrap();
 
     let store = SqliteStore::connect(&format!("{}/ctx.db", dir.path().display()))
@@ -48,7 +50,10 @@ async fn fixture() -> (tempfile::TempDir, Arc<dyn Store + Send + Sync>, i64) {
         .get_or_create_worktree(repo, "main", dir.path().to_str().unwrap())
         .await
         .unwrap();
-    let commit = store.get_or_create_commit(repo, "c-ctx", None).await.unwrap();
+    let commit = store
+        .get_or_create_commit(repo, "c-ctx", None)
+        .await
+        .unwrap();
     let file = store
         .upsert_file(&FileRecord {
             repo_id: repo,
@@ -132,7 +137,11 @@ async fn default_options_are_dense_and_symmetric() {
     assert!(
         !imports.is_empty(),
         "default assembly must surface import relations (F82); items: {:?}",
-        bundle.items.iter().map(|i| (&i.role, &i.reason)).collect::<Vec<_>>()
+        bundle
+            .items
+            .iter()
+            .map(|i| (&i.role, &i.reason))
+            .collect::<Vec<_>>()
     );
     assert!(
         bundle.items.iter().any(|i| i.role == "primary"),

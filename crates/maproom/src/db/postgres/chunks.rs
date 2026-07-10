@@ -43,9 +43,21 @@ fn bind_chunk<'q>(
     // raw preview-derived `ts_doc_text`, whose 'simple' tsvector is a recoverable copy
     // of the source. So minimized Postgres keeps SYMBOL-NAME keyword search with no
     // content at rest. blob_sha/kind/line-ranges/symbol_name/embeddings are retained.
-    let signature = if minimized { None } else { chunk.signature.as_deref() };
-    let docstring = if minimized { None } else { chunk.docstring.as_deref() };
-    let preview: Option<&str> = if minimized { None } else { Some(chunk.preview.as_str()) };
+    let signature = if minimized {
+        None
+    } else {
+        chunk.signature.as_deref()
+    };
+    let docstring = if minimized {
+        None
+    } else {
+        chunk.docstring.as_deref()
+    };
+    let preview: Option<&str> = if minimized {
+        None
+    } else {
+        Some(chunk.preview.as_str())
+    };
     let ts_source: &str = if minimized {
         chunk.symbol_name.as_deref().unwrap_or("")
     } else {
@@ -87,9 +99,14 @@ impl StoreChunks for PostgresStore {
     async fn insert_chunk(&self, chunk: &ChunkRecord) -> anyhow::Result<i64> {
         let metadata = chunk.metadata.as_ref().map(|v| v.to_string());
         let minimized = self.minimized.load(std::sync::atomic::Ordering::Relaxed);
-        let id: i64 = bind_chunk(sqlx::query_scalar(INSERT_CHUNK_CTE), chunk, metadata, minimized)
-            .fetch_one(&self.pool)
-            .await?;
+        let id: i64 = bind_chunk(
+            sqlx::query_scalar(INSERT_CHUNK_CTE),
+            chunk,
+            metadata,
+            minimized,
+        )
+        .fetch_one(&self.pool)
+        .await?;
         Ok(id)
     }
 
@@ -104,9 +121,14 @@ impl StoreChunks for PostgresStore {
         let minimized = self.minimized.load(std::sync::atomic::Ordering::Relaxed);
         for chunk in chunks {
             let metadata = chunk.metadata.as_ref().map(|v| v.to_string());
-            let id: i64 = bind_chunk(sqlx::query_scalar(INSERT_CHUNK_CTE), chunk, metadata, minimized)
-                .fetch_one(&mut *tx)
-                .await?;
+            let id: i64 = bind_chunk(
+                sqlx::query_scalar(INSERT_CHUNK_CTE),
+                chunk,
+                metadata,
+                minimized,
+            )
+            .fetch_one(&mut *tx)
+            .await?;
             ids.push(id);
         }
         tx.commit().await?;

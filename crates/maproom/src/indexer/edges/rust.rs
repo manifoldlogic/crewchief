@@ -51,7 +51,14 @@ pub fn extract_calls(
     let mut unresolved = Vec::new();
     let root = tree.root_node();
 
-    find_call_expressions(&root, source, chunks, &symbol_table, &mut edges, &mut unresolved);
+    find_call_expressions(
+        &root,
+        source,
+        chunks,
+        &symbol_table,
+        &mut edges,
+        &mut unresolved,
+    );
 
     debug!(
         "Extracted {} same-file call edges, {} unresolved refs from Rust file",
@@ -263,7 +270,9 @@ impl Calculator {
         let chunks = real_chunks(source);
         // Sanity: the chunker must actually emit an overlapping container.
         assert!(
-            chunks.iter().any(|c| c.kind == "impl" || c.kind == "struct"),
+            chunks
+                .iter()
+                .any(|c| c.kind == "impl" || c.kind == "struct"),
             "fixture must exercise container overlap: {chunks:?}"
         );
         let (edges, _unresolved) = extract_calls(source, &chunks).unwrap();

@@ -385,9 +385,11 @@ async fn test_accuracy_python_repo() {
     let store = setup_store().await;
     let test_repo = Path::new("tests/fixtures/edge_extraction/python_calls");
 
-    scan_worktree(&store, "py_repo", "main", test_repo, "HEAD", 4, None, None, None)
-        .await
-        .unwrap();
+    scan_worktree(
+        &store, "py_repo", "main", test_repo, "HEAD", 4, None, None, None,
+    )
+    .await
+    .unwrap();
 
     // Ground truth from README.md (same-file calls).
     let mut expected_edges = HashSet::new();

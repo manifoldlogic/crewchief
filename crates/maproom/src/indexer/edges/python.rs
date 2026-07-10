@@ -49,7 +49,14 @@ pub fn extract_calls(
     let mut edges = Vec::new();
     let mut unresolved = Vec::new();
     let root = tree.root_node();
-    find_call_expressions(&root, source, chunks, &symbol_table, &mut edges, &mut unresolved);
+    find_call_expressions(
+        &root,
+        source,
+        chunks,
+        &symbol_table,
+        &mut edges,
+        &mut unresolved,
+    );
 
     debug!(
         "Extracted {} same-file call edges, {} unresolved refs from Python file",
@@ -112,7 +119,10 @@ fn process_call_expression(
         Some(&id) => id,
         None => {
             // Spec B1: not silently dropped — handed to the cross-file post-pass.
-            trace!("Unresolved local call: {} (cross-file candidate)", callee_name);
+            trace!(
+                "Unresolved local call: {} (cross-file candidate)",
+                callee_name
+            );
             unresolved.push(UnresolvedRef {
                 src_chunk_id: caller_chunk.id,
                 callee_name,
@@ -233,10 +243,15 @@ def caller():
         let chunks = real_chunks(source);
         let (edges, unresolved) = extract_calls(source, &chunks).unwrap();
         // No same-file callee exists for append/print/undefined_helper.
-        assert!(edges.is_empty(), "no same-file edges expected, got {edges:?}");
+        assert!(
+            edges.is_empty(),
+            "no same-file edges expected, got {edges:?}"
+        );
         // They are captured as unresolved refs (not silently dropped).
         assert!(
-            unresolved.iter().any(|u| u.callee_name == "undefined_helper"),
+            unresolved
+                .iter()
+                .any(|u| u.callee_name == "undefined_helper"),
             "unknown call must be an unresolved ref, got {unresolved:?}"
         );
     }

@@ -241,12 +241,13 @@ pub async fn incremental_update(
     );
 
     // 4. Find changed files via git diff-tree
-    let changes = git_diff_tree(&last_indexed, &current_tree_sha, repo_path).with_context(|| {
-        format!(
-            "Failed to get diff-tree between {} and {}",
-            last_indexed, current_tree_sha
-        )
-    })?;
+    let changes =
+        git_diff_tree(&last_indexed, &current_tree_sha, repo_path).with_context(|| {
+            format!(
+                "Failed to get diff-tree between {} and {}",
+                last_indexed, current_tree_sha
+            )
+        })?;
 
     let mut stats = UpdateStats::new();
 
@@ -261,8 +262,8 @@ pub async fn incremental_update(
     // upsert_files, polluting the index until the next full-scan
     // reconciliation removed them again (churn loop).
     let ignore_matcher = {
-        let patterns = crate::incremental::ignore::load_ignore_patterns(repo_path)
-            .unwrap_or_default();
+        let patterns =
+            crate::incremental::ignore::load_ignore_patterns(repo_path).unwrap_or_default();
         crate::incremental::IgnorePatternMatcher::with_patterns(patterns).ok()
     };
 

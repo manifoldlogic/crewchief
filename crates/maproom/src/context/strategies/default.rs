@@ -396,7 +396,10 @@ impl DefaultAssemblyStrategy {
             let metadata = match self.get_chunk_metadata(rel.chunk_id).await {
                 Ok(m) => m,
                 Err(e) => {
-                    warn!("Failed to load import-related chunk {}: {}", rel.chunk_id, e);
+                    warn!(
+                        "Failed to load import-related chunk {}: {}",
+                        rel.chunk_id, e
+                    );
                     continue;
                 }
             };
@@ -521,7 +524,8 @@ impl AssemblyStrategy for DefaultAssemblyStrategy {
 
         // 2. Add tests if requested (20% of budget)
         if options.tests {
-            self.add_tests(&mut bundle, chunk_id, budget, &mut seen).await?;
+            self.add_tests(&mut bundle, chunk_id, budget, &mut seen)
+                .await?;
         }
 
         // 3. Add callers if requested (15% of budget)

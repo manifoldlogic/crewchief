@@ -115,7 +115,10 @@ fn unique_base() -> String {
 /// under `--features postgres` + `MAPROOM_TEST_PG_URL`.
 async fn backends() -> Vec<(&'static str, Arc<dyn Store + Send + Sync>)> {
     let mut v: Vec<(&'static str, Arc<dyn Store + Send + Sync>)> = Vec::new();
-    let mem = format!("file:memdb_bench_{}?mode=memory&cache=shared", unique_base());
+    let mem = format!(
+        "file:memdb_bench_{}?mode=memory&cache=shared",
+        unique_base()
+    );
     let sqlite = SqliteStore::connect(&mem).await.expect("sqlite connect");
     sqlite.migrate().await.expect("sqlite migrate");
     v.push(("sqlite", Arc::new(sqlite)));
@@ -148,7 +151,10 @@ async fn seed_corpus(store: &(dyn Store + Send + Sync), docs: &[Doc]) -> String 
         .get_or_create_worktree(repo, "main", "/bench/main")
         .await
         .unwrap();
-    let commit = store.get_or_create_commit(repo, "benchsha", None).await.unwrap();
+    let commit = store
+        .get_or_create_commit(repo, "benchsha", None)
+        .await
+        .unwrap();
     let file = store
         .upsert_file(&FileRecord {
             repo_id: repo,
@@ -183,7 +189,10 @@ async fn seed_corpus(store: &(dyn Store + Send + Sync), docs: &[Doc]) -> String 
             })
             .await
             .unwrap();
-        store.upsert_embedding(&blob, &d.emb, "bench-model").await.unwrap();
+        store
+            .upsert_embedding(&blob, &d.emb, "bench-model")
+            .await
+            .unwrap();
     }
     // Populate the SQLite vec0 tables (no-op on Postgres).
     store.sync_all_embeddings_to_vec().await.unwrap();
@@ -354,8 +363,12 @@ fn render_report(rows: &[Row], pg_present: bool) {
     if pg_present {
         eprintln!("\n----- quality delta (Postgres − SQLite), per mode -----");
         for mode in ["fts", "vector"] {
-            let sq = rows.iter().find(|r| r.backend == "sqlite" && r.mode == mode);
-            let pg = rows.iter().find(|r| r.backend == "postgres" && r.mode == mode);
+            let sq = rows
+                .iter()
+                .find(|r| r.backend == "sqlite" && r.mode == mode);
+            let pg = rows
+                .iter()
+                .find(|r| r.backend == "postgres" && r.mode == mode);
             if let (Some(s), Some(p)) = (sq, pg) {
                 eprintln!(
                     "  {:<8} nDCG@5 Δ {:+.3}   MRR Δ {:+.3}   R@5 Δ {:+.3}",
@@ -393,7 +406,8 @@ async fn backend_search_benchmark() {
     render_report(&rows, pg_present);
 
     // ── Assertions (O1 = report + TOLERANT thresholds; no exact-order on PG). ──
-    let get = |backend: &str, mode: &str| rows.iter().find(|r| r.backend == backend && r.mode == mode);
+    let get =
+        |backend: &str, mode: &str| rows.iter().find(|r| r.backend == backend && r.mode == mode);
 
     // SQLite FTS must rank the keyword-bearing topic chunks well.
     let sq_fts = get("sqlite", "fts").expect("sqlite fts row");
@@ -461,13 +475,35 @@ async fn backend_search_benchmark() {
 #[test]
 fn metric_machinery_ideal_ranking() {
     let ideal = vec![
-        RankedResult { id: 1, relevant: true, relevance_grade: 3 },
-        RankedResult { id: 2, relevant: true, relevance_grade: 2 },
-        RankedResult { id: 3, relevant: true, relevance_grade: 1 },
-        RankedResult { id: 4, relevant: false, relevance_grade: 0 },
+        RankedResult {
+            id: 1,
+            relevant: true,
+            relevance_grade: 3,
+        },
+        RankedResult {
+            id: 2,
+            relevant: true,
+            relevance_grade: 2,
+        },
+        RankedResult {
+            id: 3,
+            relevant: true,
+            relevance_grade: 1,
+        },
+        RankedResult {
+            id: 4,
+            relevant: false,
+            relevance_grade: 0,
+        },
     ];
     let m = calculate_all_metrics(&ideal, 3, K_VALUES);
-    assert!((m.ndcg_at_k[&5] - 1.0).abs() < 1e-9, "ideal ranking scores nDCG 1.0");
+    assert!(
+        (m.ndcg_at_k[&5] - 1.0).abs() < 1e-9,
+        "ideal ranking scores nDCG 1.0"
+    );
     assert!((m.mrr - 1.0).abs() < 1e-9, "top-ranked relevant → MRR 1.0");
-    assert!((m.recall_at_k[&5] - 1.0).abs() < 1e-9, "all 3 relevant retrieved → recall 1.0");
+    assert!(
+        (m.recall_at_k[&5] - 1.0).abs() < 1e-9,
+        "all 3 relevant retrieved → recall 1.0"
+    );
 }
