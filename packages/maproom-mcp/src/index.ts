@@ -290,80 +290,89 @@ DEBUG: Set debug=true to see score breakdowns`,
 async function handleStatus(params: any): Promise<any> {
   const { repo } = params
 
-  // Check database type
+  // Resolve database configuration — works for both sqlite and postgres backends
   const dbConfig = resolveDatabaseConfig()
+
   if (dbConfig.type === 'sqlite') {
     log.info({ sqlitePath: dbConfig.path }, 'SQLite mode: querying status via daemon')
-
-    try {
-      const daemon = getDaemonClient()
-      const statusResult = await daemon.status({ repo })
-
-      // Calculate totals from daemon response
-      const totalFiles = statusResult.total_files
-      const totalChunks = statusResult.total_chunks
-
-      // Format repos for MCP response (convert snake_case to camelCase)
-      const repos = statusResult.repos.map(r => ({
-        name: r.name,
-        worktrees: r.worktrees.map(wt => ({
-          name: wt.name,
-          path: wt.path,
-          fileCount: wt.file_count,
-          chunkCount: wt.chunk_count,
-        }))
-      }))
-
-      let hint = ''
-      let nextStep: string | undefined
-
-      if (repos.length === 0) {
-        hint = 'No repositories indexed yet.\n\nTo get started:\n1. Run `maproom scan` to index a repository\n2. Then use search to find your code'
-        nextStep = 'Run maproom scan to index your first repository'
-      } else if (totalFiles === 0) {
-        hint = 'Repository found but no files indexed.\n\nTo fix:\n1. Run `maproom scan` to index files in this repository\n2. Check that the path contains supported file types (.ts, .js, .rs, .md, etc.)'
-        nextStep = 'Run maproom scan to index files'
-      } else {
-        hint = `Index ready! ${totalFiles} files and ${totalChunks} searchable chunks.\n\nCommon searches: "main function", "error handling", "database query"`
-      }
-
-      return {
-        repos,
-        totalRepos: repos.length,
-        totalFiles,
-        totalChunks,
-        hint,
-        nextStep,
-        backendType: 'sqlite',
-        sqlitePath: dbConfig.path,
-        searchTips: [
-          'Use simple terms: "auth" instead of "authentication_handler"',
-          'Search concepts: "message bus" or "event handling"',
-          'Filter by type: use filter:"code" or filter:"docs"',
-        ],
-      }
-    } catch (error) {
-      log.error({ error }, 'Failed to get status from daemon')
-      // Fallback to empty response on error
-      return {
-        repos: [],
-        totalRepos: 0,
-        totalFiles: 0,
-        totalChunks: 0,
-        hint: `Failed to query status: ${error instanceof Error ? error.message : String(error)}`,
-        backendType: 'sqlite',
-        sqlitePath: dbConfig.path,
-        searchTips: [
-          'Use simple terms: "auth" instead of "authentication_handler"',
-          'Search concepts: "message bus" or "event handling"',
-          'Filter by type: use filter:"code" or filter:"docs"',
-        ],
-      }
-    }
+  } else {
+    log.info({ db: dbConfig.redactedUrl }, 'PostgreSQL mode: querying status via daemon')
   }
 
-  // PostgreSQL backend has been removed. Only SQLite via the Rust daemon is supported.
-  throw new Error('Unsupported database configuration. Only SQLite mode is supported. Set MAPROOM_DATABASE_URL to a sqlite:// path.')
+  try {
+    const daemon = getDaemonClient()
+    const statusResult = await daemon.status({ repo })
+
+    // Calculate totals from daemon response
+    const totalFiles = statusResult.total_files
+    const totalChunks = statusResult.total_chunks
+
+    // Format repos for MCP response (convert snake_case to camelCase)
+    const repos = statusResult.repos.map(r => ({
+      name: r.name,
+      worktrees: r.worktrees.map(wt => ({
+        name: wt.name,
+        path: wt.path,
+        fileCount: wt.file_count,
+        chunkCount: wt.chunk_count,
+      }))
+    }))
+
+    let hint = ''
+    let nextStep: string | undefined
+
+    if (repos.length === 0) {
+      hint = 'No repositories indexed yet.\n\nTo get started:\n1. Run `maproom scan` to index a repository\n2. Then use search to find your code'
+      nextStep = 'Run maproom scan to index your first repository'
+    } else if (totalFiles === 0) {
+      hint = 'Repository found but no files indexed.\n\nTo fix:\n1. Run `maproom scan` to index files in this repository\n2. Check that the path contains supported file types (.ts, .js, .rs, .md, etc.)'
+      nextStep = 'Run maproom scan to index files'
+    } else {
+      hint = `Index ready! ${totalFiles} files and ${totalChunks} searchable chunks.\n\nCommon searches: "main function", "error handling", "database query"`
+    }
+
+    // Build backend-specific fields for the response (R4)
+    const backendFields = dbConfig.type === 'sqlite'
+      ? { backendType: 'sqlite' as const, sqlitePath: dbConfig.path }
+      : { backendType: 'postgres' as const, databaseUrl: dbConfig.redactedUrl }
+
+    return {
+      repos,
+      totalRepos: repos.length,
+      totalFiles,
+      totalChunks,
+      hint,
+      nextStep,
+      ...backendFields,
+      searchTips: [
+        'Use simple terms: "auth" instead of "authentication_handler"',
+        'Search concepts: "message bus" or "event handling"',
+        'Filter by type: use filter:"code" or filter:"docs"',
+      ],
+    }
+  } catch (error) {
+    log.error({ error }, 'Failed to get status from daemon')
+
+    // Build backend-specific fields for the error response (R4)
+    const backendFields = dbConfig.type === 'sqlite'
+      ? { backendType: 'sqlite' as const, sqlitePath: dbConfig.path }
+      : { backendType: 'postgres' as const, databaseUrl: dbConfig.redactedUrl }
+
+    // Fallback to empty response on error
+    return {
+      repos: [],
+      totalRepos: 0,
+      totalFiles: 0,
+      totalChunks: 0,
+      hint: `Failed to query status: ${error instanceof Error ? error.message : String(error)}`,
+      ...backendFields,
+      searchTips: [
+        'Use simple terms: "auth" instead of "authentication_handler"',
+        'Search concepts: "message bus" or "event handling"',
+        'Filter by type: use filter:"code" or filter:"docs"',
+      ],
+    }
+  }
 }
 
 /**
@@ -487,61 +496,53 @@ export async function handleSearch(params: any): Promise<any> {
 }
 
 async function handleOpen(params: any): Promise<any> {
-  // Check database type
-  const dbConfig = resolveDatabaseConfig()
-  if (dbConfig.type === 'sqlite') {
-    // SQLite mode: read file directly from filesystem
-    // In SQLite mode, we don't have worktree abs_path mappings in the database,
-    // so we read from the current working directory or use relpath as-is
-    const fs = await import('node:fs/promises')
-    const path = await import('node:path')
+  // Filesystem read is backend-agnostic: works the same for sqlite and postgres backends.
+  // We read from the filesystem using the relative path from the search result.
+  const fs = await import('node:fs/promises')
+  const path = await import('node:path')
 
-    try {
-      const { relpath, range } = params
+  try {
+    const { relpath, range } = params
 
-      // Try to read from current working directory
-      const cwd = process.cwd()
-      const fullPath = path.resolve(cwd, relpath)
+    // Try to read from current working directory
+    const cwd = process.cwd()
+    const fullPath = path.resolve(cwd, relpath)
 
-      // Security: ensure path is within cwd
-      if (!fullPath.startsWith(cwd)) {
-        return {
-          error: 'INVALID_PATH',
-          message: 'Path traversal not allowed',
-        }
-      }
-
-      let content = await fs.readFile(fullPath, 'utf8')
-
-      // Apply line range if specified
-      if (range && range.start && range.end) {
-        const lines = content.split('\n')
-        const startIdx = Math.max(0, range.start - 1)
-        const endIdx = Math.min(lines.length, range.end)
-        content = lines.slice(startIdx, endIdx).join('\n')
-      }
-
+    // Security: ensure path is within cwd
+    if (!fullPath.startsWith(cwd)) {
       return {
-        content,
-        relpath,
-        ...(range && { range }),
-      }
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
-        return {
-          error: 'FILE_NOT_FOUND',
-          message: `File not found: ${params.relpath}`,
-        }
-      }
-      return {
-        error: 'OPEN_FAILED',
-        message: error.message || 'Failed to open file',
+        error: 'INVALID_PATH',
+        message: 'Path traversal not allowed',
       }
     }
-  }
 
-  // PostgreSQL backend has been removed. Only SQLite mode is supported.
-  throw new Error('Unsupported database configuration. Only SQLite mode is supported. Set MAPROOM_DATABASE_URL to a sqlite:// path.')
+    let content = await fs.readFile(fullPath, 'utf8')
+
+    // Apply line range if specified
+    if (range && range.start && range.end) {
+      const lines = content.split('\n')
+      const startIdx = Math.max(0, range.start - 1)
+      const endIdx = Math.min(lines.length, range.end)
+      content = lines.slice(startIdx, endIdx).join('\n')
+    }
+
+    return {
+      content,
+      relpath,
+      ...(range && { range }),
+    }
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return {
+        error: 'FILE_NOT_FOUND',
+        message: `File not found: ${params.relpath}`,
+      }
+    }
+    return {
+      error: 'OPEN_FAILED',
+      message: error.message || 'Failed to open file',
+    }
+  }
 }
 
 /**
