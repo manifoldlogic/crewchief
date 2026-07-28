@@ -1,25 +1,14 @@
 import type { SpawnSyncReturns } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  resolveMaproomDbPath,
-  maproomIndexExists,
-  runAutoIndexScan,
-  runMaproomSearchWithAutoIndex,
-} from '../maproom.js'
+import { runMaproomSearch } from '../maproom.js'
 
 // ---- Mocks ----
 
 // Mock node:child_process
-const mockSpawnSync = vi.fn<(...args: unknown[]) => SpawnSyncReturns<Buffer>>()
+const mockSpawnSync = vi.fn<[string, string[], unknown], SpawnSyncReturns<Buffer>>()
 vi.mock('node:child_process', () => ({
-  spawnSync: (...args: unknown[]) => mockSpawnSync(...args),
-}))
-
-// Mock node:fs for existsSync (used by maproomIndexExists and findMaproomBinary)
-const mockExistsSync = vi.fn<(p: string) => boolean>()
-vi.mock('node:fs', () => ({
-  default: { existsSync: (p: string) => mockExistsSync(p) },
-  existsSync: (p: string) => mockExistsSync(p),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  spawnSync: (...args: any[]) => mockSpawnSync(...(args as [string, string[], unknown])),
 }))
 
 // Mock config loader
@@ -63,123 +52,21 @@ function spawnResult(status: number): SpawnSyncReturns<Buffer> {
 
 // ---- Tests ----
 
-describe('resolveMaproomDbPath', () => {
-  const origEnv = process.env.MAPROOM_DATABASE_URL
-
-  afterEach(() => {
-    if (origEnv !== undefined) {
-      process.env.MAPROOM_DATABASE_URL = origEnv
-    } else {
-      delete process.env.MAPROOM_DATABASE_URL
-    }
-  })
-
-  it('returns ~/.maproom/maproom.db by default', () => {
-    delete process.env.MAPROOM_DATABASE_URL
-    const dbPath = resolveMaproomDbPath()
-    expect(dbPath).toMatch(/\.maproom\/maproom\.db$/)
-  })
-
-  it('strips sqlite:// prefix from MAPROOM_DATABASE_URL', () => {
-    process.env.MAPROOM_DATABASE_URL = 'sqlite:///custom/path/maproom.db'
-    expect(resolveMaproomDbPath()).toBe('/custom/path/maproom.db')
-  })
-
-  it('expands tilde in MAPROOM_DATABASE_URL', () => {
-    process.env.MAPROOM_DATABASE_URL = 'sqlite://~/.maproom/maproom.db'
-    const dbPath = resolveMaproomDbPath()
-    expect(dbPath).not.toContain('~')
-    expect(dbPath).toMatch(/\.maproom\/maproom\.db$/)
-  })
-
-  it('handles plain path in MAPROOM_DATABASE_URL (no sqlite:// prefix)', () => {
-    process.env.MAPROOM_DATABASE_URL = '/custom/maproom.db'
-    expect(resolveMaproomDbPath()).toBe('/custom/maproom.db')
-  })
-})
-
-describe('maproomIndexExists', () => {
-  afterEach(() => {
-    delete process.env.MAPROOM_DATABASE_URL
-  })
-
-  it('returns true when the database file exists', () => {
-    mockExistsSync.mockReturnValue(true)
-    expect(maproomIndexExists()).toBe(true)
-  })
-
-  it('returns false when the database file does not exist', () => {
-    mockExistsSync.mockReturnValue(false)
-    expect(maproomIndexExists()).toBe(false)
-  })
-})
-
-describe('runAutoIndexScan', () => {
-  let consoleSpy: ReturnType<typeof vi.spyOn>
-
+describe('runMaproomSearch (passthrough)', () => {
   beforeEach(() => {
-    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-  })
-
-  afterEach(() => {
-    consoleSpy.mockRestore()
     mockSpawnSync.mockReset()
-  })
-
-  it('prints the progress message', () => {
-    mockSpawnSync.mockReturnValue(spawnResult(0))
-    runAutoIndexScan('/usr/local/bin/maproom')
-    expect(consoleSpy).toHaveBeenCalledWith(
-      'No index found. Building FTS index for this repo (no embedding provider required).',
-    )
-  })
-
-  it('invokes maproom scan with no extra flags (FTS-only)', () => {
-    mockSpawnSync.mockReturnValue(spawnResult(0))
-    runAutoIndexScan('/usr/local/bin/maproom')
-    expect(mockSpawnSync).toHaveBeenCalledWith('/usr/local/bin/maproom', ['scan'], { stdio: 'inherit' })
-  })
-
-  it('returns 0 on success', () => {
-    mockSpawnSync.mockReturnValue(spawnResult(0))
-    expect(runAutoIndexScan('/usr/local/bin/maproom')).toBe(0)
-  })
-
-  it('returns non-zero on failure', () => {
-    mockSpawnSync.mockReturnValue(spawnResult(1))
-    expect(runAutoIndexScan('/usr/local/bin/maproom')).toBe(1)
-  })
-})
-
-describe('runMaproomSearchWithAutoIndex', () => {
-  let consoleLogSpy: ReturnType<typeof vi.spyOn>
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
-
-  beforeEach(() => {
-    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    mockSpawnSync.mockReset()
-    mockExistsSync.mockReset()
     process.exitCode = undefined
   })
 
   afterEach(() => {
-    consoleLogSpy.mockRestore()
-    consoleErrorSpy.mockRestore()
     process.exitCode = undefined
   })
 
-  it('runs search directly when index already exists (no auto-index)', async () => {
-    // Database file exists
-    mockExistsSync.mockReturnValue(true)
-    // Search succeeds
+  it('spawns exactly one process (search) for a successful query', async () => {
     mockSpawnSync.mockReturnValue(spawnResult(0))
 
-    await runMaproomSearchWithAutoIndex(['--repo', 'myrepo', '--query', 'auth'])
+    await runMaproomSearch(['--repo', 'myrepo', '--query', 'auth'])
 
-    // Should NOT have printed the auto-index message
-    expect(consoleLogSpy).not.toHaveBeenCalledWith(expect.stringContaining('No index found'))
-    // Should have called search only (no scan)
     expect(mockSpawnSync).toHaveBeenCalledTimes(1)
     expect(mockSpawnSync).toHaveBeenCalledWith(
       '/usr/local/bin/maproom',
@@ -188,93 +75,63 @@ describe('runMaproomSearchWithAutoIndex', () => {
     )
   })
 
-  it('auto-indexes and then searches when no database file exists (pre-flight)', async () => {
-    // Database file does NOT exist
-    mockExistsSync.mockReturnValue(false)
-    // First call: scan succeeds; second call: search succeeds
-    mockSpawnSync
-      .mockReturnValueOnce(spawnResult(0)) // scan
-      .mockReturnValueOnce(spawnResult(0)) // search
+  // Regression: the old auto-index path would spawn maproom scan before or after search.
+  // Under the shared-PG backend there is no local SQLite file, so that path always
+  // fired a spurious scan. Verify it is gone: search NEVER spawns scan regardless of
+  // exit code.
+  it('regression: never spawns a scan process, even on non-zero exit', async () => {
+    // Simulate various failure exit codes (1, 2 = the old post-flight trigger, 127, etc.)
+    for (const code of [1, 2, 127]) {
+      mockSpawnSync.mockReset()
+      process.exitCode = undefined
+      mockSpawnSync.mockReturnValue(spawnResult(code))
 
-    await runMaproomSearchWithAutoIndex(['--repo', 'myrepo', '--query', 'auth'])
+      await runMaproomSearch(['auth'])
 
-    // Should have printed the progress message
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      'No index found. Building FTS index for this repo (no embedding provider required).',
-    )
-    // Should have called scan then search
-    expect(mockSpawnSync).toHaveBeenCalledTimes(2)
-    expect(mockSpawnSync).toHaveBeenNthCalledWith(1, '/usr/local/bin/maproom', ['scan'], { stdio: 'inherit' })
-    expect(mockSpawnSync).toHaveBeenNthCalledWith(
-      2,
+      // Exactly one spawn, and its args must start with 'search', never 'scan'
+      expect(mockSpawnSync).toHaveBeenCalledTimes(1)
+      const [, spawnArgs] = mockSpawnSync.mock.calls[0] as unknown as [string, string[], unknown]
+      expect(spawnArgs[0]).toBe('search')
+      expect(spawnArgs).not.toContain('scan')
+    }
+  })
+
+  it('propagates non-zero exit code from search', async () => {
+    mockSpawnSync.mockReturnValue(spawnResult(1))
+
+    await runMaproomSearch(['auth'])
+
+    expect(process.exitCode).toBe(1)
+    expect(mockSpawnSync).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not set exitCode on success', async () => {
+    mockSpawnSync.mockReturnValue(spawnResult(0))
+
+    await runMaproomSearch(['auth'])
+
+    expect(process.exitCode).toBeUndefined()
+  })
+
+  it('passes through arbitrary extra flags to maproom search', async () => {
+    mockSpawnSync.mockReturnValue(spawnResult(0))
+
+    await runMaproomSearch(['auth flow', '--limit', '10', '--format', 'agent'])
+
+    expect(mockSpawnSync).toHaveBeenCalledWith(
       '/usr/local/bin/maproom',
-      ['search', '--repo', 'myrepo', '--query', 'auth'],
+      ['search', 'auth flow', '--limit', '10', '--format', 'agent'],
       { stdio: 'inherit' },
     )
   })
 
-  it('retries search after exit code 2 (post-flight fallback)', async () => {
-    // Database file exists (pre-flight passes)
-    mockExistsSync.mockReturnValue(true)
-    // First search returns exit 2 (config error / repo not indexed)
-    // Then scan succeeds, then retry search succeeds
-    mockSpawnSync
-      .mockReturnValueOnce(spawnResult(2)) // search -> exit 2
-      .mockReturnValueOnce(spawnResult(0)) // scan
-      .mockReturnValueOnce(spawnResult(0)) // retry search
+  it('propagates exit code 2 without triggering a scan (PG error passthrough)', async () => {
+    mockSpawnSync.mockReturnValue(spawnResult(2))
 
-    await runMaproomSearchWithAutoIndex(['--repo', 'myrepo', '--query', 'auth'])
+    await runMaproomSearch(['auth'])
 
-    // Should have printed the auto-index message on the fallback path
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      'No index found. Building FTS index for this repo (no embedding provider required).',
-    )
-    // Three spawns: failed search, scan, retry search
-    expect(mockSpawnSync).toHaveBeenCalledTimes(3)
-  })
-
-  it('reports error when pre-flight scan fails', async () => {
-    mockExistsSync.mockReturnValue(false)
-    // Scan fails
-    mockSpawnSync.mockReturnValue(spawnResult(1))
-
-    await runMaproomSearchWithAutoIndex(['--repo', 'myrepo', '--query', 'auth'])
-
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      'Auto-index failed. Run "crewchief maproom scan" manually for details.',
-    )
-    expect(process.exitCode).toBe(1)
-    // Should NOT have attempted search
-    expect(mockSpawnSync).toHaveBeenCalledTimes(1) // only the scan
-  })
-
-  it('reports error when post-flight scan fails', async () => {
-    mockExistsSync.mockReturnValue(true)
-    // Search returns exit 2 (triggers fallback)
-    mockSpawnSync
-      .mockReturnValueOnce(spawnResult(2)) // search -> exit 2
-      .mockReturnValueOnce(spawnResult(1)) // scan fails
-
-    await runMaproomSearchWithAutoIndex(['--repo', 'myrepo', '--query', 'auth'])
-
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      'Auto-index failed. Run "crewchief maproom scan" manually for details.',
-    )
-    expect(process.exitCode).toBe(1)
-    // Should have search then scan but NOT a retry search
-    expect(mockSpawnSync).toHaveBeenCalledTimes(2)
-  })
-
-  it('propagates non-zero non-2 exit code from search', async () => {
-    mockExistsSync.mockReturnValue(true)
-    // Search returns exit 1 (runtime error, not config error)
-    mockSpawnSync.mockReturnValue(spawnResult(1))
-
-    await runMaproomSearchWithAutoIndex(['--repo', 'myrepo', '--query', 'auth'])
-
-    // Should NOT trigger auto-index (only exit 2 triggers it)
-    expect(consoleLogSpy).not.toHaveBeenCalledWith(expect.stringContaining('No index found'))
-    expect(process.exitCode).toBe(1)
+    // Only one spawn (search), exit code 2 propagated
     expect(mockSpawnSync).toHaveBeenCalledTimes(1)
+    expect(process.exitCode).toBe(2)
   })
 })

@@ -42,7 +42,7 @@ function runCli(
 }
 
 const TEST_ENV = {
-  // Minimal env to pass validation (SQLite-only after PostgreSQL removal)
+  // Minimal env to pass validation (supports sqlite:// or postgres:// URLs)
   MAPROOM_DATABASE_URL: 'sqlite:///tmp/test-maproom.db',
   MAPROOM_EMBEDDING_PROVIDER: 'ollama',
 }
@@ -77,6 +77,7 @@ describe('Maproom command registration', () => {
     const { stdout, exitCode } = runCli('maproom scan --help', EMPTY_ENV)
     expect(exitCode).toBe(0)
     expect(stdout).toContain('scan')
+    // Description now reads: "...configured database backend (SQLite or PostgreSQL)"
     expect(stdout).toContain('SQLite')
   })
 
