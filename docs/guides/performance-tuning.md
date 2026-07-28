@@ -63,14 +63,26 @@ Maproom caches embeddings by content hash (blob SHA):
 - 70-90% cost savings on incremental updates
 - Cache stored in `code_embeddings` table
 
-**Check cache effectiveness:**
-```sql
--- In sqlite3 ~/.maproom/maproom.db
-SELECT
-  COUNT(*) as total_chunks,
-  COUNT(DISTINCT blob_sha) as unique_content,
-  ROUND(100.0 * COUNT(DISTINCT blob_sha) / COUNT(*), 1) as dedup_percent
-FROM chunks WHERE blob_sha IS NOT NULL;
+**Check cache effectiveness (SQLite backend):**
+```bash
+sqlite3 ~/.maproom/maproom.db "
+  SELECT
+    COUNT(*) as total_chunks,
+    COUNT(DISTINCT blob_sha) as unique_content,
+    ROUND(100.0 * COUNT(DISTINCT blob_sha) / COUNT(*), 1) as dedup_percent
+  FROM chunks WHERE blob_sha IS NOT NULL;
+"
+```
+
+**Check cache effectiveness (PostgreSQL backend):**
+```bash
+psql "$MAPROOM_DATABASE_URL" -c "
+  SELECT
+    COUNT(*) as total_chunks,
+    COUNT(DISTINCT blob_sha) as unique_content,
+    ROUND(100.0 * COUNT(DISTINCT blob_sha)::numeric / COUNT(*), 1) as dedup_percent
+  FROM chunks WHERE blob_sha IS NOT NULL;
+"
 ```
 
 ## Search Optimization
@@ -124,7 +136,7 @@ Narrow searches for faster results:
 
 ## Database Tuning
 
-### SQLite Settings (Applied Automatically)
+### SQLite Settings (Applied Automatically — SQLite backend only)
 
 ```sql
 PRAGMA journal_mode = WAL;      -- Concurrent reads
@@ -137,13 +149,13 @@ PRAGMA foreign_keys = ON;
 
 Default: 10 connections. Adjust for workload:
 ```rust
-// In SqliteStore initialization
+// In SqliteStore initialization (SQLite backend only)
 r2d2::Pool::builder()
     .max_size(10)  // Increase for high concurrency
     .build(manager)
 ```
 
-### WAL Maintenance
+### WAL Maintenance (SQLite backend only)
 
 ```bash
 # Check WAL size
@@ -151,6 +163,22 @@ ls -la ~/.maproom/maproom.db*
 
 # Manual checkpoint (usually automatic)
 sqlite3 ~/.maproom/maproom.db "PRAGMA wal_checkpoint(TRUNCATE)"
+```
+
+### PostgreSQL Tuning (shared deployment)
+
+The PostgreSQL backend benefits from server-side tuning. See
+[VECTOR_SEARCH_CONFIGURATION.md](../crates/maproom/docs/VECTOR_SEARCH_CONFIGURATION.md)
+for recommended `postgresql.conf` settings and HNSW `ef_search` tuning.
+
+Key difference from SQLite: the Postgres backend supports concurrent multi-process
+writes and does not have a WAL checkpoint step. Connection pooling is handled by
+sqlx's built-in pool.
+
+HNSW recall / speed tradeoff:
+```bash
+# Default ef_search=40 (good balance). Raise for higher recall (no rebuild):
+export MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH=100
 ```
 
 ## Daemon Performance
