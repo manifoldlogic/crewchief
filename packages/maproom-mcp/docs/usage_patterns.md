@@ -79,7 +79,7 @@ This shows you:
 ```
 
 **Returns**: Array of chunks with:
-- `chunk_id`: UUID for use in context/explain tools
+- `chunk_id`: UUID for use in context tool
 - `relpath`: File path for use in open tool
 - `worktree`: Worktree name for use in open tool
 - `start_line`, `end_line`: Line range
@@ -171,67 +171,8 @@ This shows you:
 
 ---
 
-### 5. upsert
-
-**Purpose**: Update the code index for specific files
-**When to Use**: After making code changes; keeping index current
-**Parameters**:
-- `paths` (required): Array of file paths to index
-- `commit` (required): Git commit hash (use `"HEAD"` for current)
-- `repo` (required): Repository name
-- `worktree` (required): Worktree name
-- `root` (required): Absolute path to repository root
-
-**Example**:
-```json
-{
-  "paths": [
-    "packages/cli/src/auth/login.ts",
-    "packages/cli/src/auth/validate.ts"
-  ],
-  "commit": "HEAD",
-  "repo": "crewchief",
-  "worktree": "main",
-  "root": "/absolute/path/to/crewchief"
-}
-```
-
-**Returns**: Indexing statistics
-
-**Tips**:
-- Index only changed files for speed
-- Use `"HEAD"` for current working directory
-- Provide absolute paths for reliability
-- Re-index after significant refactoring
-
----
-
-### 6. explain
-
-**Purpose**: Generate detailed symbol card for a code chunk (EXPERIMENTAL)
-**When to Use**: Understanding complex functions or classes
-**Parameters**:
-- `chunk_id` (required): Chunk ID from search results
-
-**Example**:
-```json
-{
-  "chunk_id": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-**Returns**: Markdown-formatted explanation with:
-- Symbol metadata (name, type, language)
-- Code relationships
-- Code preview
-- Usage examples
-- Related symbols
-
-**Tips**:
-- Use after finding interesting chunks in search
-- Combines well with context tool
-- Cache-friendly for repeated queries
-- May require additional configuration
+> **Note**: `scan`, `upsert`, and `explain` are NOT MCP tools in this server.
+> Use the `maproom` CLI directly for indexing operations (e.g. `maproom scan`).
 
 ---
 
@@ -437,26 +378,20 @@ This shows you:
 
 ---
 
-### Pattern 6: Incremental Indexing
+### Pattern 6: Re-indexing After Changes
 
 **Goal**: Keep index up-to-date during development
+
+> **Note**: Re-indexing uses the `maproom` CLI, not an MCP tool.
+> Run `maproom scan` (or `maproom scan --paths src/auth/login.ts src/auth/session.ts`)
+> from the command line after making code changes.
 
 **Steps**:
 1. Make code changes
 
-2. Index changed files
-   ```json
-   Tool: upsert
-   {
-     "paths": [
-       "src/auth/login.ts",
-       "src/auth/session.ts"
-     ],
-     "commit": "HEAD",
-     "repo": "your-repo",
-     "worktree": "main",
-     "root": "/absolute/path/to/repo"
-   }
+2. Re-index via CLI (not an MCP tool)
+   ```bash
+   maproom scan
    ```
 
 3. Verify changes are searchable
@@ -509,11 +444,13 @@ This shows you:
    }
    ```
 
-3. Explain key components
+3. Get deep context for key components
    ```json
-   Tool: explain
+   Tool: context
    {
-     "chunk_id": "core-component-chunk-id"
+     "chunk_id": "core-component-chunk-id",
+     "budget_tokens": 10000,
+     "expand": { "callers": true, "callees": true, "max_depth": 2 }
    }
    ```
 
@@ -625,16 +562,9 @@ This shows you:
    }
    ```
 
-4. After refactoring, re-index
-   ```json
-   Tool: upsert
-   {
-     "paths": ["all/changed/files.ts"],
-     "commit": "HEAD",
-     "repo": "your-repo",
-     "worktree": "main",
-     "root": "/absolute/path"
-   }
+4. After refactoring, re-index via CLI (not an MCP tool)
+   ```bash
+   maproom scan
    ```
 
 5. Verify refactoring
@@ -685,10 +615,10 @@ This shows you:
    { "relpath": "src/errors.ts", "worktree": "main" }
    ```
 
-5. Get detailed explanations
+5. Get context for interesting chunks
    ```json
-   Tool: explain
-   { "chunk_id": "chunk-from-each-repo" }
+   Tool: context
+   { "chunk_id": "chunk-from-each-repo", "budget_tokens": 8000 }
    ```
 
 **Use Cases**:
@@ -803,7 +733,7 @@ Claude: [Explains the code]
 2. **Filter by file type**: Use `filter` parameter
 3. **Control context budget**: Adjust `budget_tokens`
 4. **Target specific worktrees**: Use `worktree` parameter
-5. **Index incrementally**: Use `upsert` for changed files only
+5. **Re-index after changes**: Run `maproom scan` from the CLI after making code changes
 
 ---
 
@@ -892,7 +822,7 @@ Claude: [Explains the code]
 4. Filter applied incorrectly
 
 **Solutions**:
-1. Re-index with `upsert` tool
+1. Re-index with `maproom scan` CLI command
 2. Verify worktree parameter
 3. Try different query terms
 4. Check filter parameter

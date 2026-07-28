@@ -260,7 +260,7 @@ export async function handleSearchTool(
     debug,
     deduplicate,
     include_confidence,
-    include_related,
+    // R2: phantom no-op field removed from destructuring
   } = validatedParams;
 
   log.debug(
@@ -273,7 +273,6 @@ export async function handleSearchTool(
       debug,
       deduplicate,
       include_confidence,
-      include_related,
     },
     "handleSearchTool called",
   );
@@ -325,7 +324,7 @@ export async function handleSearchTool(
       debug,
       deduplicate,
       include_confidence: include_confidence ?? false,
-      include_related: include_related ?? false,
+      // R2: phantom no-op field not sent to daemon
     });
   } catch (error) {
     // Convert daemon errors to MCP-friendly errors
