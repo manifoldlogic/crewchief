@@ -1,6 +1,7 @@
 # Vector Search Configuration and Performance Guide
 
-This document provides comprehensive guidance on configuring and optimizing PostgreSQL with pgvector for the Maproom hybrid search system.
+This document covers the shipped vector index (HNSW on the `code_embeddings` pool)
+and the supporting PostgreSQL configuration for the Maproom hybrid search system.
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -13,37 +14,60 @@ This document provides comprehensive guidance on configuring and optimizing Post
 
 ## Overview
 
-The Maproom hybrid search system uses PostgreSQL with the pgvector extension to provide vector similarity search alongside full-text search and graph signals. This guide covers the database layer optimization for achieving:
+The Maproom hybrid search system uses PostgreSQL with the pgvector extension to provide
+vector similarity search alongside full-text search and graph signals.
 
-- **p95 latency**: <50ms for hybrid queries
-- **Recall**: >80% on test queries
-- **Throughput**: 10+ queries per second
+> **Backend note.** The Postgres vector backend requires a `--features postgres` build;
+> the default SQLite build uses sqlite-vec with a separate per-dimension vector table
+> per-repo (`vec_code`, `vec_code_768`, `vec_code_1024`) and is not covered here. The
+> configuration knobs, SQL patterns, and monitoring queries in this document are
+> Postgres-only.
 
-> **⚠️ As-built vs. this guide.** Much of this document describes an earlier design
-> (an `ivfflat` index on `chunks.code_embedding`/`text_embedding`, plus materialized
-> views) that was NOT the shipped schema. **What actually ships** (migration
-> `0004_vector_ann.sql`):
->
-> - **Storage**: a content-addressed `code_embeddings` pool (one row per `blob_sha`,
->   shared across worktrees), with one typed vector column per supported dim —
->   `embedding_768 vector(768)`, `embedding_1024 vector(1024)`, `embedding_1536
->   vector(1536)`. Each row populates exactly the column matching its `embedding_dim`.
-> - **Index**: one **partial HNSW** index per dim,
->   `USING hnsw (embedding_<dim> vector_cosine_ops) WHERE embedding_<dim> IS NOT NULL`
->   — NOT `ivfflat`. `pgvector >= 0.5.0` (0.8.0 in CI) is required, not "in future".
-> - **Query**: cosine distance `<=>` over the typed column for the query's dim,
->   `ORDER BY (embedding_<dim> <=> $q::vector(<dim>)) ASC LIMIT k`; similarity =
->   `1 - cosine_distance`.
-> - **Tuning**: `hnsw.ef_search` is set per KNN transaction from config
->   (`MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH`, default 40, clamped up to `k`). The
->   `ivfflat.probes` / `ivfflat.lists` knobs below are inert for this backend.
-> - **Timeout**: the KNN runs under the normal `statement_timeout` (the HNSW index
->   bounds the scan); there is no `SET LOCAL statement_timeout = 0`.
->
-> EXPLAIN on a 5000-row dim-768 corpus: the planner uses
-> `Index Scan using idx_code_embeddings_hnsw_768` (0.38 ms) vs. a forced brute-force
-> seq-scan + top-N sort (58 ms) — ~150× faster. The `ivfflat`/materialized-view
-> sections below are retained for historical reference only.
+### Shipped index design (migration `0004_vector_ann.sql`)
+
+**Storage**: a content-addressed `code_embeddings` pool, with one typed vector column
+per supported dimension:
+- `embedding_768 vector(768)` — Ollama nomic-embed-text
+- `embedding_1024 vector(1024)` — Ollama mxbai-embed-large (default)
+- `embedding_1536 vector(1536)` — OpenAI text-embedding-3-small
+
+Each row populates exactly the column matching its `embedding_dim`; the other two are
+NULL (NULLs cost no storage in Postgres).
+
+**Index**: one partial HNSW index per dimension, using `vector_cosine_ops`:
+```sql
+CREATE INDEX idx_code_embeddings_hnsw_768
+    ON code_embeddings USING hnsw (embedding_768 vector_cosine_ops)
+    WHERE embedding_768 IS NOT NULL;
+CREATE INDEX idx_code_embeddings_hnsw_1024
+    ON code_embeddings USING hnsw (embedding_1024 vector_cosine_ops)
+    WHERE embedding_1024 IS NOT NULL;
+CREATE INDEX idx_code_embeddings_hnsw_1536
+    ON code_embeddings USING hnsw (embedding_1536 vector_cosine_ops)
+    WHERE embedding_1536 IS NOT NULL;
+```
+
+**Query operator**: cosine distance `<=>`. Similarity = `1 - cosine_distance`
+(`cosine_distance_to_similarity`, PG-local — SQLite keeps its L2 `1/(1+d)`). Score
+parity is on membership + ordering, not raw scores.
+
+**First-connect build**: migration `0004` runs inside a single advisory-locked
+transaction, which lifts `statement_timeout`. The HNSW indexes are built with a
+**locking** (non-`CONCURRENT`) build — Postgres forbids `CREATE INDEX CONCURRENTLY`
+inside a transaction block. Fast on a fresh/small pool; a large pre-existing pool will
+block writers during the first-connect migration.
+
+**Approximate, not reproducible**: HNSW is an approximate index. The KNN uses
+`ORDER BY distance ASC` with NO secondary tiebreak on purpose — adding `, c.id` causes
+Postgres to fall back to a full seq-scan + sort (~150× slower, EXPLAIN-verified). The
+pool is content-addressed, so tied rows are identical content; their relative order
+at the `k` boundary is not pinned run-to-run. This is an accepted tradeoff.
+
+**EXPLAIN benchmark** (5 000-row dim-768 corpus): planner uses
+`Index Scan using idx_code_embeddings_hnsw_768` (0.38 ms) vs. forced brute-force
+seq-scan + top-N sort (58 ms) — ~150× faster.
+
+**pgvector requirement**: `pgvector >= 0.5.0` (0.8.0 in CI).
 
 ### Architecture Components
 
@@ -52,7 +76,7 @@ The Maproom hybrid search system uses PostgreSQL with the pgvector extension to 
 │            Hybrid Search Query                   │
 ├─────────────────────────────────────────────────┤
 │  FTS (tsvector)  │  Vector (pgvector)  │ Signals│
-│   GIN index      │   ivfflat index     │ B-tree │
+│   GIN index      │   HNSW index        │ B-tree │
 └─────────────────────────────────────────────────┘
                         ▼
             ┌───────────────────────┐
@@ -72,127 +96,95 @@ CREATE EXTENSION IF NOT EXISTS unaccent;
 ```
 
 **Minimum versions:**
-- `pgvector >= 0.5.0` (for HNSW index support in future)
+- `pgvector >= 0.5.0` (HNSW index support; 0.8.0 in CI)
 - `pg_trgm >= 1.4`
 - `unaccent >= 1.1`
 
-### Vector Columns
+### Vector Storage Schema
 
-The `maproom.chunks` table contains two vector columns:
+The `code_embeddings` table stores one row per unique `blob_sha`:
 
 ```sql
-code_embedding VECTOR(1536)  -- Code representation embedding
-text_embedding VECTOR(1536)  -- Natural language representation embedding
+-- Simplified view; see migration 0004 for exact DDL
+CREATE TABLE code_embeddings (
+    blob_sha       TEXT PRIMARY KEY,
+    embedding_dim  INTEGER NOT NULL,       -- 768, 1024, or 1536
+    embedding_768  vector(768),            -- populated when embedding_dim = 768
+    embedding_1024 vector(1024),           -- populated when embedding_dim = 1024
+    embedding_1536 vector(1536),           -- populated when embedding_dim = 1536
+    model_version  TEXT NOT NULL,
+    created_at     TIMESTAMPTZ DEFAULT NOW()
+);
 ```
 
-**Embedding model**: OpenAI `text-embedding-3-small` (1536 dimensions)
-
-**Null handling**: Both columns can be NULL. Queries must filter for non-NULL values:
-```sql
-WHERE c.code_embedding IS NOT NULL
-```
+The `chunks` table joins to `code_embeddings` via `blob_sha` for vector search.
 
 ## Index Configuration
 
-### ivfflat Indices
+### HNSW Indices (Shipped)
 
-Two ivfflat indices provide approximate nearest neighbor search:
+Three partial HNSW indices provide approximate nearest neighbor search (one per
+supported dimension):
 
 ```sql
-CREATE INDEX idx_chunks_code_vec
-  ON maproom.chunks USING ivfflat (code_embedding vector_cosine_ops)
-  WITH (lists = 200);
+CREATE INDEX idx_code_embeddings_hnsw_768
+    ON code_embeddings USING hnsw (embedding_768 vector_cosine_ops)
+    WHERE embedding_768 IS NOT NULL;
 
-CREATE INDEX idx_chunks_text_vec
-  ON maproom.chunks USING ivfflat (text_embedding vector_cosine_ops)
-  WITH (lists = 200);
+CREATE INDEX idx_code_embeddings_hnsw_1024
+    ON code_embeddings USING hnsw (embedding_1024 vector_cosine_ops)
+    WHERE embedding_1024 IS NOT NULL;
+
+CREATE INDEX idx_code_embeddings_hnsw_1536
+    ON code_embeddings USING hnsw (embedding_1536 vector_cosine_ops)
+    WHERE embedding_1536 IS NOT NULL;
 ```
-
-**Parameters:**
-
-| Parameter | Value | Purpose | Tuning |
-|-----------|-------|---------|--------|
-| `lists` | 200 | Number of clusters for ANN | Set to `sqrt(row_count)` |
-| `probes` | 10 | Runtime search accuracy | Higher = more accurate but slower |
 
 **Distance metric**: `vector_cosine_ops` (cosine similarity via `<=>` operator)
 
-**Scaling guidelines:**
+### Runtime Parameter: `hnsw.ef_search`
 
-| Dataset Size | Recommended lists | Reasoning |
-|--------------|-------------------|-----------|
-| 10k chunks | 100 | sqrt(10000) ≈ 100 |
-| 40k chunks | 200 | sqrt(40000) ≈ 200 ✓ current |
-| 100k chunks | 316 | sqrt(100000) ≈ 316 |
-| 500k chunks | 707 | sqrt(500000) ≈ 707 |
-| 1M chunks | 1000 | sqrt(1000000) = 1000 |
+The `hnsw.ef_search` parameter controls the accuracy/speed tradeoff at query time.
+Set per KNN transaction from config:
 
-**Reindexing procedure** (when increasing lists):
-
-```sql
--- Use CONCURRENTLY to avoid blocking writes
-DROP INDEX CONCURRENTLY IF EXISTS maproom.idx_chunks_code_vec;
-
-CREATE INDEX CONCURRENTLY idx_chunks_code_vec
-  ON maproom.chunks
-  USING ivfflat (code_embedding vector_cosine_ops)
-  WITH (lists = 707);
-
--- Update statistics after reindexing
-ANALYZE maproom.chunks;
-```
-
-### Runtime Parameter: ivfflat.probes
-
-The `ivfflat.probes` parameter controls the accuracy/speed tradeoff at query time.
-
-**Setting levels:**
+**Environment variable**: `MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH`
+- **Default**: 40
+- **Clamped**: automatically raised to match the query's `k` (so ef_search is never
+  less than k)
+- **No index rebuild needed** to change this setting
 
 ```sql
--- Database-level (default for all connections)
-ALTER DATABASE postgres SET ivfflat.probes = 10;
-
--- Session-level (for current connection)
-SET ivfflat.probes = 10;
+-- Session-level override (for current connection)
+SET hnsw.ef_search = 40;
 
 -- Transaction-level (for current transaction only)
-SET LOCAL ivfflat.probes = 10;
+SET LOCAL hnsw.ef_search = 40;
 ```
 
 **Performance characteristics:**
 
-| probes | Latency (p95) | Recall | Use Case |
-|--------|---------------|--------|----------|
-| 1 | <10ms | 50-60% | Speed-critical, low accuracy ok |
-| 5 | <15ms | 70-75% | Balanced for small datasets |
-| **10** | **<25ms** | **80-85%** | **Recommended default** |
-| 20 | <40ms | 90-95% | High accuracy requirements |
-| 50 | <80ms | 95-98% | Maximum accuracy, latency acceptable |
+| ef_search | Latency (p95) | Recall | Use Case |
+|-----------|---------------|--------|----------|
+| 10 | <10ms | ~80% | Speed-critical |
+| **40** | **<25ms** | **~90%** | **Default** |
+| 100 | <50ms | ~95% | High accuracy requirements |
+| 200 | <80ms | ~98% | Maximum accuracy |
 
-**Recommendation**: Start with `probes=10` for 80%+ recall with acceptable latency. Increase only if recall is insufficient.
+**Recommendation**: The default (40) is appropriate for most workloads. Raise only if
+recall is demonstrably insufficient. ef_search has no impact on index storage or build.
 
 ### Partial Indices
 
 Partial indices optimize common filter patterns:
 
 ```sql
--- High recency score (recently modified code)
-CREATE INDEX idx_chunks_recent
-  ON maproom.chunks (recency_score)
-  WHERE recency_score > 0.5;
-
--- High churn score (frequently modified code)
-CREATE INDEX idx_chunks_high_churn
-  ON maproom.chunks (churn_score)
-  WHERE churn_score > 10;
-
 -- Repo + worktree filtering (core hybrid query pattern)
 CREATE INDEX idx_files_repo_worktree
-  ON maproom.files (repo_id, worktree_id);
+  ON files (repo_id, worktree_id);
 
 -- Symbol name lookups (exclude nulls)
 CREATE INDEX idx_chunks_symbol_name
-  ON maproom.chunks (symbol_name)
+  ON chunks (symbol_name)
   WHERE symbol_name IS NOT NULL;
 ```
 
@@ -201,17 +193,13 @@ CREATE INDEX idx_chunks_symbol_name
 - Faster index scans for matching queries
 - Lower maintenance overhead
 
-**Usage requirements:**
-- Query `WHERE` clause must match or be more restrictive than index predicate
-- Example: `WHERE recency_score > 0.7` can use `idx_chunks_recent` (predicate: `> 0.5`)
-
 ### Full-Text Search Index
 
 GIN index for tsvector-based full-text search:
 
 ```sql
 CREATE INDEX idx_chunks_tsv
-  ON maproom.chunks USING GIN (ts_doc);
+  ON chunks USING GIN (ts_doc);
 ```
 
 **Usage:**
@@ -256,15 +244,12 @@ Run `ANALYZE` after bulk operations or schema changes:
 
 ```sql
 -- Update all maproom tables
-ANALYZE maproom.chunks;
-ANALYZE maproom.files;
-ANALYZE maproom.chunk_edges;
-ANALYZE maproom.repos;
-ANALYZE maproom.worktrees;
-ANALYZE maproom.commits;
-
--- Or analyze entire schema
-ANALYZE maproom.*;
+ANALYZE chunks;
+ANALYZE files;
+ANALYZE code_embeddings;
+ANALYZE chunk_edges;
+ANALYZE repos;
+ANALYZE worktrees;
 ```
 
 **Autovacuum configuration:**
@@ -278,39 +263,38 @@ autovacuum_analyze_scale_factor = 0.05
 
 ## Query Patterns
 
-### Pattern 1: Vector Similarity Search (Code Mode)
+### Pattern 1: Vector Similarity Search (Postgres)
 
 ```sql
--- Find top-k similar code chunks
+-- Find top-k similar chunks via HNSW on the code_embeddings pool.
+-- Replace <dim> with 768, 1024, or 1536 to match your query embedding.
+SET LOCAL hnsw.ef_search = 40;  -- set by Rust before the KNN
+
 SELECT c.id, c.symbol_name, c.preview,
-       1 - (c.code_embedding <=> $1::vector(1536)) as similarity
-FROM maproom.chunks c
-JOIN maproom.files f ON f.id = c.file_id
+       1 - (ce.embedding_<dim> <=> $1::vector(<dim>)) as similarity
+FROM chunks c
+JOIN files f ON f.id = c.file_id
+JOIN code_embeddings ce ON ce.blob_sha = c.blob_sha
 WHERE f.repo_id = $2
   AND ($3::bigint IS NULL OR f.worktree_id = $3)
-  AND c.code_embedding IS NOT NULL
-ORDER BY c.code_embedding <=> $1::vector(1536)
+  AND ce.embedding_<dim> IS NOT NULL
+ORDER BY ce.embedding_<dim> <=> $1::vector(<dim>)
 LIMIT $4;
 ```
-
-**Parameters:**
-- `$1`: Query embedding (vector)
-- `$2`: Repository ID
-- `$3`: Worktree ID (optional)
-- `$4`: Limit (k)
 
 **Expected EXPLAIN plan:**
 ```
 Limit
   -> Nested Loop
-    -> Index Scan using idx_chunks_code_vec on chunks c
-         Order By: (code_embedding <=> $1::vector)
+    -> Index Scan using idx_code_embeddings_hnsw_<dim> on code_embeddings ce
+         Order By: (embedding_<dim> <=> $1::vector(<dim>))
+         Filter: embedding_<dim> IS NOT NULL     -- partial-index predicate
+    -> Index Scan using chunks_blob_sha_idx on chunks c
     -> Index Scan using files_pkey on files f
-         Index Cond: (id = c.file_id)
          Filter: (repo_id = $2)
 ```
 
-**Performance target**: <20ms for k=10
+**Performance target**: <25ms for k=10 (HNSW ef_search=40, warm cache)
 
 ### Pattern 2: Hybrid Search (FTS + Vector + Signals)
 
@@ -318,66 +302,48 @@ Limit
 WITH lex_scores AS (
   -- Full-text search
   SELECT c.id, ts_rank_cd(c.ts_doc, query) as lex_rank
-  FROM maproom.chunks c
-  JOIN maproom.files f ON f.id = c.file_id,
+  FROM chunks c
+  JOIN files f ON f.id = c.file_id,
        to_tsquery('simple', $1) as query
   WHERE f.repo_id = $2
     AND ($3::bigint IS NULL OR f.worktree_id = $3)
     AND c.ts_doc @@ query
 ),
 sem_scores AS (
-  -- Vector similarity
+  -- Vector similarity via HNSW (dim chosen from query embedding)
   SELECT c.id,
-    1.0 - (c.code_embedding <=> $4::vector) as sem_code,
-    1.0 - (c.text_embedding <=> $4::vector) as sem_text
-  FROM maproom.chunks c
-  JOIN maproom.files f ON f.id = c.file_id
+    1.0 - (ce.embedding_1024 <=> $4::vector(1024)) as sem_score
+  FROM chunks c
+  JOIN files f ON f.id = c.file_id
+  JOIN code_embeddings ce ON ce.blob_sha = c.blob_sha
   WHERE f.repo_id = $2
     AND ($3::bigint IS NULL OR f.worktree_id = $3)
-    AND c.code_embedding IS NOT NULL
-  ORDER BY
-    CASE $5
-      WHEN 'code' THEN c.code_embedding <=> $4::vector
-      WHEN 'text' THEN c.text_embedding <=> $4::vector
-      ELSE LEAST(c.code_embedding <=> $4::vector,
-                 c.text_embedding <=> $4::vector)
-    END
+    AND ce.embedding_1024 IS NOT NULL
+  ORDER BY ce.embedding_1024 <=> $4::vector(1024)
   LIMIT 100
 )
 SELECT c.id, f.relpath, c.symbol_name, c.kind::text,
        c.start_line, c.end_line, c.preview,
        (
          0.55 * COALESCE(l.lex_rank, 0) +
-         0.30 * CASE WHEN $5 = 'code' THEN COALESCE(s.sem_code, 0)
-                     ELSE COALESCE(s.sem_text, 0) END +
-         0.10 * CASE WHEN $5 = 'code' THEN COALESCE(s.sem_text, 0)
-                     ELSE COALESCE(s.sem_code, 0) END +
+         0.40 * COALESCE(s.sem_score, 0) +
          0.03 * c.recency_score +
          0.02 * (1.0 / (1.0 + c.churn_score))
        ) AS score
-FROM maproom.chunks c
-JOIN maproom.files f ON f.id = c.file_id
+FROM chunks c
+JOIN files f ON f.id = c.file_id
 LEFT JOIN lex_scores l ON l.id = c.id
 LEFT JOIN sem_scores s ON s.id = c.id
 WHERE c.id IN (
   SELECT id FROM lex_scores UNION SELECT id FROM sem_scores
 )
 ORDER BY score DESC
-LIMIT $6;
+LIMIT $5;
 ```
-
-**Parameters:**
-- `$1`: FTS query string (e.g., "auth & login")
-- `$2`: Repository ID
-- `$3`: Worktree ID (optional)
-- `$4`: Query embedding (vector)
-- `$5`: Search mode ('code', 'text', or 'auto')
-- `$6`: Final result limit (k)
 
 **Weight configuration:**
 - FTS: 55% (lexical matching)
-- Primary vector: 30% (semantic similarity)
-- Secondary vector: 10% (alternative perspective)
+- Vector: 40% (semantic similarity)
 - Recency: 3% (prefer recent code)
 - Churn: 2% (penalize unstable code)
 
@@ -386,39 +352,33 @@ LIMIT $6;
 ### Pattern 3: Filtered Vector Search (Recent Code)
 
 ```sql
--- Find similar code in recently modified files
+SET LOCAL hnsw.ef_search = 40;
+
 SELECT c.id, c.symbol_name,
-       1 - (c.code_embedding <=> $1::vector) as similarity,
+       1 - (ce.embedding_1024 <=> $1::vector(1024)) as similarity,
        c.recency_score
-FROM maproom.chunks c
-JOIN maproom.files f ON f.id = c.file_id
+FROM chunks c
+JOIN files f ON f.id = c.file_id
+JOIN code_embeddings ce ON ce.blob_sha = c.blob_sha
 WHERE f.repo_id = $2
   AND c.recency_score > 0.5
-  AND c.code_embedding IS NOT NULL
-ORDER BY c.code_embedding <=> $1::vector
+  AND ce.embedding_1024 IS NOT NULL
+ORDER BY ce.embedding_1024 <=> $1::vector(1024)
 LIMIT $3;
 ```
 
-**Expected plan:**
-```
-Limit
-  -> Nested Loop
-    -> Index Scan using idx_chunks_code_vec
-    -> Index Scan using idx_chunks_recent (partial index)
-```
-
-**Performance target**: <15ms for k=10
+**Performance target**: <25ms for k=10
 
 ## Monitoring
 
 ### Index Usage Statistics
 
 ```sql
--- Check index usage and sizes
+-- Check HNSW index usage and sizes
 SELECT
   schemaname,
-  tablename,
-  indexname,
+  relname,
+  indexrelname,
   pg_size_pretty(pg_relation_size(indexrelid)) as index_size,
   idx_scan as times_used,
   idx_tup_read as tuples_read,
@@ -428,14 +388,13 @@ SELECT
     ELSE 0
   END as avg_tuples_per_scan
 FROM pg_stat_user_indexes
-WHERE schemaname = 'maproom'
+WHERE indexrelname LIKE '%hnsw%'
 ORDER BY pg_relation_size(indexrelid) DESC;
 ```
 
 **What to look for:**
-- `times_used = 0`: Unused index (consider dropping)
+- `times_used = 0`: HNSW index not being picked up — check the IS NOT NULL predicate
 - Large `index_size` with low `times_used`: Expensive unused index
-- High `avg_tuples_per_scan`: May need more selective index
 
 ### Table Statistics
 
@@ -443,7 +402,7 @@ ORDER BY pg_relation_size(indexrelid) DESC;
 -- Check table health and statistics freshness
 SELECT
   schemaname,
-  tablename,
+  relname,
   n_live_tup as live_rows,
   n_dead_tup as dead_rows,
   round(100.0 * n_dead_tup / NULLIF(n_live_tup + n_dead_tup, 0), 2) as dead_pct,
@@ -452,7 +411,7 @@ SELECT
   last_analyze,
   last_autoanalyze
 FROM pg_stat_user_tables
-WHERE schemaname = 'maproom'
+WHERE relname IN ('code_embeddings', 'chunks', 'files')
 ORDER BY n_live_tup DESC;
 ```
 
@@ -464,24 +423,24 @@ ORDER BY n_live_tup DESC;
 ### Sequential Scan Detection
 
 ```sql
--- Find tables with excessive sequential scans
+-- Find tables with excessive sequential scans (vector search should use HNSW)
 SELECT
   schemaname,
-  tablename,
+  relname,
   seq_scan,
   seq_tup_read,
   idx_scan,
   n_live_tup,
   round(100.0 * seq_scan / NULLIF(seq_scan + idx_scan, 0), 2) as seq_scan_pct
 FROM pg_stat_user_tables
-WHERE schemaname = 'maproom'
+WHERE relname = 'code_embeddings'
   AND n_live_tup > 1000
 ORDER BY seq_tup_read DESC;
 ```
 
 **Warning signs:**
-- `seq_scan_pct > 50%` on large tables: May need additional indices
-- High `seq_tup_read`: Queries scanning entire table
+- `seq_scan_pct > 50%` on `code_embeddings` with >1 000 rows: HNSW not being used —
+  check the IS NOT NULL predicate in your query and in `pg_stat_user_indexes`.
 
 ### Query Performance (pg_stat_statements)
 
@@ -503,7 +462,7 @@ SELECT
   round((100 * total_exec_time / sum(total_exec_time) OVER ())::numeric, 2) as pct_total,
   left(query, 80) as query_preview
 FROM pg_stat_statements
-WHERE query LIKE '%maproom%'
+WHERE query LIKE '%code_embeddings%'
 ORDER BY mean_exec_time DESC
 LIMIT 20;
 ```
@@ -518,23 +477,29 @@ LIMIT 20;
 
 **Diagnosis:**
 ```sql
--- Check current probes setting
-SHOW ivfflat.probes;
+-- Check ef_search for the current session.
+-- Note: hnsw.ef_search is a session-local GUC set by the application before each
+-- KNN query (SET LOCAL hnsw.ef_search = N). SHOW only works after a SET has been
+-- issued in the same session; a fresh psql session will report "unrecognized
+-- configuration parameter". To inspect the default used by the application, check
+-- MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH (env var, default 40) instead.
+SHOW hnsw.ef_search;  -- only works after SET hnsw.ef_search = N in this session
 
--- Check index usage
+-- Check HNSW index usage
 EXPLAIN (ANALYZE, BUFFERS)
-SELECT c.id FROM maproom.chunks c
-WHERE c.code_embedding IS NOT NULL
-ORDER BY c.code_embedding <=> '[...]'::vector
+SELECT ce.blob_sha FROM code_embeddings ce
+WHERE ce.embedding_1024 IS NOT NULL
+ORDER BY ce.embedding_1024 <=> '[...]'::vector(1024)
 LIMIT 10;
 ```
 
 **Solutions:**
-1. **Decrease probes**: `SET ivfflat.probes = 5;` (sacrifice recall for speed)
-2. **Check index exists**: Ensure `idx_chunks_code_vec` is present
-3. **Verify NULL filtering**: Add `WHERE code_embedding IS NOT NULL`
-4. **Rebuild statistics**: `ANALYZE maproom.chunks;`
-5. **Reindex with more lists**: If dataset grew significantly
+1. **Decrease ef_search**: Lower `MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH` (e.g., 20)
+   to sacrifice recall for speed — no rebuild required.
+2. **Verify IS NOT NULL clause**: The partial-index predicate requires
+   `WHERE embedding_<dim> IS NOT NULL` to match.
+3. **Rebuild statistics**: `ANALYZE code_embeddings;`
+4. **Confirm index exists**: `\di` or query `pg_stat_user_indexes` filtered on `hnsw`.
 
 ### Issue: Low Recall (<80%)
 
@@ -544,81 +509,88 @@ LIMIT 10;
 
 **Diagnosis:**
 ```sql
--- Check recall with known good pairs
+-- Check ef_search (session-local GUC; SHOW only works after SET in the same session).
+-- Check MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH env var for the configured default instead.
+SHOW hnsw.ef_search;  -- only works after SET hnsw.ef_search = N in this session
+
+-- Check recall with a known good pair
 SELECT
-  (c.code_embedding <=> $1::vector) as distance,
-  1 - (c.code_embedding <=> $1::vector) as similarity
-FROM maproom.chunks c
-WHERE c.id = $2;  -- Known relevant chunk
+  (ce.embedding_1024 <=> $1::vector(1024)) as distance,
+  1 - (ce.embedding_1024 <=> $1::vector(1024)) as similarity
+FROM code_embeddings ce
+WHERE ce.blob_sha = $2;  -- blob_sha of a known relevant chunk
 ```
 
 **Solutions:**
-1. **Increase probes**: `SET ivfflat.probes = 20;` (accept latency cost)
-2. **Check embedding quality**: Verify embeddings are being generated correctly
-3. **Adjust fusion weights**: Increase vector weight vs FTS
-4. **Increase candidate pool**: Fetch more candidates before fusion (e.g., LIMIT 200)
+1. **Increase ef_search**: Set `MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH=100` (no rebuild).
+2. **Check embedding quality**: Verify embeddings are generated with the expected model.
+3. **Adjust fusion weights**: Increase vector weight vs FTS in the scoring CTE.
+4. **Increase candidate pool**: Raise the `LIMIT 100` in the `sem_scores` CTE.
 
 ### Issue: Index Not Being Used
 
 **Symptoms:**
-- EXPLAIN shows Sequential Scan instead of Index Scan
+- EXPLAIN shows Sequential Scan on `code_embeddings` instead of Index Scan
 - Queries slower than expected
 
 **Diagnosis:**
 ```sql
 EXPLAIN (ANALYZE, BUFFERS)
-<your query here>;
+SELECT ce.blob_sha FROM code_embeddings ce
+WHERE ce.embedding_1024 IS NOT NULL
+ORDER BY ce.embedding_1024 <=> '[...]'::vector(1024)
+LIMIT 10;
 ```
 
 **Common causes and solutions:**
 
-1. **Missing WHERE clause for NULL:**
+1. **Missing IS NOT NULL clause** (partial-index predicate not met):
    ```sql
-   -- Bad (won't use index):
-   ORDER BY c.code_embedding <=> $1::vector
+   -- Bad (planner cannot use the partial HNSW index):
+   ORDER BY ce.embedding_1024 <=> $1::vector(1024)
 
-   -- Good (uses index):
-   WHERE c.code_embedding IS NOT NULL
-   ORDER BY c.code_embedding <=> $1::vector
+   -- Good (partial-index predicate satisfied):
+   WHERE ce.embedding_1024 IS NOT NULL
+   ORDER BY ce.embedding_1024 <=> $1::vector(1024)
    ```
 
 2. **Statistics outdated:**
    ```sql
-   ANALYZE maproom.chunks;
+   ANALYZE code_embeddings;
    ```
 
 3. **Index missing:**
    ```sql
-   \di maproom.*  -- List all indices
+   -- List all HNSW indexes
+   SELECT indexname, indexdef
+   FROM pg_indexes
+   WHERE indexname LIKE '%hnsw%';
    ```
 
-4. **Query planner prefers seq scan (small table):**
-   - This is OK for small datasets (<1000 rows)
-   - Force index: `SET enable_seqscan = off;` (testing only!)
+4. **Table too small** (planner prefers seq-scan for small tables):
+   - Normal for < 1 000 rows
+   - Force for testing: `SET enable_seqscan = off;` (testing only!)
 
-### Issue: Out of Memory During Index Creation
+### Issue: Out of Memory During Migration (`0004`) HNSW Build
 
 **Symptoms:**
-- `CREATE INDEX` fails with memory error
-- Server becomes unresponsive during reindex
+- First-connect migration hangs or fails with memory error
+- Postgres OOM during `CREATE INDEX`
+
+**Context**: Migration `0004` builds the HNSW indexes inside a transaction with
+statement_timeout lifted. On a large pre-existing pool this blocks writers. On very
+large pools it may exhaust `maintenance_work_mem`.
 
 **Solutions:**
-1. **Increase maintenance_work_mem:**
+1. **Increase maintenance_work_mem** before the first connect:
    ```sql
-   SET maintenance_work_mem = '1GB';
-   CREATE INDEX ...;
+   ALTER SYSTEM SET maintenance_work_mem = '1GB';
+   SELECT pg_reload_conf();
    ```
+   Then restart the Maproom process to trigger migration.
 
-2. **Use CONCURRENTLY (slower but safer):**
-   ```sql
-   CREATE INDEX CONCURRENTLY idx_name ON ...;
-   ```
-
-3. **Reduce lists parameter temporarily:**
-   ```sql
-   -- Create with fewer lists, rebuild later
-   WITH (lists = 100)
-   ```
+2. **Fresh pool**: If the pool was never indexed in Postgres, migration runs on an
+   empty table — build is a no-op and completes in milliseconds.
 
 ### Issue: High Churn on Dead Rows
 
@@ -631,18 +603,18 @@ EXPLAIN (ANALYZE, BUFFERS)
 SELECT n_live_tup, n_dead_tup,
        last_vacuum, last_autovacuum
 FROM pg_stat_user_tables
-WHERE tablename = 'chunks';
+WHERE relname = 'code_embeddings';
 ```
 
 **Solutions:**
 1. **Manual VACUUM:**
    ```sql
-   VACUUM ANALYZE maproom.chunks;
+   VACUUM ANALYZE code_embeddings;
    ```
 
 2. **Tune autovacuum:**
    ```sql
-   ALTER TABLE maproom.chunks SET (
+   ALTER TABLE code_embeddings SET (
      autovacuum_vacuum_scale_factor = 0.05,
      autovacuum_analyze_scale_factor = 0.02
    );
@@ -658,7 +630,7 @@ WHERE tablename = 'chunks';
 
 ## Performance Baselines
 
-### Single Vector Query (Isolated)
+### Single Vector Query (Isolated, HNSW ef_search=40)
 
 | Metric | Target | Measured |
 |--------|--------|----------|
@@ -667,12 +639,13 @@ WHERE tablename = 'chunks';
 | p99 latency | <40ms | TBD |
 | Recall@10 | >80% | TBD |
 
-**Benchmark command:**
+**Benchmark command (psql):**
 ```sql
 \timing on
-SELECT c.id FROM maproom.chunks c
-WHERE c.code_embedding IS NOT NULL
-ORDER BY c.code_embedding <=> '[...]'::vector
+SET hnsw.ef_search = 40;
+SELECT ce.blob_sha FROM code_embeddings ce
+WHERE ce.embedding_1024 IS NOT NULL
+ORDER BY ce.embedding_1024 <=> '[...]'::vector(1024)
 LIMIT 10;
 ```
 
@@ -694,26 +667,29 @@ LIMIT 10;
 | Max connections | <50 | TBD |
 
 **Load testing:**
-Use `pgbench` or custom load generator to simulate concurrent searches.
+Use `pgbench` or a custom load generator to simulate concurrent searches. The daemon
+amortizes Postgres connect cost (warm requests measured at ~0.6 ms).
 
 ## References
 
 - [pgvector Documentation](https://github.com/pgvector/pgvector)
 - [PostgreSQL Index Documentation](https://www.postgresql.org/docs/current/indexes.html)
 - [PostgreSQL Performance Tuning](https://wiki.postgresql.org/wiki/Performance_Optimization)
-- HYBRID_SEARCH Architecture: `/workspace/.crewchief/archive/projects/HYBRID_SEARCH_hybrid-retrieval-system/planning/HYBRID_SEARCH_ARCHITECTURE.md`
-- Migration: `/workspace/crates/maproom/migrations/0004_optimize_vector_indices.sql`
+- Migration: `crates/maproom/migrations_pg/0004_vector_ann.sql`
+- Crate CLAUDE.md conventions (HNSW details): `crates/maproom/CLAUDE.md`
+- Database architecture: `docs/architecture/DATABASE_ARCHITECTURE.md`
 
 ## Changelog
 
 | Date | Version | Changes |
 |------|---------|---------|
 | 2025-10-24 | 1.0.0 | Initial documentation for HYBRID_SEARCH-1002 |
+| 2026-07-09 | 2.0.0 | Full rewrite to reflect shipped HNSW/`code_embeddings` design (migration 0004); removed pre-ship ivfflat content |
 
 ---
 
 **Maintenance Note**: This document should be updated when:
-- Index configurations change
+- HNSW parameters or ef_search defaults change
 - Performance targets are revised
 - New query patterns are introduced
-- Scaling thresholds are reached
+- New embedding dimensions are added

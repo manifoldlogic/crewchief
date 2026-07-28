@@ -310,17 +310,13 @@ CREATE TABLE maproom.chunk_edges (
 CREATE INDEX idx_chunks_ts_doc ON maproom.chunks USING GIN(ts_doc);
 ```
 
-**Vector Similarity Indexes** (ivfflat algorithm):
+**Vector Similarity Indexes** (HNSW, partial — one per embedding dimension, on the
+`code_embeddings` pool; see migration `0004_vector_ann.sql` for full DDL):
 ```sql
--- OpenAI 1536-dim indexes
-CREATE INDEX idx_chunks_code_embedding_ivfflat
-ON maproom.chunks USING ivfflat (code_embedding vector_cosine_ops)
-WITH (lists = 100);
-
--- Ollama/Google 768-dim indexes
-CREATE INDEX idx_chunks_code_embedding_ollama_ivfflat
-ON maproom.chunks USING ivfflat (code_embedding_ollama vector_cosine_ops)
-WITH (lists = 100);
+-- Shipped index — dim-1024 example (768 and 1536 follow the same pattern)
+CREATE INDEX idx_code_embeddings_hnsw_1024
+    ON code_embeddings USING hnsw (embedding_1024 vector_cosine_ops)
+    WHERE embedding_1024 IS NOT NULL;
 ```
 
 **Performance Indexes**:
@@ -601,7 +597,7 @@ churn:   0.05  // Slight penalty for high-churn (unstable) code
 **Optimization Opportunities**:
 - Materialized views for graph importance (precomputed)
 - Query result caching (LRU cache in `crates/maproom/src/search/cache.rs`)
-- Vector index tuning (ivfflat lists parameter)
+- Vector index tuning (HNSW `ef_search` parameter via `MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH`)
 
 ---
 
@@ -983,7 +979,7 @@ User runs: mcp__maproom__context({
 | **Enterprise** | 100K+ | 5M+ | ~200ms+ | Needs tuning |
 
 **Optimization at Scale**:
-- Increase ivfflat lists parameter (100 → 500 → 1000)
+- Raise HNSW `ef_search` for higher recall (`MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH`, no rebuild)
 - Partition by repository/worktree
 - Enable query result caching
 - Use materialized views for graph importance
@@ -1040,14 +1036,16 @@ FusionWeights {
 
 ### Vector Index Tuning
 
-**ivfflat Lists Parameter**:
-- Small datasets (< 100K chunks): `lists = 100`
-- Medium datasets (100K-1M chunks): `lists = 500`
-- Large datasets (> 1M chunks): `lists = 1000`
+**HNSW `ef_search` Parameter** (`MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH`):
+- Default: 40 (good balance of recall vs speed)
+- Higher values increase recall at the cost of latency; no index rebuild needed.
+- Automatically clamped up to the query's `k` so ef_search never limits a small query.
 
-**Formula**: `lists = sqrt(row_count)` is a good starting point.
-
-**Trade-off**: Higher lists = faster search, slower index build, more memory.
+| ef_search | Latency impact | Recall |
+|-----------|---------------|--------|
+| 20 | Fastest | ~80% |
+| 40 | Default | ~90% |
+| 100 | Moderate | ~95% |
 
 ### Context Assembly Tuning
 
@@ -1219,7 +1217,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize"}' | node dist/index.js
 - **Database**: SQLite + sqlite-vec (default); PostgreSQL 16 + pgvector (optional, `postgres` feature)
 - **Parsing**: tree-sitter (TypeScript, Rust, Python, Markdown, JSON)
 - **Embeddings**: Ollama (mxbai-embed-large), Google Vertex AI (textembedding-gecko), OpenAI (text-embedding-3-small)
-- **Vector Index**: ivfflat algorithm (pgvector)
+- **Vector Index**: HNSW partial indexes per embedding dimension (pgvector, migration `0004`)
 - **Protocol**: Model Context Protocol (MCP) v2024-11-05
 
 ### External Dependencies
@@ -1241,7 +1239,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize"}' | node dist/index.js
 - **Fusion**: Combining scores from multiple search strategies
 - **MCP**: Model Context Protocol for AI assistant integration
 - **pgvector**: PostgreSQL extension for vector similarity search
-- **ivfflat**: Inverted file flat index for approximate nearest neighbor search
+- **HNSW**: Hierarchical Navigable Small World — approximate nearest neighbor index used by pgvector for vector search
 - **Embedding**: Dense vector representation of code/text for semantic similarity
 - **Context Bundle**: Collection of related code chunks assembled within a token budget
 - **Worktree**: Git worktree representing a branch or commit snapshot

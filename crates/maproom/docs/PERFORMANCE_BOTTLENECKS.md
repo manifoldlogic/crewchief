@@ -110,7 +110,7 @@ pub async fn insert_chunk(client: &Client, ...) -> anyhow::Result<i64> {
 
 4. **Index overhead during inserts**
    - GIN index on ts_doc updated per insert
-   - ivfflat vector indexes updated per insert
+   - HNSW indexes on `code_embeddings` updated per insert
    - Could disable indexes, bulk insert, then rebuild
 
 **Optimization Opportunities (PERF_OPT-1003):**
@@ -163,7 +163,7 @@ pub async fn insert_chunk(client: &Client, ...) -> anyhow::Result<i64> {
 
 2. **Vector Executor** (`src/search/vector.rs`)
    - `<=>` operator (cosine distance)
-   - ivfflat index scan
+   - HNSW index scan on `code_embeddings` pool (migration `0004`)
    - Target: ~30-50ms (likely slowest component)
 
 3. **Graph Executor** (`src/search/graph.rs`)
@@ -176,10 +176,10 @@ pub async fn insert_chunk(client: &Client, ...) -> anyhow::Result<i64> {
    - Target: ~5-10ms
 
 **Optimization Opportunities:**
-1. Tune ivfflat index parameters (lists, probes)
+1. Tune HNSW ef_search (`MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH`) without rebuild
 2. Optimize FTS ranking function
 3. Add query result caching
-4. Consider approximate nearest neighbor search for large datasets
+4. HNSW already provides approximate nearest neighbor search at scale
 
 ### 1.4 Context Assembly (Medium Impact)
 
@@ -266,20 +266,16 @@ LIMIT $4;
 ```
 
 **Expected Performance:**
-- **Without index:** 500-2000ms (full table scan on 500k chunks)
-- **With ivfflat index:** 30-80ms (configured at src/db/queries.rs:19: `SET ivfflat.probes = 10`)
+- **Without index:** 500-2000ms (full table scan on 500k embeddings)
+- **With HNSW index:** 30-80ms (ef_search=40, `MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH`)
 - **Target:** <30ms for p95
 
 **Bottlenecks Identified:**
 
-1. **ivfflat configuration** (src/db/queries.rs:16-19)
-   ```rust
-   // probes=10 provides ~80-85% recall with <25ms p95 latency
-   client.execute("SET ivfflat.probes = 10", &[]).await?;
-   ```
-   - Current: `probes = 10` (hardcoded)
-   - May need tuning based on dataset size
-   - No dynamic adjustment for repo size
+1. **HNSW ef_search configuration** (`MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH`)
+   - Default: 40 (set per KNN transaction via `SET LOCAL hnsw.ef_search = 40`)
+   - Tunable without index rebuild
+   - Automatically clamped up to the query's `k`
 
 2. **Dual distance calculations** (hybrid mode)
    - Computes both code_embedding and text_embedding distances
@@ -293,14 +289,14 @@ LIMIT $4;
 
 **Optimization Opportunities (PERF_OPT-1005):**
 
-1. **Tune ivfflat parameters dynamically:**
-   - Adjust probes based on chunk count
-   - Consider lists parameter (set during index creation)
-   - Test probes values: 5, 10, 20, 50
+1. **Tune HNSW ef_search dynamically:**
+   - Set `MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH` based on recall requirements
+   - No index rebuild needed
+   - Test values: 20, 40, 100, 200
 
 2. **Index optimization:**
-   - Ensure ivfflat index exists: `migrations/0004_optimize_vector_indices.sql`
-   - Consider composite index on (repo_id, embedding)
+   - HNSW indexes exist in migration `0004_vector_ann.sql` (`code_embeddings` pool)
+   - Partial indexes (IS NOT NULL) ensure planner uses HNSW even with NULL rows
 
 3. **Query optimization:**
    - Add materialized view for common queries
@@ -853,7 +849,7 @@ After implementing Tier 1 optimizations, expected improvements:
 
 ### Index Configuration
 
-- [ ] Verify ivfflat index parameters (lists, probes)
+- [ ] Verify HNSW index ef_search (`MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH`, default 40)
 - [ ] Check GIN index configuration for FTS
 - [ ] Validate B-tree index usage
 

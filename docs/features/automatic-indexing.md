@@ -16,9 +16,12 @@ The maproom `watch` command monitors your git repository for file changes and au
 
 Before using automatic indexing:
 
-1. **SQLite Database**: Maproom uses SQLite by default (no setup required)
-   - Database auto-created at `~/.maproom/maproom.db`
-   - Override with: `MAPROOM_DATABASE_URL="sqlite:///path/to/db"`
+1. **Database**: Maproom uses SQLite by default (no setup required)
+   - Database auto-created at `~/.maproom/maproom.db` (SQLite backend)
+   - Override with: `MAPROOM_DATABASE_URL="sqlite:///path/to/db"` for a custom SQLite path
+   - For the shared PostgreSQL backend (team/production), set a `postgres://` URL — the
+     container must be running before starting the watcher. See
+     [Database Architecture](../architecture/DATABASE_ARCHITECTURE.md).
 
 2. **Git Repository**: Your project must be a git repository with `.git/` directory
 
@@ -279,10 +282,11 @@ maproom watch --throttle 500
 
 **Symptoms**:
 ```
-[ERROR] Database error: unable to open database file
+[ERROR] Database error: unable to open database file   # SQLite backend
+[ERROR] Database error: connection refused             # PostgreSQL backend
 ```
 
-**Solutions**:
+**Solutions (SQLite backend):**
 
 ```bash
 # 1. Check database location (default: ~/.maproom/maproom.db)
@@ -293,6 +297,19 @@ export MAPROOM_DATABASE_URL="sqlite:///path/to/maproom.db"
 
 # 3. Ensure directory exists and is writable
 mkdir -p ~/.maproom
+```
+
+**Solutions (PostgreSQL backend):**
+
+```bash
+# 1. Verify the container is running
+docker ps | grep maproom-postgres
+
+# 2. Start it if needed (from the maproom-mcp config dir)
+docker compose up -d
+
+# 3. Set the correct URL for your network context (see DATABASE_ARCHITECTURE.md)
+export MAPROOM_DATABASE_URL="postgresql://maproom:maproom@maproom-postgres:5432/maproom"
 ```
 
 ### Watcher Crashes or Exits Unexpectedly
