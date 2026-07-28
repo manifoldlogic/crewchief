@@ -132,6 +132,12 @@ SQLite uses the [sqlite-vec](https://github.com/asg017/sqlite-vec) extension for
 
 PostgreSQL is recommended for team environments and production deployments where concurrent access is required.
 
+> **Build note.** The PostgreSQL backend requires a `--features postgres` build of the
+> Rust crate. The default binary (and the published `@crewchief/cli` package) includes
+> the Postgres backend. A `postgres://` or `postgresql://` URL in
+> `MAPROOM_DATABASE_URL` selects the Postgres backend at runtime; any other URL (or no
+> URL) falls back to SQLite.
+
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                      Docker Environment                           │
@@ -161,29 +167,66 @@ PostgreSQL is recommended for team environments and production deployments where
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-## Database Details
+## Shared Postgres Deployment
 
-**Maproom PostgreSQL** (`maproom-postgres:5432/maproom`)
-- **Purpose**: Semantic code search, MCP service, development, testing
-- **Connection**: `postgresql://maproom:maproom@maproom-postgres:5432/maproom`
-- **Network**: Accessible from devcontainer and MCP containers via `maproom-network`
-- **Data**: Persistent via Docker volumes (`maproom-data`)
-- **Image**: `pgvector/pgvector:pg16`
-- **Container**: Managed via `config/docker-compose.yml` in maproom-mcp package
+The recommended production/team setup runs a single `maproom-postgres` container
+shared by all repos and all maproom consumers (CLI scans, MCP daemon, CI jobs). Each
+repo gets its own `repos`/`worktrees`/`chunks` rows; embeddings are deduplicated via
+the content-addressed `code_embeddings` pool.
 
-**Connection Details**:
-```bash
-Host:     maproom-postgres
-Port:     5432 (internal), 5433 (host)
+### Hostname Reference
+
+The Postgres container is exposed on **three hostnames** depending on who is
+connecting. Use the table below to pick the right one for your context:
+
+| Context | Hostname | Port | Notes |
+|---------|----------|------|-------|
+| **Same Docker network** (devcontainer, MCP container) | `maproom-postgres` | `5432` | Compose-internal DNS; fastest path |
+| **Host machine** (your terminal, psql on laptop) | `localhost` or `127.0.0.1` | `5433` | Compose maps host port 5433 → container 5432 |
+| **Devcontainer → host port** | `host.docker.internal` | `5433` | When the container cannot resolve `maproom-postgres` (e.g., running outside the maproom-network) |
+| **In-container test server** | `localhost` | `5433` | Cargo integration tests use a throwaway `maproom_test` DB on the in-container PG14 sandbox — never point at `host.docker.internal` for tests |
+
+**Credential set (development placeholder — change for production):**
+```
 User:     maproom
 Password: maproom
 Database: maproom
 ```
 
-**Connection String**:
+### Typical Connection Strings by Context
+
 ```bash
+# From inside the maproom-network (devcontainer or MCP container):
 MAPROOM_DATABASE_URL=postgresql://maproom:maproom@maproom-postgres:5432/maproom
+
+# From the host machine (psql, pgAdmin, TablePlus, etc.):
+MAPROOM_DATABASE_URL=postgresql://maproom:maproom@localhost:5433/maproom
+
+# From a devcontainer that is NOT on maproom-network (fallback):
+MAPROOM_DATABASE_URL=postgresql://maproom:maproom@host.docker.internal:5433/maproom
+
+# Read-only status / search verification (never DDL or import against live index):
+export MAPROOM_DATABASE_URL=postgresql://maproom:maproom@host.docker.internal:5433/maproom
+maproom status --json
+
+# Cargo integration tests (throwaway DB, in-container PG14 only):
+MAPROOM_TEST_PG_URL=postgresql://maproom:maproom@localhost:5433/maproom_test \
+  cargo test --features postgres
 ```
+
+> **Live index safety rule**: The production index at `host.docker.internal:5433/maproom`
+> is READ-ONLY for diagnostic commands (`status`, `search`). Never run `scan`, `import`,
+> migrations, or DDL against it from test or development code.
+
+## Database Details
+
+**Maproom PostgreSQL** (`maproom-postgres:5432/maproom`)
+- **Purpose**: Semantic code search, MCP service, development, testing
+- **Connection (compose-internal)**: `postgresql://maproom:maproom@maproom-postgres:5432/maproom`
+- **Network**: Accessible from devcontainer and MCP containers via `maproom-network`
+- **Data**: Persistent via Docker volumes (`maproom-data`)
+- **Image**: `pgvector/pgvector:pg16`
+- **Container**: Managed via `config/docker-compose.yml` in maproom-mcp package
 
 ## Connection Fallback System
 

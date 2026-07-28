@@ -25,7 +25,7 @@ Maproom uses a multi-layered indexing strategy to optimize query performance acr
 - **Partial Indices**: Smaller, faster indices for filtered queries
 - **BRIN Indices**: Space-efficient indices for naturally ordered data
 - **Composite Indices**: Multi-column indices for complex query patterns
-- **Specialized Indices**: Vector indices (ivfflat), full-text search (GIN), trigram indices
+- **Specialized Indices**: Vector indices (HNSW via pgvector), full-text search (GIN), trigram indices
 
 ### Performance Targets
 
@@ -74,21 +74,25 @@ CREATE INDEX idx_trgm ON files USING GIN (relpath gin_trgm_ops);
 - Size: 20-50% of table size
 - Update optimization: `fastupdate = on`, `gin_pending_list_limit`
 
-### 3. ivfflat Indices (Vector Similarity)
+### 3. HNSW Indices (Vector Similarity)
+
+> **Note**: The shipped schema uses partial HNSW indexes on the content-addressed
+> `code_embeddings` pool (migration `0004_vector_ann.sql`), not the `chunks` table
+> directly. See `crates/maproom/docs/VECTOR_SEARCH_CONFIGURATION.md` for current DDL.
 
 **Use for**: Approximate nearest neighbor search on embeddings
 
 ```sql
-CREATE INDEX idx_vec ON chunks
-  USING ivfflat (code_embedding vector_cosine_ops)
-  WITH (lists = 200);
+-- Shipped DDL (one partial HNSW index per embedding dimension)
+CREATE INDEX idx_code_embeddings_hnsw_1024
+    ON code_embeddings USING hnsw (embedding_1024 vector_cosine_ops)
+    WHERE embedding_1024 IS NOT NULL;
 ```
 
 **Characteristics**:
-- Approximate search (configurable recall/speed tradeoff)
-- lists parameter: sqrt(row_count) recommended
-- probes parameter: 10 for 80-85% recall
-- Size: 30-50% of embedding data size
+- Approximate search (recall/speed tradeoff via `hnsw.ef_search`, default 40)
+- No rebuild needed to change `ef_search`
+- Size: varies with corpus; partial index only covers non-NULL rows per dim
 
 ### 4. BRIN Indices (Block Range Index)
 

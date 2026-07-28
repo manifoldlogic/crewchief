@@ -1,5 +1,10 @@
 # LOCAL Resource Usage Profile
 
+> **ARCHIVED — historical reference only (pre-0.2.0, 2025-10-28).**
+> This report was captured against the ivfflat-indexed schema. The shipped schema
+> (maproom 0.2.0, migration `0004`) uses **HNSW** indexes. Size estimates for the
+> vector index overhead may differ.
+
 **Test Date**: 2025-10-28
 **Docker Environment**: Devcontainer (Docker-in-Docker)
 **Platform**: Linux aarch64 (ARM64)

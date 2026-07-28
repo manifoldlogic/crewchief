@@ -1,5 +1,10 @@
 # LOCAL-4008 Performance Validation Report
 
+> **ARCHIVED — historical reference only (pre-0.2.0, 2025-10-28).**
+> This report benchmarked the ivfflat-indexed schema. The shipped schema
+> (maproom 0.2.0, migration `0004`) uses **HNSW** indexes; ivfflat parameters
+> (`lists`, `probes`) and recommendations in this document are superseded.
+
 ## Executive Summary
 
 **Date**: 2025-10-28

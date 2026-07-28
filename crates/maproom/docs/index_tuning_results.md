@@ -1,5 +1,11 @@
 # ivfflat Index Tuning Results
 
+> **ARCHIVED — historical reference only.**
+> The shipped schema (maproom 0.2.0, migration `0004`) uses **HNSW** indexes, not ivfflat.
+> The ivfflat parameters (`lists`, `probes`) documented here are no longer applicable.
+> For current vector index configuration, see
+> [`VECTOR_SEARCH_CONFIGURATION.md`](VECTOR_SEARCH_CONFIGURATION.md).
+
 ## Executive Summary
 
 This document presents comprehensive benchmark results for ivfflat index tuning in the Maproom vector search system. We systematically tested 9 configurations (3 lists × 3 probes values) to optimize the recall/latency tradeoff for our hybrid search workload.

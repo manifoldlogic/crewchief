@@ -591,7 +591,7 @@ ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
 2. Refresh materialized views
 3. Check for table bloat (dead rows)
 4. Consider reindexing if indices are bloated
-5. Scale ivfflat lists parameter if approaching 1M chunks
+5. Raise HNSW ef_search (`MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH`) if approaching recall limits at scale
 
 ### Materialized View Out of Date
 
