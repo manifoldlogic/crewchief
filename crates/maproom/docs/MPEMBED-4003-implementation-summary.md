@@ -1,5 +1,12 @@
 # MPEMBED-4003 Implementation Summary
 
+> **ARCHIVED — historical reference only.**
+> This document describes the pre-0.2.0 SQLite schema (`code_embedding_ollama`,
+> `code_embedding` columns with ivfflat indexes). The shipped schema (maproom 0.2.0,
+> migration `0004`) uses a content-addressed `code_embeddings` pool with per-dimension
+> typed columns (`embedding_768`/`embedding_1024`/`embedding_1536`) backed by
+> **HNSW** indexes. Statements about ivfflat indexes in this document are superseded.
+
 ## Overview
 
 Successfully updated vector search queries to handle mixed embeddings using the COALESCE pattern. This enables the search system to work with chunks that have different embedding dimensions (768-dim from Ollama/Google, 1536-dim from OpenAI) while maintaining backward compatibility.

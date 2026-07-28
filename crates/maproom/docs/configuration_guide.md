@@ -193,48 +193,32 @@ parallel_execution: false
 
 Controls vector index parameters and maintenance.
 
+> **Note**: The shipped Postgres backend uses partial HNSW indexes per embedding
+> dimension on the `code_embeddings` pool (migration `0004_vector_ann.sql`). The
+> list/probe-style fields in the config struct are inert for the HNSW backend.
+> Use `MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH` (env var, default 40) to tune HNSW
+> recall at query time — no index rebuild required.
+
 ```yaml
 index:
-  # IVFFlat index parameters (PostgreSQL pgvector)
-  ivfflat_lists: 100
-  ivfflat_probes: 10
-
+  # HNSW ef_search is set via MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH (default 40)
   # Index refresh interval in seconds
   refresh_interval_seconds: 3600
 ```
 
-#### IVFFlat Index Tuning
+#### HNSW Index Tuning
 
-The IVFFlat index partitions vectors into clusters for faster search.
+The shipped HNSW index provides approximate nearest neighbor search.
 
-**Small datasets (<10K vectors):**
-```yaml
-ivfflat_lists: 50
-ivfflat_probes: 5
-```
-
-**Medium datasets (10K-100K vectors):**
-```yaml
-ivfflat_lists: 100
-ivfflat_probes: 10
-```
-
-**Large datasets (>100K vectors):**
-```yaml
-ivfflat_lists: 200
-ivfflat_probes: 20
-```
-
-**Guidelines:**
-- `ivfflat_lists`: Recommended ~√(total_vectors)
-- `ivfflat_probes`: Higher = better recall, slower queries (typical: 10-20)
-- `ivfflat_probes` should not exceed `ivfflat_lists`
+**Recall / speed tradeoff** (`MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH`):
+- `ef_search=20`: fastest, ~80% recall
+- `ef_search=40`: default, ~90% recall
+- `ef_search=100`: higher recall, ~50ms p95
+- No index rebuild needed for any ef_search change
 
 #### Validation Rules
 
-- `ivfflat_lists` must be greater than 0
-- `ivfflat_probes` must be greater than 0
-- Warning if `ivfflat_probes` > `ivfflat_lists`
+- `MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH` must be ≥ 1 (clamped up to query `k`)
 
 ### Feature Flags
 
@@ -540,7 +524,7 @@ grep "Configuration reloaded" logs/maproom.log
 
 **Solution:**
 1. Reduce `max_candidates_per_method`
-2. Decrease `ivfflat_probes`
+2. Decrease `MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH` (default 40 — lower trades recall for speed)
 3. Disable unused features
 4. Enable parallel execution
 
@@ -551,9 +535,6 @@ performance:
   final_result_limit: 10
   timeout_ms: 500
   parallel_execution: true
-
-index:
-  ivfflat_probes: 5
 
 feature_flags:
   enable_graph_signals: false
@@ -566,7 +547,7 @@ feature_flags:
 
 **Solution:**
 1. Increase `max_candidates_per_method`
-2. Increase `ivfflat_probes`
+2. Raise `MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH` (e.g., from 40 to 100) — no rebuild
 3. Adjust fusion weights
 4. Enable all search signals
 
@@ -576,8 +557,7 @@ performance:
   max_candidates_per_method: 200
   final_result_limit: 50
 
-index:
-  ivfflat_probes: 20
+# Set via env: MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH=100
 
 feature_flags:
   enable_vector_search: true
@@ -617,8 +597,6 @@ performance:
   parallel_execution: false
 
 index:
-  ivfflat_lists: 50
-  ivfflat_probes: 5
   refresh_interval_seconds: 3600
 
 feature_flags:
@@ -659,9 +637,8 @@ performance:
   parallel_execution: true
 
 index:
-  ivfflat_lists: 200
-  ivfflat_probes: 20
   refresh_interval_seconds: 1800
+# HNSW ef_search: set MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH=100 for high-quality mode
 
 feature_flags:
   enable_vector_search: true
@@ -701,9 +678,8 @@ performance:
   parallel_execution: true
 
 index:
-  ivfflat_lists: 50
-  ivfflat_probes: 10
   refresh_interval_seconds: 3600
+# HNSW ef_search: default (MAPROOM_SEARCH_INDEX_HNSW_EF_SEARCH=40) is fine for development
 
 feature_flags:
   enable_vector_search: true
