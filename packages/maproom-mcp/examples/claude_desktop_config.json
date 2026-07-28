@@ -90,26 +90,9 @@
           "budget_tokens": "(optional) Max tokens in context bundle (default: 6000)",
           "expand": "(optional) Expansion config for related chunks"
         }
-      },
-      {
-        "name": "upsert",
-        "description": "Update the code index for specific files",
-        "parameters": {
-          "paths": "Array of file paths to index",
-          "commit": "Git commit hash (use 'HEAD' for current)",
-          "repo": "Repository name",
-          "worktree": "Worktree name to index",
-          "root": "Root directory path of the repository"
-        }
-      },
-      {
-        "name": "explain",
-        "description": "Generate detailed symbol card for a code chunk (EXPERIMENTAL)",
-        "parameters": {
-          "chunk_id": "Chunk ID to explain (from search results)"
-        }
       }
     ],
+    "_note_tools_not_available": "scan, upsert, and explain are NOT implemented in this MCP server. Use the maproom CLI directly for indexing operations.",
     "troubleshooting": {
       "connection_failed": [
         "Verify MAPROOM_DATABASE_URL is correct and PostgreSQL is running",
@@ -150,8 +133,8 @@
       "targeted_worktree": "Limit search to specific branch/worktree to narrow results"
     },
     "advanced": {
-      "multi_step_workflow": "Search → Context → Open related files → Explain symbols",
-      "index_updates": "Use 'upsert' after making code changes to re-index specific files",
+      "multi_step_workflow": "Search → Context → Open related files for deeper exploration",
+      "index_updates": "Use the maproom CLI (`maproom scan`) directly to re-index files after changes",
       "custom_expansion": "Configure 'expand' parameter in context tool to control related chunks"
     }
   }

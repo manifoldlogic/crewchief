@@ -35,8 +35,7 @@ export interface SearchParams {
   deduplicate?: boolean;
   /** Include confidence signals for result quality assessment (default: false) */
   include_confidence?: boolean;
-  /** Include related chunks via graph traversal (default: false) */
-  include_related?: boolean;
+  // R2: phantom no-op field removed. Wave 3 adds real cross-repo support.
 }
 
 /**

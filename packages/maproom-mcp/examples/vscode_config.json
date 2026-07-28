@@ -103,20 +103,9 @@
         "description": "Get contextual code around a chunk",
         "use_case": "Understand code in context with related functions and imports",
         "example": "Use chunk_id from search results to get surrounding context"
-      },
-      {
-        "name": "upsert",
-        "description": "Update code index",
-        "use_case": "Re-index files after making changes",
-        "example": "Index specific files or entire directories"
-      },
-      {
-        "name": "explain",
-        "description": "Generate detailed symbol explanation (EXPERIMENTAL)",
-        "use_case": "Get comprehensive documentation for a code symbol",
-        "example": "Use chunk_id from search results to explain a function or class"
       }
     ],
+    "_note_tools_not_available": "scan, upsert, and explain are NOT implemented in this MCP server. Use the maproom CLI directly for indexing operations.",
     "vscode_specific_features": {
       "command_palette": {
         "description": "Access MCP tools through VS Code Command Palette",
@@ -180,7 +169,7 @@
         "Use simple search terms (1-3 words) for best results",
         "Use 'open' tool to view code from search results",
         "Use 'context' tool to understand code relationships",
-        "Re-index with 'upsert' after making significant changes"
+        "Re-index with `maproom scan` CLI after making significant changes"
       ],
       "team_collaboration": [
         "Share consistent database configurations across team",
@@ -215,10 +204,9 @@
       "description": "Update index after code changes",
       "steps": [
         "1. Make code changes in your repository",
-        "2. Call 'upsert' with paths to changed files",
-        "3. Provide current commit hash (or 'HEAD')",
-        "4. Verify with 'search' that new code is findable",
-        "5. Continue development with up-to-date search index"
+        "2. Run `maproom scan` from the CLI to re-index changed files",
+        "3. The MCP server will reflect updated data automatically",
+        "4. Verify with 'search' that new code is findable"
       ]
     },
     "architecture_exploration": {
@@ -227,7 +215,7 @@
         "1. Search for 'main entry index' to find entry points",
         "2. Use 'context' to see what the entry point imports",
         "3. Search for key architectural terms (router, controller, service)",
-        "4. Use 'explain' tool to get detailed symbol documentation",
+        "4. Use 'open' with relpath from search results to view code directly",
         "5. Build mental model of codebase architecture"
       ]
     }

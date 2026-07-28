@@ -94,16 +94,7 @@ export const SearchParamsSchema = z.object({
       "Include confidence signals for result quality assessment. Adds source_count, " +
         "score_gap, and is_exact_match fields to results. (default: false)",
     ),
-  include_related: z
-    .boolean()
-    .default(false)
-    .describe(
-      "Include related chunks for high-confidence results via graph traversal. " +
-        "Finds top 5 related chunks for results with high confidence (source_count >= 2 OR is_exact_match). " +
-        "Automatically enables confidence scoring. Performance impact: <20ms overhead. " +
-        "Response structure: High-confidence results get a 'related' array field. " +
-        "(default: false)",
-    ),
+  // R2: phantom no-op field removed. Cross-repo traversal → Wave 3 (rust-cross-repo-search).
 });
 
 export type SearchParams = z.infer<typeof SearchParamsSchema>;
