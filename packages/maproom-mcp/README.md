@@ -4,7 +4,7 @@ MCP server for semantic code search powered by Maproom. This is the recommended 
 
 ## Agent Integration via MCP
 
-`@crewchief/maproom-mcp` provides a Model Context Protocol (MCP) server for semantic code search. It connects to the Maproom Rust daemon which handles indexing, search, and context assembly over a SQLite database.
+`@crewchief/maproom-mcp` provides a Model Context Protocol (MCP) server for semantic code search. It connects to the Maproom Rust daemon which handles indexing, search, and context assembly over a SQLite or PostgreSQL database.
 
 ```bash
 npm install -g @crewchief/maproom-mcp
@@ -31,10 +31,11 @@ npm install -g @crewchief/maproom-mcp
 
 ## Features
 
-- **Fast Hybrid Search** - Vector similarity + full-text search with SQLite
+- **Fast Hybrid Search** - Vector similarity + full-text search with SQLite or PostgreSQL
 - **Semantic Ranking** - Implementations rank higher than tests or docs
 - **Choice of Providers** - OpenAI (recommended), Google Vertex AI, or Ollama
 - **Multi-Language** - Tree-sitter parsing for TypeScript, JavaScript, Rust, and more
+- **PostgreSQL Support** - Connect to a shared Postgres index via `postgres://` URL
 
 ## Usage
 
@@ -45,6 +46,8 @@ Install the [Maproom extension](https://marketplace.visualstudio.com/items?itemN
 ### Manual MCP Configuration
 
 Add to your editor's MCP configuration:
+
+**SQLite (default / open-source):**
 
 ```json
 {
@@ -62,16 +65,36 @@ Add to your editor's MCP configuration:
 }
 ```
 
+**PostgreSQL (shared team index):**
+
+```json
+{
+  "servers": {
+    "maproom": {
+      "command": "npx",
+      "args": ["-y", "@crewchief/maproom-mcp"],
+      "env": {
+        "MAPROOM_DATABASE_URL": "postgres://user:pass@host:5432/maproom",
+        "MAPROOM_EMBEDDING_PROVIDER": "openai",
+        "OPENAI_API_KEY": "${env:OPENAI_API_KEY}"
+      }
+    }
+  }
+}
+```
+
 ## Environment Variables
 
-| Variable                         | Description                     | Required           |
-| -------------------------------- | ------------------------------- | ------------------ |
-| `MAPROOM_DATABASE_URL`           | SQLite database URL             | Auto-detected¹     |
-| `MAPROOM_EMBEDDING_PROVIDER`     | `openai`, `google`, or `ollama` | Yes                |
-| `OPENAI_API_KEY`                 | OpenAI API key                  | If provider=openai |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Google credentials path         | If provider=google |
+| Variable                         | Description                                               | Required           |
+| -------------------------------- | --------------------------------------------------------- | ------------------ |
+| `MAPROOM_DATABASE_URL`           | Database URL: `sqlite:///path` or `postgres://host/db`    | Auto-detected¹     |
+| `MAPROOM_EMBEDDING_PROVIDER`     | `openai`, `google`, or `ollama`                           | Yes                |
+| `OPENAI_API_KEY`                 | OpenAI API key                                            | If provider=openai |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Google credentials path                                   | If provider=google |
 
-¹ Auto-detection: `MAPROOM_DATABASE_URL` > `~/.maproom/maproom.db`
+¹ Auto-detection priority: `MAPROOM_DATABASE_URL` env var → `~/.maproom/maproom.db` (SQLite default).
+  Accepts `sqlite://`, `postgres://`, and `postgresql://` schemes.
+  Credentials in postgres URLs are never echoed in tool responses (host+dbname only).
 
 ## MCP Tools
 

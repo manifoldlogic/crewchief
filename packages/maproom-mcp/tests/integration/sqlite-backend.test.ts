@@ -143,7 +143,7 @@ describe('DatabaseConfig Interface', () => {
 
     // Type field
     expect(config.type).toBeDefined()
-    expect(['postgresql', 'sqlite']).toContain(config.type)
+    expect(['postgresql', 'postgres', 'sqlite']).toContain(config.type)
 
     // URL field
     expect(config.url).toBeDefined()
