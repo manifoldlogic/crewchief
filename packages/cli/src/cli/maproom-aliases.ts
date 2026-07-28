@@ -1,5 +1,5 @@
 import { Command } from 'commander'
-import { runMaproomForward, runMaproomSearchWithAutoIndex } from './maproom.js'
+import { runMaproomForward, runMaproomSearch } from './maproom.js'
 
 /**
  * Register top-level command aliases that forward to maproom subcommands.
@@ -23,7 +23,7 @@ export function registerMaproomAliases(program: Command) {
       'after',
       '\nExamples:\n  $ crewchief search "authentication flow"\n  $ crewchief search "database queries" --limit 10\n  $ crewchief search "error handling" --format agent',
     )
-    .action(async (args) => await runMaproomSearchWithAutoIndex(args || []))
+    .action(async (args) => await runMaproomSearch(args || []))
 
   program
     .command('index')
@@ -32,7 +32,7 @@ export function registerMaproomAliases(program: Command) {
     .argument('[args...]')
     .addHelpText(
       'after',
-      '\nIndexes repository files into SQLite for fast code search.\nAuto-detects: repo name, worktree, file path, and commit from git context.\n\nExamples:\n  $ crewchief index                        # FTS-only index (default)\n  $ crewchief index --generate-embeddings   # Include vector embeddings',
+      '\nIndexes repository files into the configured database backend (SQLite or PostgreSQL).\nAuto-detects: repo name, worktree, file path, and commit from git context.\n\nExamples:\n  $ crewchief index                        # FTS-only index (default)\n  $ crewchief index --generate-embeddings   # Include vector embeddings',
     )
     .action(async (args) => await runMaproomForward(['scan', ...(args || [])]))
 

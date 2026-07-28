@@ -1,16 +1,16 @@
 import { Command } from 'commander'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { registerMaproomAliases } from '../maproom-aliases.js'
-import { runMaproomForward, runMaproomSearchWithAutoIndex } from '../maproom.js'
+import { runMaproomForward, runMaproomSearch } from '../maproom.js'
 
-// Mock the maproom module to intercept runMaproomForward / runMaproomSearchWithAutoIndex calls
+// Mock the maproom module to intercept runMaproomForward / runMaproomSearch calls
 vi.mock('../maproom.js', () => ({
   runMaproomForward: vi.fn().mockResolvedValue(undefined),
-  runMaproomSearchWithAutoIndex: vi.fn().mockResolvedValue(undefined),
+  runMaproomSearch: vi.fn().mockResolvedValue(undefined),
 }))
 
 const mockRunMaproomForward = vi.mocked(runMaproomForward)
-const mockRunMaproomSearchWithAutoIndex = vi.mocked(runMaproomSearchWithAutoIndex)
+const mockRunMaproomSearch = vi.mocked(runMaproomSearch)
 
 describe('maproom top-level aliases', () => {
   afterEach(() => {
@@ -32,16 +32,16 @@ describe('maproom top-level aliases', () => {
       expect(searchCmd!.description()).toBe('Search your codebase by concept')
     })
 
-    it('delegates to runMaproomSearchWithAutoIndex with search args', async () => {
+    it('delegates to runMaproomSearch with search args', async () => {
       const program = buildProgram()
       await program.parseAsync(['node', 'crewchief', 'search', 'auth flow'], { from: 'node' })
-      expect(mockRunMaproomSearchWithAutoIndex).toHaveBeenCalledWith(['auth flow'])
+      expect(mockRunMaproomSearch).toHaveBeenCalledWith(['auth flow'])
     })
 
     it('passes through extra flags to maproom', async () => {
       const program = buildProgram()
       await program.parseAsync(['node', 'crewchief', 'search', 'auth flow', '--format', 'agent'], { from: 'node' })
-      expect(mockRunMaproomSearchWithAutoIndex).toHaveBeenCalledWith(['auth flow', '--format', 'agent'])
+      expect(mockRunMaproomSearch).toHaveBeenCalledWith(['auth flow', '--format', 'agent'])
     })
   })
 
