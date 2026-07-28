@@ -229,76 +229,23 @@ export async function logout(sessionId: string): Promise<void> {
 
 ---
 
-### Step 5: Explain the Function (Optional)
+### Step 5: Get Deep Context for the Function (Optional)
 
-**Tool**: `explain`
+**Tool**: `context`
 
 **Parameters**:
 ```json
 {
-  "chunk_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  "chunk_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "budget_tokens": 8000,
+  "expand": { "callers": true, "callees": true, "tests": true }
 }
 ```
 
-**Expected Output**:
-```markdown
-# Symbol: authenticate
+> **Note**: `explain` is not an MCP tool. Use `context` to explore related code,
+> and `open` to read specific files in full.
 
-**Type**: Function (async)
-**Language**: TypeScript
-**File**: packages/cli/src/auth/authenticate.ts
-**Lines**: 15-45
-
-## Description
-
-Authenticates a user with provided credentials. Validates the credentials, checks user status, and creates a session upon successful authentication.
-
-## Signature
-
-```typescript
-async function authenticate(credentials: Credentials): Promise<AuthResult>
-```
-
-## Parameters
-
-- `credentials: Credentials` - User credentials containing email and password
-
-## Returns
-
-`Promise<AuthResult>` - Authentication result with success status, user data, and session if successful
-
-## Relationships
-
-**Calls**:
-- `validateUser(credentials)` - Validates user credentials
-- `sessionManager.createSession(user)` - Creates user session
-
-**Called By**:
-- `packages/cli/src/routes/auth.ts:12` - POST /login route handler
-
-## Usage Example
-
-```typescript
-const result = await authenticate({
-  email: 'user@example.com',
-  password: 'secret123'
-});
-
-if (result.success) {
-  console.log('Logged in as', result.user.email);
-} else {
-  console.error('Login failed:', result.error);
-}
-```
-
-## Related Symbols
-
-- `validateUser` - Credential validation
-- `SessionManager` - Session management
-- `logout` - Session termination
-```
-
-**Interpretation**: Comprehensive documentation including signature, relationships, and usage examples.
+**Interpretation**: Context assembles the function alongside its callers, callees, and tests within the token budget.
 
 ---
 
@@ -503,49 +450,24 @@ if (result.success) {
 
 ---
 
-### Step 2: Index the Changed Files
+### Step 2: Re-index Changed Files via CLI
 
-**Tool**: `upsert`
+> **Note**: `upsert` is not an MCP tool. Re-indexing uses the `maproom` CLI.
 
-**Parameters**:
-```json
-{
-  "paths": [
-    "packages/cli/src/auth/authenticate.ts",
-    "packages/cli/src/auth/validation.ts",
-    "packages/cli/src/auth/session.ts"
-  ],
-  "commit": "HEAD",
-  "repo": "crewchief",
-  "worktree": "main",
-  "root": "/Users/developer/projects/crewchief"
-}
+**Command** (run in your terminal, not via MCP):
+```bash
+maproom scan
 ```
 
-**Expected Output**:
-```json
-{
-  "indexed_files": 3,
-  "chunks_created": 24,
-  "chunks_updated": 18,
-  "chunks_deleted": 6,
-  "duration_ms": 342,
-  "statistics": {
-    "total_lines": 456,
-    "total_bytes": 15234,
-    "languages": {
-      "TypeScript": 3
-    }
-  }
-}
+Or for specific files:
+```bash
+maproom scan --paths packages/cli/src/auth/authenticate.ts packages/cli/src/auth/validation.ts
 ```
 
-**Interpretation**:
-- 3 files indexed successfully
-- 24 new code chunks created
-- 18 existing chunks updated
-- 6 old chunks removed (deleted code)
-- Took 342ms
+**Expected Output** (CLI):
+```
+Indexed 3 files: 24 chunks created, 18 updated, 6 removed (342ms)
+```
 
 ---
 
@@ -994,24 +916,13 @@ For each result, get context to understand the call:
 
 ---
 
-### Step 5: Re-index Changed Files
+### Step 5: Re-index Changed Files via CLI
 
-**Tool**: `upsert`
+> **Note**: `upsert` is not an MCP tool. Re-indexing uses the `maproom` CLI.
 
-**Parameters**:
-```json
-{
-  "paths": [
-    "src/payments/processor.ts",
-    "src/api/checkout.ts",
-    "src/api/orders.ts",
-    "tests/payments/processor.test.ts"
-  ],
-  "commit": "HEAD",
-  "repo": "ecommerce",
-  "worktree": "main",
-  "root": "/path/to/ecommerce"
-}
+**Command** (run in your terminal):
+```bash
+maproom scan
 ```
 
 ---

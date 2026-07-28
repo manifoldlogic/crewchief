@@ -11,7 +11,7 @@
  * - Confidence signals have expected structure (source_count, score_gap, is_exact_match)
  * - High confidence scenario: exact match test (SRCHCONF-3003)
  * - Low confidence scenario: ambiguous query test (SRCHCONF-3003)
- * - include_related parameter acceptance and validation (SRCHREL-2002)
+ * - R2: phantom no-op field removed from SearchParams; see Wave 3 rust-cross-repo-search
  *
  * Prerequisites:
  * - SQLite test database with test-corpus indexed
@@ -285,42 +285,18 @@ describe("Confidence Scoring Integration (SRCHCONF-3001)", () => {
     }, 30000);
   });
 
-  describe("Relationship Expansion (SRCHREL-2002)", () => {
-    it("should accept include_related parameter and return results", async () => {
+  // Relationship Expansion (SRCHREL-2002) tests removed (R2):
+  // The phantom no-op field was removed from SearchParams (never in Rust).
+  // Cross-repo graph traversal will be added in Wave 3 (rust-cross-repo-search).
+  describe("Search without phantom field (R2: no-op removed)", () => {
+    it("search works normally (no phantom field)", async () => {
       const params = {
         query: "handleSearchTool",
         repo: "crewchief",
         worktree: "main",
         limit: 5,
         mode: "fts" as const,
-        include_related: true,
-      };
-
-      const result: SearchBundle = await handleSearchTool(params, client);
-
-      // Verify basic search functionality works with include_related parameter
-      expect(result).toHaveProperty("hits");
-      expect(result.hits).toBeInstanceOf(Array);
-      expect(result.hits.length).toBeGreaterThan(0);
-
-      // Verify standard fields are present
-      const firstHit = result.hits[0];
-      expect(firstHit).toHaveProperty("chunk_id");
-      expect(firstHit).toHaveProperty("score");
-      expect(firstHit).toHaveProperty("relpath");
-
-      // When include_related=true is passed, the search should still work
-      // The Rust backend will handle relationship expansion when supported
-    }, 30000);
-
-    it("should work without include_related parameter (backward compatibility)", async () => {
-      const params = {
-        query: "search",
-        repo: "crewchief",
-        worktree: "main",
-        limit: 5,
-        mode: "fts" as const,
-        // Note: include_related NOT provided
+        // R2: no phantom no-op field
       };
 
       const result: SearchBundle = await handleSearchTool(params, client);
@@ -329,37 +305,13 @@ describe("Confidence Scoring Integration (SRCHCONF-3001)", () => {
       expect(result.hits).toBeInstanceOf(Array);
       expect(result.hits.length).toBeGreaterThan(0);
 
-      // Verify standard fields are present
       const firstHit = result.hits[0];
       expect(firstHit).toHaveProperty("chunk_id");
       expect(firstHit).toHaveProperty("score");
       expect(firstHit).toHaveProperty("relpath");
     }, 30000);
 
-    it("should work with include_related=false explicitly", async () => {
-      const params = {
-        query: "context",
-        repo: "crewchief",
-        worktree: "main",
-        limit: 5,
-        mode: "fts" as const,
-        include_related: false,
-      };
-
-      const result: SearchBundle = await handleSearchTool(params, client);
-
-      expect(result).toHaveProperty("hits");
-      expect(result.hits).toBeInstanceOf(Array);
-      expect(result.hits.length).toBeGreaterThan(0);
-
-      // Verify standard fields are present
-      const firstHit = result.hits[0];
-      expect(firstHit).toHaveProperty("chunk_id");
-      expect(firstHit).toHaveProperty("score");
-      expect(firstHit).toHaveProperty("relpath");
-    }, 30000);
-
-    it("should work with both include_confidence and include_related", async () => {
+    it("search with include_confidence works (no phantom field)", async () => {
       const params = {
         query: "daemon",
         repo: "crewchief",
@@ -367,7 +319,7 @@ describe("Confidence Scoring Integration (SRCHCONF-3001)", () => {
         limit: 5,
         mode: "fts" as const,
         include_confidence: true,
-        include_related: true,
+        // R2: no phantom no-op field
       };
 
       const result: SearchBundle = await handleSearchTool(params, client);
@@ -376,13 +328,10 @@ describe("Confidence Scoring Integration (SRCHCONF-3001)", () => {
       expect(result.hits).toBeInstanceOf(Array);
       expect(result.hits.length).toBeGreaterThan(0);
 
-      // Verify standard fields are present
       const firstHit = result.hits[0];
       expect(firstHit).toHaveProperty("chunk_id");
       expect(firstHit).toHaveProperty("score");
       expect(firstHit).toHaveProperty("relpath");
-
-      // Both parameters should be accepted and passed to the backend
     }, 30000);
   });
 });

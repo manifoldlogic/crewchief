@@ -82,10 +82,12 @@
 
 ## Index Management
 
-The index is usually automatic, but if results seem stale:
+The index is managed by the `maproom` CLI (not the MCP server). If results seem stale:
 - Run `status` to check last index time
-- Use `upsert` only if files were recently changed and not indexed
-- Most changes are auto-indexed within seconds
+- Use `maproom scan` CLI command to re-index if files were recently changed
+- Most changes auto-indexed within seconds via pm2 file watchers
+
+Note: `scan`, `upsert`, and `explain` are CLI-only operations; they are not available as MCP tools.
 
 ## Default Repository
 
