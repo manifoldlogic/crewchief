@@ -1,9 +1,10 @@
 {
   "name": "vscode-maproom",
   "displayName": "Maproom Semantic Search",
-  "description": "[DEPRECATED] Semantic code search powered by Maproom - find code by concept, not just text",
+  "description": "RETIRED — Semantic code search powered by Maproom. Replaced by @crewchief/maproom-mcp for MCP-capable editors.",
   "icon": "icon.png",
   "version": "0.4.13",
+  "private": true,
   "publisher": "manifoldlogic",
   "engines": {
     "vscode": "^1.85.0"

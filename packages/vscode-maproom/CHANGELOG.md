@@ -5,6 +5,59 @@ All notable changes to the Maproom Semantic Search extension will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [RETIRED] - 2026-07-10
+
+This extension is officially retired as of 0.4.x. The source tree is preserved in-tree for
+historical reference and a future revive path remains available; no code has been deleted.
+
+### What 0.4.x was
+
+The extension auto-indexed workspace files into a local SQLite database, watched for file changes
+and re-indexed incrementally, spawned the Maproom daemon and MCP server internally, and exposed
+semantic code search via the VS Code Command Palette. It supported Ollama, OpenAI, and Google
+Gemini embedding providers and stored credentials via VS Code SecretStorage. It was hardwired to
+a single SQLite database and `workspaceFolders[0]`.
+
+### Why retired
+
+- Every capability (search, status, context — against both SQLite and PostgreSQL) is now covered
+  by `@crewchief/maproom-mcp`, which is MCP-capable and works with any MCP-aware editor.
+- The maproom ecosystem moved to a shared-PostgreSQL, multi-repo architecture (Waves 1–3 of the
+  maproom-ecosystem-program-2026-07-09): the extension's hardwired SQLite +
+  `workspaceFolders[0]` architecture would require a significant revive effort (5 hunks) to be
+  honest with current capabilities.
+- The extension was self-described as `[DEPRECATED]` in its own metadata, not installed in the
+  development environment, and only stale 0.1.0/0.3.0 `.vsix` artifacts existed on disk versus
+  the 0.4.13 source.
+
+### What replaces it
+
+Use `@crewchief/maproom-mcp` directly from any MCP-capable editor. For VS Code, add the
+following to `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "maproom": {
+      "command": "npx",
+      "args": ["-y", "@crewchief/maproom-mcp"],
+      "env": {
+        "MAPROOM_DATABASE_URL": "sqlite://~/.maproom/maproom.db",
+        "MAPROOM_EMBEDDING_PROVIDER": "ollama"
+      }
+    }
+  }
+}
+```
+
+See [`packages/maproom-mcp/README.md`](../../packages/maproom-mcp/README.md) for the full
+configuration reference including PostgreSQL and OpenAI/Google embedding providers.
+
+### Revive path
+
+If you want to revive this extension, the 5-hunk revive spec is documented in the maproom
+ecosystem recon (`wf_08797ba6-57f` probe 3). Open an issue or PR to reopen discussion.
+
 ## [0.3.0] - 2025-01-25
 
 ### Added

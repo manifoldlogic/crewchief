@@ -11,7 +11,7 @@ Avoid: $RANDOM, [[ ]], bash arrays, `which`. Use: command -v, [ ], grep -E, port
 
 **"Worktree" overloading**: Git worktrees are filesystem checkouts. Maproom worktrees are database records tracking indexed branches (1:1 with branches, not git worktrees).
 
-**Release order**: CLI → maproom-mcp → vscode-maproom (CLI contains Rust binaries others depend on). See `release-config.json`.
+**Release order**: CLI → maproom-mcp (CLI contains Rust binaries others depend on). See `release-config.json`. `vscode-maproom` is retired and excluded from releases.
 
 **Type sync**: Rust is source of truth. See `.claude/docs/type-sync-workflow.md`.
 
@@ -24,7 +24,7 @@ Avoid: $RANDOM, [[ ]], bash arrays, `which`. Use: command -v, [ ], grep -E, port
 | `packages/cli/` | TypeScript CLI | `packages/cli/CLAUDE.md` |
 | `packages/daemon-client/` | Daemon RPC client | `packages/daemon-client/CLAUDE.md` |
 | `packages/maproom-mcp/` | MCP server | `packages/maproom-mcp/CLAUDE.md` |
-| `packages/vscode-maproom/` | VSCode extension | `packages/vscode-maproom/CLAUDE.md` |
+| `packages/vscode-maproom/` | VSCode extension (retired — see maproom-mcp) | `packages/vscode-maproom/CLAUDE.md` |
 | `crates/maproom/` | Rust indexer | `crates/maproom/CLAUDE.md` |
 | `crates/maproom/migrations/` | Database migrations | `crates/maproom/migrations/CLAUDE.md` |
 | `.github/` | CI/CD | `.github/CLAUDE.md` |
