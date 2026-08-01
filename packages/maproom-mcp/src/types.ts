@@ -107,21 +107,43 @@ export interface UpsertToolConfig {
 
 /**
  * Parameters for the Search tool
+ *
+ * Exactly one of {repo, repos, allRepos} must be provided (D-9 / R1 / R2).
+ * Client-side validation in search_schema.ts mirrors the daemon's -32602 enforcement.
  */
 export interface SearchParams {
   /** Search query text - use 2-3 keyword concepts for best results */
   query: string;
 
-  /** Repository name to search (e.g., "crewchief") */
+  /**
+   * Single-repo scope: search exactly this repository (e.g., "crewchief").
+   * Mutually exclusive with repos and allRepos.
+   */
   repo?: string;
+
+  /**
+   * Multi-repo scope: search these repositories in a single query (requires maproom >= 0.3.0).
+   * Mutually exclusive with repo and allRepos.
+   */
+  repos?: string[];
+
+  /**
+   * All-repos scope: search every indexed repository (requires maproom >= 0.3.0).
+   * Use with caution — large indices may return many results.
+   * Mutually exclusive with repo and repos.
+   */
+  allRepos?: boolean;
 
   /** Worktree/branch name to search (e.g., "main") */
   worktree?: string;
 
-  /** Maximum number of results to return (default: 20, max: 100) */
+  /**
+   * Maximum number of results to return (default: 20, max: 1000).
+   * In cross-repo mode (repos/allRepos) this is a per-repo cap; results are grouped by repo.
+   */
   limit?: number;
 
-  /** Search mode: "fts" for full-text, "vector" for semantic, "hybrid" for combined (default: fts) */
+  /** Search mode: "fts" for full-text, "vector" for semantic, "hybrid" for combined (default: hybrid) */
   mode?: "fts" | "vector" | "hybrid";
 
   /** Content type filter */
@@ -143,8 +165,6 @@ export interface SearchParams {
 
   /** Include confidence signals for result quality assessment (default: false) */
   include_confidence?: boolean;
-
-  // R2: phantom no-op field removed here. Wave 3 adds real cross-repo support.
 }
 
 /**
@@ -171,6 +191,13 @@ export interface SearchResult {
 
   /** Relevance score */
   score: number;
+
+  /**
+   * Repository name this hit came from (present on every hit in cross-repo results;
+   * also present in single-repo results from maproom >= 0.3.0).
+   * D-8b/c: every hit carries repo so callers never need to infer it.
+   */
+  repo?: string;
 
   /** Optional preview text */
   preview?: string;
