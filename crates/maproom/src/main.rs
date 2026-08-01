@@ -840,8 +840,8 @@ enum DbCommand {
     ///
     /// Reads the configured SQLite database and writes a versioned NDJSON dump that
     /// `maproom db import` loads into a Postgres backend WITHOUT re-indexing or
-    /// re-embedding (the content-addressed embedding pool moves verbatim). Runs from
-    /// the shipped SQLite-only binary.
+    /// re-embedding (the content-addressed embedding pool moves verbatim). Reads
+    /// SQLite only, so it runs even on a binary built without `--features postgres`.
     ///
     /// Examples:
     ///   maproom db export --out index.mrx
@@ -1291,7 +1291,8 @@ async fn real_main() -> anyhow::Result<()> {
             DbCommand::Export { out } => {
                 // Export runs against the SQLite source (connect_sqlite errors if the
                 // configured URL is Postgres). The file-artifact transport lets this
-                // run from the shipped SQLite-only binary; `db import` is postgres-gated.
+                // run on a binary built without `--features postgres`; `db import`
+                // is postgres-gated.
                 let store = db::connect_sqlite().await?;
                 let file = std::fs::File::create(&out)
                     .with_context(|| format!("create export artifact {}", out.display()))?;

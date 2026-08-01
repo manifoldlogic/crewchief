@@ -26,6 +26,12 @@ on:
         type: string
         default: '["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64"]'
 
+      features:
+        description: 'Space-separated cargo features to enable (e.g., "postgres"). Empty = default features only.'
+        required: false
+        type: string
+        default: ''
+
     outputs:
       artifact_prefix:
         description: 'Prefix for uploaded artifacts'
@@ -81,15 +87,26 @@ jobs:
         run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Build binary
+        env:
+          # Via env (not inline ${{ }}) so the value is never spliced into the script.
+          FEATURES: ${{ inputs.features }}
         run: |
+          FEATURE_ARGS=""
+          if [ -n "$FEATURES" ]; then
+            FEATURE_ARGS="--features $FEATURES"
+            echo "Building with cargo features: $FEATURES"
+          else
+            echo "Building with default features only"
+          fi
+
           if [ "${{ matrix.config.use_cross }}" = "true" ]; then
             cross build --release --bin ${{ inputs.binary_name }} \
               --manifest-path ${{ inputs.crate_path }}/Cargo.toml \
-              --target ${{ matrix.config.target }}
+              --target ${{ matrix.config.target }} $FEATURE_ARGS
           else
             cargo build --release --bin ${{ inputs.binary_name }} \
               --manifest-path ${{ inputs.crate_path }}/Cargo.toml \
-              --target ${{ matrix.config.target }}
+              --target ${{ matrix.config.target }} $FEATURE_ARGS
           fi
 
       - name: Strip binary
@@ -98,6 +115,8 @@ jobs:
           strip "$BINARY_PATH" 2>/dev/null || strip --strip-all "$BINARY_PATH" || echo "Strip not available, skipping"
 
       - name: Verify binary
+        env:
+          FEATURES: ${{ inputs.features }}
         run: |
           BINARY_PATH="target/${{ matrix.config.target }}/release/${{ inputs.binary_name }}"
 
@@ -116,6 +135,24 @@ jobs:
               chmod +x "$BINARY_PATH"
             fi
             "$BINARY_PATH" --version || echo "Binary execution test passed"
+
+            # If postgres was requested, prove it is actually compiled in.
+            # A binary built without the feature bails immediately with
+            # "built without --features postgres"; one built with it instead
+            # tries to connect and fails on the unreachable host.
+            case " $FEATURES " in
+              *" postgres "*)
+                echo "Asserting the postgres backend is compiled in..."
+                PG_OUT=$(MAPROOM_DATABASE_URL='postgres://u:p@127.0.0.1:1/none' \
+                  timeout 20 "$BINARY_PATH" status 2>&1 || true)
+                if echo "$PG_OUT" | grep -q -- 'without --features postgres'; then
+                  echo "ERROR: postgres feature was requested but is NOT compiled into the binary"
+                  echo "$PG_OUT"
+                  exit 1
+                fi
+                echo "OK: no feature-gate error — postgres backend is compiled in"
+                ;;
+            esac
           fi
 
       - name: Upload artifact
