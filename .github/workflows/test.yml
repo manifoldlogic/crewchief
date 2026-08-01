@@ -354,7 +354,7 @@ jobs:
   # =============================================================================
 
   # TypeScript Package Unit Tests
-  # Tests cli, vscode-maproom, and daemon-client packages
+  # Tests cli, vscode-maproom, daemon-client, and maproom-mcp packages
   test-typescript:
     name: TypeScript Package Tests
     needs: changes
@@ -415,6 +415,14 @@ jobs:
         env:
           CI: true
 
+      # Unit tests only (`vitest run tests/unit/`); the package's
+      # test:integration suite needs a live Postgres and stays out of this job.
+      - name: Test maproom-mcp package
+        working-directory: packages/maproom-mcp
+        run: pnpm test
+        env:
+          CI: true
+
       - name: Job Summary
         if: always()
         run: |
@@ -424,5 +432,6 @@ jobs:
           echo "- cli: Worktree management and agent orchestration" >> $GITHUB_STEP_SUMMARY
           echo "- vscode-maproom: VSCode extension" >> $GITHUB_STEP_SUMMARY
           echo "- daemon-client: Daemon RPC client" >> $GITHUB_STEP_SUMMARY
+          echo "- maproom-mcp: MCP server" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Unit tests for TypeScript packages (no database required)." >> $GITHUB_STEP_SUMMARY
