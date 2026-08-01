@@ -604,7 +604,10 @@ mod r15_honest_stats {
             .expect("batch with stats");
 
         assert_eq!(stats.total, 3);
-        assert_eq!(stats.from_api, 3, "cold cache: every text came from the API");
+        assert_eq!(
+            stats.from_api, 3,
+            "cold cache: every text came from the API"
+        );
         assert_eq!(stats.cached, 0, "cold cache: nothing was a cache hit");
         // Requests are a separate unit: the whole batch went in one POST.
         let posts = server.received_requests().await.unwrap().len();

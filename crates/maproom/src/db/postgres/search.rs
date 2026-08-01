@@ -153,7 +153,16 @@ fn row_to_fts_hit(r: &sqlx::postgres::PgRow, normalized_query: &str) -> SearchHi
         // populated in the DB all along but the SELECT omitted it and this
         // mapper hardcoded None (PG-only silent no-op of --preview).
         preview: r.get::<Option<String>, _>("preview"),
+        repo_name: None,
     }
+}
+
+/// Like `row_to_fts_hit` but also reads `repo_name` from the row.
+/// Used by `search_fts_multi_repo` which JOINs the repos table (R2 / D-8b).
+fn row_to_fts_hit_multi(r: &sqlx::postgres::PgRow, normalized_query: &str) -> SearchHit {
+    let mut hit = row_to_fts_hit(r, normalized_query);
+    hit.repo_name = r.try_get::<Option<String>, _>("repo_name").ok().flatten();
+    hit
 }
 
 /// Detail columns needed to (re)build a `SearchHit` (which isn't `Clone`).
@@ -373,6 +382,68 @@ impl StoreSearch for PostgresStore {
             .collect())
     }
 
+    /// Multi-repo FTS: one Postgres query, k hits per repo, grouped by repo (D-8b/c).
+    async fn search_fts_multi_repo(
+        &self,
+        repo_ids: &[i64],
+        query: &str,
+        k: i64,
+        kind_filter: Option<&[String]>,
+        lang_filter: Option<&[String]>,
+    ) -> anyhow::Result<Vec<SearchHit>> {
+        if repo_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let tsq = build_tsquery(query);
+        if tsq.is_empty() {
+            return Ok(Vec::new());
+        }
+        let normalized = normalize_for_exact_match(query);
+        let kinds = non_empty(kind_filter);
+        let langs = non_empty(lang_filter);
+
+        // D-8b/c: window ROW_NUMBER OVER (PARTITION BY repo) gives us k per repo
+        // in a single SQL round-trip.
+        // R2: JOIN repos r so every hit carries repo_name (D-8b).
+        let mut qb = QueryBuilder::<sqlx::Postgres>::new(
+            "SELECT id, start_line, end_line, symbol_name, kind, relpath, score, preview, repo_name \
+             FROM (\
+               SELECT c.id, c.start_line, c.end_line, c.symbol_name, c.kind, f.relpath, c.preview, \
+               r.name AS repo_name, \
+               ts_rank(c.ts_doc, to_tsquery('simple', ",
+        );
+        qb.push_bind(tsq.clone())
+            .push(")) AS score, f.repo_id, \
+             ROW_NUMBER() OVER (PARTITION BY f.repo_id ORDER BY ts_rank(c.ts_doc, to_tsquery('simple', ")
+            .push_bind(tsq.clone())
+            .push(")) DESC, c.id) AS rn \
+             FROM chunks c JOIN files f ON f.id = c.file_id \
+             JOIN repos r ON r.id = f.repo_id \
+             WHERE c.ts_doc @@ to_tsquery('simple', ")
+            .push_bind(tsq.clone())
+            .push(") AND f.repo_id = ANY(")
+            .push_bind(repo_ids.to_vec())
+            .push(")");
+        if let Some(kinds) = kinds {
+            qb.push(" AND c.kind = ANY(")
+                .push_bind(kinds.to_vec())
+                .push(")");
+        }
+        if let Some(langs) = langs {
+            qb.push(" AND f.language = ANY(")
+                .push_bind(langs.to_vec())
+                .push(")");
+        }
+        qb.push(") sub WHERE rn <= ").push_bind(k);
+        qb.push(" ORDER BY repo_name, score DESC, id");
+
+        let rows = qb.build().fetch_all(&self.pool).await?;
+        Ok(rows
+            .iter()
+            .map(|r| row_to_fts_hit_multi(r, &normalized))
+            .collect())
+    }
+
     async fn search_chunks_vector(
         &self,
         repo: &str,
@@ -467,6 +538,7 @@ impl StoreSearch for PostgresStore {
                     kind_mult: None,
                     exact_mult: None,
                     preview: r.get::<Option<String>, _>("preview"),
+                    repo_name: None,
                 }
             })
             .collect())
@@ -527,6 +599,7 @@ impl StoreSearch for PostgresStore {
                     kind_mult: None,
                     exact_mult: None,
                     preview: r.get::<Option<String>, _>("preview"),
+                    repo_name: None,
                 }
             })
             .collect())
@@ -616,6 +689,7 @@ impl StoreSearch for PostgresStore {
                     kind_mult: None,
                     exact_mult: None,
                     preview: d.preview.clone(),
+                    repo_name: None,
                 })
             })
             .collect())

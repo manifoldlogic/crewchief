@@ -30,11 +30,10 @@ impl StoreMigration for PostgresStore {
         // missing on a perfectly healthy database.
         let mut missing = Vec::new();
         for name in crate::db::traits::REQUIRED_TABLES_CORE {
-            let exists: Option<bool> =
-                sqlx::query_scalar("SELECT to_regclass($1) IS NOT NULL")
-                    .bind(name)
-                    .fetch_one(&self.pool)
-                    .await?;
+            let exists: Option<bool> = sqlx::query_scalar("SELECT to_regclass($1) IS NOT NULL")
+                .bind(name)
+                .fetch_one(&self.pool)
+                .await?;
             if !exists.unwrap_or(false) {
                 missing.push(name.to_string());
             }

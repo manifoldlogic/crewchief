@@ -68,7 +68,10 @@ fn serve_answers_ping_with_broken_google_env() {
     let url = format!("sqlite://{}/r16.db", db.path().display());
     let (stdout, stderr, code) =
         run_serve_with_lines(&url, &[r#"{"jsonrpc":"2.0","method":"ping","id":1}"#]);
-    assert_eq!(code, 0, "serve must not die on embedding config; stderr: {stderr}");
+    assert_eq!(
+        code, 0,
+        "serve must not die on embedding config; stderr: {stderr}"
+    );
     assert!(
         stdout.contains(r#""result":"pong""#),
         "ping must be answered; stdout: {stdout}"
@@ -132,7 +135,8 @@ fn hybrid_search_falls_back_to_fts_without_provider() {
     assert!(scan.status.success());
 
     // No explicit mode -> daemon default (hybrid).
-    let req = r#"{"jsonrpc":"2.0","method":"search","params":{"repo":"fx","query":"alphaOne"},"id":4}"#;
+    let req =
+        r#"{"jsonrpc":"2.0","method":"search","params":{"repo":"fx","query":"alphaOne"},"id":4}"#;
     let (stdout, stderr, code) = run_serve_with_lines(&url, &[req]);
     assert_eq!(code, 0, "stderr: {stderr}");
     assert!(

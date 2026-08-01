@@ -146,7 +146,9 @@ async fn handle_file_event_deleted_removes_mapping() {
     make_repo(repo.path());
     let store = store_at(db.path()).await;
     let wt = seed(&store, repo.path()).await;
-    assert!(worktree_relpaths(&store, wt).await.contains(&"a.ts".to_string()));
+    assert!(worktree_relpaths(&store, wt)
+        .await
+        .contains(&"a.ts".to_string()));
 
     std::fs::remove_file(repo.path().join("a.ts")).unwrap();
     let mut ev = modified_event(repo.path().join("a.ts"));
@@ -157,7 +159,9 @@ async fn handle_file_event_deleted_removes_mapping() {
         .expect("handle_file_event deleted");
     assert_eq!(stats.files_processed, 1);
     assert!(
-        !worktree_relpaths(&store, wt).await.contains(&"a.ts".to_string()),
+        !worktree_relpaths(&store, wt)
+            .await
+            .contains(&"a.ts".to_string()),
         "deleted file's chunks must be unmapped from the worktree"
     );
 }
@@ -219,7 +223,9 @@ async fn incremental_update_indexes_added_files() {
 
     assert!(stats.files_processed >= 1, "diff entry processed");
     assert!(
-        worktree_relpaths(&store, wt).await.contains(&"c.ts".to_string()),
+        worktree_relpaths(&store, wt)
+            .await
+            .contains(&"c.ts".to_string()),
         "commit-diff file must be REALLY indexed (R07: the old stub wrote zero rows)"
     );
     assert_eq!(
@@ -268,7 +274,10 @@ async fn incremental_update_no_advance_on_unreadable_file() {
     )
     .unwrap();
 
-    assert!(res.is_err(), "unreadable diff entry must be a hard error (R-WATCH-8)");
+    assert!(
+        res.is_err(),
+        "unreadable diff entry must be a hard error (R-WATCH-8)"
+    );
     assert_eq!(
         store.get_last_indexed_tree(wt).await.unwrap(),
         tree_a,
@@ -334,7 +343,11 @@ fn watch_binary_indexes_uncommitted_edit() {
         .env_remove("MAPROOM_EMBEDDING_PROVIDER")
         .output()
         .unwrap();
-    assert!(out.status.success(), "scan failed: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "scan failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
     // UNCOMMITTED edit.
     std::fs::write(
@@ -396,7 +409,9 @@ async fn handle_file_event_pseudo_deleted_keeps_existing_file() {
     make_repo(repo.path());
     let store = store_at(db.path()).await;
     let wt = seed(&store, repo.path()).await;
-    assert!(worktree_relpaths(&store, wt).await.contains(&"a.ts".to_string()));
+    assert!(worktree_relpaths(&store, wt)
+        .await
+        .contains(&"a.ts".to_string()));
 
     // Pseudo-Deleted: event says Deleted but the file is still on disk
     // (exactly what a `git commit -am` produces via the status poller).
@@ -407,7 +422,9 @@ async fn handle_file_event_pseudo_deleted_keeps_existing_file() {
         .expect("pseudo-deleted handling");
     assert_eq!(stats.files_processed, 1, "re-upserted, not dropped");
     assert!(
-        worktree_relpaths(&store, wt).await.contains(&"a.ts".to_string()),
+        worktree_relpaths(&store, wt)
+            .await
+            .contains(&"a.ts".to_string()),
         "a file still on disk must never be unmapped by a pseudo-Deleted event (H2)"
     );
 }

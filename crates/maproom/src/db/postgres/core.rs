@@ -53,7 +53,8 @@ impl StoreCore for PostgresStore {
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
-        self.minimized.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.minimized
+            .store(true, std::sync::atomic::Ordering::Relaxed);
         Ok(())
     }
 

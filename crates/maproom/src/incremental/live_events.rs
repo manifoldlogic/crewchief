@@ -109,9 +109,8 @@ pub async fn handle_file_event(
                 watch_root.join(&relpath)
             };
             if abs.is_file() {
-                std::fs::File::open(&abs).with_context(|| {
-                    format!("file exists but is unreadable: {}", abs.display())
-                })?;
+                std::fs::File::open(&abs)
+                    .with_context(|| format!("file exists but is unreadable: {}", abs.display()))?;
                 let commit = get_head_commit(watch_root)?;
                 crate::indexer::upsert_files(
                     store,

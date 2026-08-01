@@ -51,10 +51,7 @@ fn parse_dt(s: &str) -> Option<DateTime<Utc>> {
 }
 
 /// Import a maproom export artifact into a Postgres backend.
-pub async fn import_postgres<R: BufRead>(
-    store: &PostgresStore,
-    reader: R,
-) -> Result<ImportReport> {
+pub async fn import_postgres<R: BufRead>(store: &PostgresStore, reader: R) -> Result<ImportReport> {
     let mut repo_map: HashMap<i64, i64> = HashMap::new();
     let mut wt_map: HashMap<i64, i64> = HashMap::new();
     let mut commit_map: HashMap<i64, i64> = HashMap::new();
@@ -97,28 +94,34 @@ pub async fn import_postgres<R: BufRead>(
                 report.stats.repos += 1;
             }
             Record::Worktree(w) => {
-                let repo = *repo_map
-                    .get(&w.repo_id)
-                    .with_context(|| format!("worktree {} references unknown repo {}", w.id, w.repo_id))?;
-                let dest = store.get_or_create_worktree(repo, &w.name, &w.abs_path).await?;
+                let repo = *repo_map.get(&w.repo_id).with_context(|| {
+                    format!("worktree {} references unknown repo {}", w.id, w.repo_id)
+                })?;
+                let dest = store
+                    .get_or_create_worktree(repo, &w.name, &w.abs_path)
+                    .await?;
                 wt_map.insert(w.id, dest);
                 report.stats.worktrees += 1;
             }
             Record::Commit(c) => {
-                let repo = *repo_map
-                    .get(&c.repo_id)
-                    .with_context(|| format!("commit {} references unknown repo {}", c.id, c.repo_id))?;
+                let repo = *repo_map.get(&c.repo_id).with_context(|| {
+                    format!("commit {} references unknown repo {}", c.id, c.repo_id)
+                })?;
                 let ts = c.committed_at.as_deref().and_then(parse_dt);
                 let dest = store.get_or_create_commit(repo, &c.sha, ts).await?;
                 commit_map.insert(c.id, dest);
                 report.stats.commits += 1;
             }
             Record::File(f) => {
-                let repo_id = *repo_map.get(&f.repo_id).context("file references unknown repo")?;
-                let worktree_id =
-                    *wt_map.get(&f.worktree_id).context("file references unknown worktree")?;
-                let commit_id =
-                    *commit_map.get(&f.commit_id).context("file references unknown commit")?;
+                let repo_id = *repo_map
+                    .get(&f.repo_id)
+                    .context("file references unknown repo")?;
+                let worktree_id = *wt_map
+                    .get(&f.worktree_id)
+                    .context("file references unknown worktree")?;
+                let commit_id = *commit_map
+                    .get(&f.commit_id)
+                    .context("file references unknown commit")?;
                 let dest = store
                     .upsert_file(&FileRecord {
                         repo_id,
@@ -136,12 +139,15 @@ pub async fn import_postgres<R: BufRead>(
                 report.stats.files += 1;
             }
             Record::Chunk(c) => {
-                let file_id = *file_map.get(&c.file_id).context("chunk references unknown file")?;
+                let file_id = *file_map
+                    .get(&c.file_id)
+                    .context("chunk references unknown file")?;
                 let src_wt = *file_src_wt
                     .get(&c.file_id)
                     .context("chunk's file has no recorded worktree")?;
-                let worktree_id =
-                    *wt_map.get(&src_wt).context("chunk's file worktree not mapped")?;
+                let worktree_id = *wt_map
+                    .get(&src_wt)
+                    .context("chunk's file worktree not mapped")?;
                 let metadata = match c.metadata.as_deref() {
                     Some(s) => Some(serde_json::from_str(s).context("parse chunk metadata JSON")?),
                     None => None,
@@ -191,8 +197,9 @@ pub async fn import_postgres<R: BufRead>(
                 }
             }
             Record::ChunkWorktree(cw) => {
-                let chunk_id =
-                    *chunk_map.get(&cw.chunk_id).context("chunk_worktree references unknown chunk")?;
+                let chunk_id = *chunk_map
+                    .get(&cw.chunk_id)
+                    .context("chunk_worktree references unknown chunk")?;
                 let worktree_id = *wt_map
                     .get(&cw.worktree_id)
                     .context("chunk_worktree references unknown worktree")?;

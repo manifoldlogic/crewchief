@@ -291,6 +291,7 @@ fn row_to_score_hit(r: &sqlx::postgres::PgRow, score_col: &str) -> SearchHit {
         kind_mult: None,
         exact_mult: None,
         preview: None,
+        repo_name: None,
     }
 }
 

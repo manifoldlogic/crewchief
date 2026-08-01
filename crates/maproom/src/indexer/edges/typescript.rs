@@ -99,7 +99,14 @@ pub fn extract_calls(
     let mut unresolved = Vec::new();
     let root = tree.root_node();
 
-    find_call_expressions(&root, source, chunks, &symbol_table, &mut edges, &mut unresolved);
+    find_call_expressions(
+        &root,
+        source,
+        chunks,
+        &symbol_table,
+        &mut edges,
+        &mut unresolved,
+    );
 
     debug!(
         "Extracted {} same-file call edges, {} unresolved refs from TypeScript file",
@@ -299,17 +306,47 @@ export function Badge(props: { name: string }) {
             function build() { return Widget(); }
         "#;
         let chunks = vec![
-            ChunkWithId { id: 1, symbol_name: Some("Widget".to_string()), kind: "class".to_string(), start_line: 2, end_line: 2, file_id: 100 },
-            ChunkWithId { id: 2, symbol_name: Some("fib".to_string()), kind: "func".to_string(), start_line: 3, end_line: 3, file_id: 100 },
-            ChunkWithId { id: 3, symbol_name: Some("build".to_string()), kind: "func".to_string(), start_line: 4, end_line: 4, file_id: 100 },
+            ChunkWithId {
+                id: 1,
+                symbol_name: Some("Widget".to_string()),
+                kind: "class".to_string(),
+                start_line: 2,
+                end_line: 2,
+                file_id: 100,
+            },
+            ChunkWithId {
+                id: 2,
+                symbol_name: Some("fib".to_string()),
+                kind: "func".to_string(),
+                start_line: 3,
+                end_line: 3,
+                file_id: 100,
+            },
+            ChunkWithId {
+                id: 3,
+                symbol_name: Some("build".to_string()),
+                kind: "func".to_string(),
+                start_line: 4,
+                end_line: 4,
+                file_id: 100,
+            },
         ];
         let (edges, unresolved) = extract_calls(source, "ts", &chunks).unwrap();
         // No self-edge for the recursive fib.
-        assert!(!edges.iter().any(|e| e.src_chunk_id == e.dst_chunk_id), "self-edge leaked: {edges:?}");
+        assert!(
+            !edges.iter().any(|e| e.src_chunk_id == e.dst_chunk_id),
+            "self-edge leaked: {edges:?}"
+        );
         // No edge targeting the class chunk.
-        assert!(!edges.iter().any(|e| e.dst_chunk_id == 1), "class became a call target: {edges:?}");
+        assert!(
+            !edges.iter().any(|e| e.dst_chunk_id == 1),
+            "class became a call target: {edges:?}"
+        );
         // Widget() is instead handed to the cross-file post-pass.
-        assert!(unresolved.iter().any(|u| u.callee_name == "Widget"), "Widget() must be an unresolved ref: {unresolved:?}");
+        assert!(
+            unresolved.iter().any(|u| u.callee_name == "Widget"),
+            "Widget() must be an unresolved ref: {unresolved:?}"
+        );
     }
 
     #[test]

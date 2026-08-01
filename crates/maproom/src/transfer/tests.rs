@@ -31,8 +31,14 @@ async fn export_sqlite_full_roundtrip() {
 
     // Seed a minimal but complete graph.
     let repo = store.get_or_create_repo("acme/widget", "/w").await.unwrap();
-    let wt = store.get_or_create_worktree(repo, "main", "/w/main").await.unwrap();
-    let commit = store.get_or_create_commit(repo, "deadbeef", None).await.unwrap();
+    let wt = store
+        .get_or_create_worktree(repo, "main", "/w/main")
+        .await
+        .unwrap();
+    let commit = store
+        .get_or_create_commit(repo, "deadbeef", None)
+        .await
+        .unwrap();
     let file = store
         .upsert_file(&FileRecord {
             repo_id: repo,
@@ -123,7 +129,14 @@ async fn export_sqlite_full_roundtrip() {
             _ => None,
         })
         .unwrap();
-    assert_eq!((edge.src_chunk_id, edge.dst_chunk_id, edge.edge_type.as_str()), (ca, cb, "calls"));
+    assert_eq!(
+        (
+            edge.src_chunk_id,
+            edge.dst_chunk_id,
+            edge.edge_type.as_str()
+        ),
+        (ca, cb, "calls")
+    );
 
     // Bit-exact embedding round-trip for blob BA.
     let ea = recs
@@ -137,7 +150,10 @@ async fn export_sqlite_full_roundtrip() {
     assert_eq!(ea.model_version, "model-x");
     let decoded = decode_embedding(&ea.embedding_b64).unwrap();
     assert_eq!(decoded.len(), 768);
-    assert_eq!(decoded, va, "vector must round-trip bit-exactly through base64/LE bytes");
+    assert_eq!(
+        decoded, va,
+        "vector must round-trip bit-exactly through base64/LE bytes"
+    );
     // Explicit bit check on the non-decimal-exact lane.
     assert_eq!(decoded[0].to_bits(), 0.1f32.to_bits());
 }
@@ -171,8 +187,14 @@ async fn sqlite_to_postgres_roundtrip() {
     // 1. Build a SQLite source index with two chunks, an edge, and embeddings.
     let src = mem_store("roundtrip_src").await;
     let repo = src.get_or_create_repo("acme/rt", "/rt").await.unwrap();
-    let wt = src.get_or_create_worktree(repo, "main", "/rt/main").await.unwrap();
-    let commit = src.get_or_create_commit(repo, "cafe1234", None).await.unwrap();
+    let wt = src
+        .get_or_create_worktree(repo, "main", "/rt/main")
+        .await
+        .unwrap();
+    let commit = src
+        .get_or_create_commit(repo, "cafe1234", None)
+        .await
+        .unwrap();
     let file = src
         .upsert_file(&FileRecord {
             repo_id: repo,
@@ -209,7 +231,9 @@ async fn sqlite_to_postgres_roundtrip() {
     va[0] = 0.1;
     va[5] = -0.7;
     src.upsert_embedding("RBA", &va, "m").await.unwrap();
-    src.upsert_embedding("RBB", &vec![0.25f32; 768], "m").await.unwrap();
+    src.upsert_embedding("RBB", &vec![0.25f32; 768], "m")
+        .await
+        .unwrap();
 
     let (buf, ex_stats) = export_sqlite(&src, Vec::<u8>::new()).await.unwrap();
 
@@ -247,7 +271,11 @@ async fn sqlite_to_postgres_roundtrip() {
     super::import::import_postgres(&pg, std::io::Cursor::new(buf2))
         .await
         .unwrap();
-    assert_eq!(pg.get_global_chunk_count().await.unwrap(), 2, "re-import is idempotent");
+    assert_eq!(
+        pg.get_global_chunk_count().await.unwrap(),
+        2,
+        "re-import is idempotent"
+    );
     assert_eq!(pg.get_global_embedding_count().await.unwrap(), 2);
 
     eprintln!("sqlite_to_postgres_roundtrip: counts + vector preserved, idempotent");

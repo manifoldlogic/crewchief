@@ -16,7 +16,12 @@ import type { ConfidenceSignals, SearchMetadata } from "./types.js";
  */
 export interface SearchParams {
   query: string;
-  repo: string;
+  /** Single-repo scope. Relaxed to optional to support multi-repo (D-8e). */
+  repo?: string;
+  /** Multi-repo scope: list of repo names (D-8a). Mutually exclusive with repo and all_repos. */
+  repos?: string[];
+  /** All-repos scope (D-8a, D-8d). Mutually exclusive with repo and repos. */
+  all_repos?: boolean;
   worktree?: string;
   limit?: number;
   threshold?: number;

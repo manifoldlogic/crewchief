@@ -174,7 +174,9 @@ mod tests {
         for k in ["func", "function", "method", "async_func", "async_method"] {
             assert!(is_callable_kind(k), "{k} must be callable");
         }
-        for k in ["class", "struct", "enum", "trait", "impl", "module", "use", "imports"] {
+        for k in [
+            "class", "struct", "enum", "trait", "impl", "module", "use", "imports",
+        ] {
             assert!(!is_callable_kind(k), "{k} must not be callable");
         }
     }

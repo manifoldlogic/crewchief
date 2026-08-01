@@ -707,7 +707,10 @@ async fn dim_typed_roundtrip_live() {
         let got = store.get_embedding(&blob).await.unwrap().unwrap();
         assert_eq!(got.len(), dim, "dim {dim} round-trip length");
         for (a, b) in v.iter().zip(&got) {
-            assert!((a - b).abs() <= 1e-5, "dim {dim} round-trip value {a} vs {b}");
+            assert!(
+                (a - b).abs() <= 1e-5,
+                "dim {dim} round-trip value {a} vs {b}"
+            );
         }
 
         // Exactly the matching typed column is non-null; the other two are null.
@@ -810,7 +813,9 @@ async fn backfill_preserves_live() {
         embedding_col.is_none(),
         "typeless `embedding` column must be dropped after 0004"
     );
-    eprintln!("backfill_preserves_live: 0004 backfill preserved vectors and dropped typeless column");
+    eprintln!(
+        "backfill_preserves_live: 0004 backfill preserved vectors and dropped typeless column"
+    );
 }
 
 /// Spec S3.1/S3.2 (unit, no DB): the KNN session GUC sets `hnsw.ef_search` from
@@ -879,7 +884,10 @@ async fn knn_ef_search_applies_live() {
         .fetch_one(&mut *tx)
         .await
         .unwrap();
-    assert_ne!(st, "0", "statement_timeout must not be disabled for the KNN scan");
+    assert_ne!(
+        st, "0",
+        "statement_timeout must not be disabled for the KNN scan"
+    );
     tx.commit().await.unwrap();
     eprintln!("knn_ef_search_applies_live: ef_search GUC applied, statement_timeout not disabled");
 }
@@ -1481,7 +1489,10 @@ async fn minimize_content_live() {
     };
     let store = fresh_store(&url).await;
     let repo = store.get_or_create_repo("acme/min", "/m").await.unwrap();
-    let wt = store.get_or_create_worktree(repo, "main", "/m").await.unwrap();
+    let wt = store
+        .get_or_create_worktree(repo, "main", "/m")
+        .await
+        .unwrap();
     let commit = store.get_or_create_commit(repo, "s", None).await.unwrap();
     let file = store
         .upsert_file(&FileRecord {
@@ -1550,12 +1561,18 @@ async fn minimize_content_live() {
         .search_chunks_fts("acme/min", Some("main"), "secret", 10, false, None, None)
         .await
         .unwrap();
-    assert!(secret_hits.is_empty(), "raw content is not searchable under minimization");
+    assert!(
+        secret_hits.is_empty(),
+        "raw content is not searchable under minimization"
+    );
     let (name_hits, _) = store
         .search_chunks_fts("acme/min", Some("main"), "alpha", 10, false, None, None)
         .await
         .unwrap();
-    assert!(!name_hits.is_empty(), "symbol-name keyword search works on minimized Postgres");
+    assert!(
+        !name_hits.is_empty(),
+        "symbol-name keyword search works on minimized Postgres"
+    );
 
     // Marker is sticky.
     let marker: Option<String> =
@@ -1563,6 +1580,10 @@ async fn minimize_content_live() {
             .fetch_optional(&store.pool)
             .await
             .unwrap();
-    assert_eq!(marker.as_deref(), Some("true"), "minimization marker persisted");
+    assert_eq!(
+        marker.as_deref(),
+        Some("true"),
+        "minimization marker persisted"
+    );
     eprintln!("minimize_content_live: no raw content at rest, FTS+vector+marker OK");
 }

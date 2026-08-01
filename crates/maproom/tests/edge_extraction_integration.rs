@@ -7,16 +7,16 @@
 //! - Edge data is accurate and queryable
 
 use maproom::context::relationships::find_test_files;
-use maproom::context::{AssemblyStrategy, DefaultAssemblyStrategy, ContextBundle, ExpandOptions};
+use maproom::context::{AssemblyStrategy, ContextBundle, DefaultAssemblyStrategy, ExpandOptions};
+use maproom::db::traits::StoreGraph;
+use maproom::db::types::ImportDirection;
 use maproom::db::SqliteStore;
 use maproom::db::Store;
 use maproom::db::StoreMigration;
-use maproom::db::traits::StoreGraph;
-use maproom::db::types::ImportDirection;
 use maproom::indexer::{scan_worktree, upsert_files};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 /// Helper to create an in-memory store with schema
 async fn setup_store() -> SqliteStore {
@@ -415,7 +415,10 @@ fn test_supports_call_extraction_predicate() {
         assert!(supports_call_extraction(lang), "{lang} must be supported");
     }
     for lang in ["go", "rb", "java", "md", "json"] {
-        assert!(!supports_call_extraction(lang), "{lang} must not be enabled");
+        assert!(
+            !supports_call_extraction(lang),
+            "{lang} must not be enabled"
+        );
     }
 }
 
@@ -427,11 +430,24 @@ async fn test_scan_creates_rust_edges() {
     let store = setup_store().await;
     let test_repo = Path::new("tests/fixtures/edge_extraction/rust_simple");
 
-    scan_worktree(&store, "rust_repo", "main", test_repo, "HEAD", 4, None, None, None)
-        .await
-        .expect("Scan should succeed");
+    scan_worktree(
+        &store,
+        "rust_repo",
+        "main",
+        test_repo,
+        "HEAD",
+        4,
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect("Scan should succeed");
 
-    assert!(has_edge(&store, "alpha", "beta", "calls").await, "alpha -> beta");
+    assert!(
+        has_edge(&store, "alpha", "beta", "calls").await,
+        "alpha -> beta"
+    );
     assert!(
         has_edge(&store, "multiply", "add", "calls").await,
         "multiply -> add must exist with the METHOD as src (A3)"
@@ -448,10 +464,24 @@ async fn test_scan_creates_rust_edges() {
 
     // Idempotence: rescan changes nothing (UNIQUE + OR IGNORE, asserted).
     let before = get_edge_count(&store).await;
-    scan_worktree(&store, "rust_repo", "main", test_repo, "HEAD", 4, None, None, None)
-        .await
-        .expect("Rescan should succeed");
-    assert_eq!(before, get_edge_count(&store).await, "rescan must be idempotent");
+    scan_worktree(
+        &store,
+        "rust_repo",
+        "main",
+        test_repo,
+        "HEAD",
+        4,
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect("Rescan should succeed");
+    assert_eq!(
+        before,
+        get_edge_count(&store).await,
+        "rescan must be idempotent"
+    );
 }
 
 // ==================== Edge-depth spec F-C: Python import scoping ====================
@@ -508,9 +538,11 @@ async fn test_scan_scopes_python_imports() {
     let store = setup_store().await;
     let test_repo = Path::new("tests/fixtures/edge_extraction/python_imports");
 
-    scan_worktree(&store, "py_repo", "main", test_repo, "HEAD", 4, None, None, None)
-        .await
-        .expect("Scan should succeed");
+    scan_worktree(
+        &store, "py_repo", "main", test_repo, "HEAD", 4, None, None, None,
+    )
+    .await
+    .expect("Scan should succeed");
 
     // Exactly two __imports__ chunks (a.py and b.py; pkg/utils.py has no imports).
     assert_eq!(
@@ -529,7 +561,11 @@ async fn test_scan_scopes_python_imports() {
     // Distinct src chunks — a.py's and b.py's — never collapsed onto one.
     let distinct_src: std::collections::HashSet<&str> =
         edges.iter().map(|(s, _, _)| s.as_str()).collect();
-    assert_eq!(distinct_src.len(), 2, "src chunks must be distinct, got {edges:?}");
+    assert_eq!(
+        distinct_src.len(),
+        2,
+        "src chunks must be distinct, got {edges:?}"
+    );
     assert!(distinct_src.contains("a.py") && distinct_src.contains("b.py"));
 
     // Both dst == pkg/utils.py's `helper`, never b.py's local decoy or any external.
@@ -538,21 +574,34 @@ async fn test_scan_scopes_python_imports() {
             dst_relpath, "pkg/utils.py",
             "{src}'s import must resolve to pkg/utils.py, not {dst_relpath} (decoy/external leak)"
         );
-        assert_eq!(dst_symbol.as_deref(), Some("helper"), "dst must be `helper`");
+        assert_eq!(
+            dst_symbol.as_deref(),
+            Some("helper"),
+            "dst must be `helper`"
+        );
     }
 
     // Idempotence: a second scan changes none of the above (spec §6 Gherkin).
-    scan_worktree(&store, "py_repo", "main", test_repo, "HEAD", 4, None, None, None)
-        .await
-        .expect("Rescan should succeed");
+    scan_worktree(
+        &store, "py_repo", "main", test_repo, "HEAD", 4, None, None, None,
+    )
+    .await
+    .expect("Rescan should succeed");
     let edges_again = import_edges(&store).await;
-    assert_eq!(edges_again.len(), 2, "rescan must not add/duplicate import edges");
+    assert_eq!(
+        edges_again.len(),
+        2,
+        "rescan must not add/duplicate import edges"
+    );
     assert_eq!(
         imports_chunk_count(&store).await,
         2,
         "rescan must not duplicate __imports__ chunks"
     );
-    assert_eq!(edges, edges_again, "rescan must leave import edges unchanged");
+    assert_eq!(
+        edges, edges_again,
+        "rescan must leave import edges unchanged"
+    );
 }
 
 // ==================== Edge-depth spec F-B: cross-file call resolution ====================
@@ -666,9 +715,11 @@ async fn test_crossfile_ambiguity_never_guesses() {
     let store = setup_store().await;
     let repo = Path::new("tests/fixtures/edge_extraction/rust_ambiguous");
 
-    scan_worktree(&store, "amb_repo", "main", repo, "HEAD", 4, None, None, None)
-        .await
-        .expect("Scan should succeed");
+    scan_worktree(
+        &store, "amb_repo", "main", repo, "HEAD", 4, None, None, None,
+    )
+    .await
+    .expect("Scan should succeed");
 
     let run = chunk_id_by(&store, "caller.rs", "run").await;
     // No calls edge may originate from `run` (both `multiply` targets are ambiguous).
@@ -683,7 +734,10 @@ async fn test_crossfile_ambiguity_never_guesses() {
         })
         .await
         .unwrap();
-    assert_eq!(outgoing, 0, "ambiguous multiply() call must produce zero edges");
+    assert_eq!(
+        outgoing, 0,
+        "ambiguous multiply() call must produce zero edges"
+    );
 }
 
 /// Spec B5 pin: inbound cross-file edge goes stale on single-file upsert and a full
@@ -693,9 +747,19 @@ async fn test_inbound_edge_staleness_is_deliberate() {
     let store = setup_store().await;
     let repo = Path::new("tests/fixtures/edge_extraction/rust_crossfile");
 
-    scan_worktree(&store, "stale_repo", "main", repo, "HEAD", 4, None, None, None)
-        .await
-        .expect("Scan should succeed");
+    scan_worktree(
+        &store,
+        "stale_repo",
+        "main",
+        repo,
+        "HEAD",
+        4,
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect("Scan should succeed");
 
     let caller_a = chunk_id_by(&store, "caller.rs", "caller_a").await;
     let helper_b = chunk_id_by(&store, "helper.rs", "helper_b").await;
@@ -725,9 +789,19 @@ async fn test_inbound_edge_staleness_is_deliberate() {
     );
 
     // A full rescan restores it.
-    scan_worktree(&store, "stale_repo", "main", repo, "HEAD", 4, None, None, None)
-        .await
-        .expect("Rescan should succeed");
+    scan_worktree(
+        &store,
+        "stale_repo",
+        "main",
+        repo,
+        "HEAD",
+        4,
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect("Rescan should succeed");
     let caller_a3 = chunk_id_by(&store, "caller.rs", "caller_a").await;
     let helper_b3 = chunk_id_by(&store, "helper.rs", "helper_b").await;
     assert!(
@@ -755,8 +829,14 @@ async fn test_scan_derives_test_of_edges() {
     let beta = chunk_id_by(&store, "lib.rs", "beta").await;
 
     // Both callers produce a `calls` edge.
-    assert!(edge_exists(&store, test_alpha, alpha, "calls").await, "test_alpha -> alpha calls");
-    assert!(edge_exists(&store, beta, alpha, "calls").await, "beta -> alpha calls");
+    assert!(
+        edge_exists(&store, test_alpha, alpha, "calls").await,
+        "test_alpha -> alpha calls"
+    );
+    assert!(
+        edge_exists(&store, beta, alpha, "calls").await,
+        "beta -> alpha calls"
+    );
 
     // Only the test caller produces a `test_of` edge (B7/B8).
     assert!(
@@ -771,8 +851,14 @@ async fn test_scan_derives_test_of_edges() {
     // Consumer: find_test_files(alpha) returns test_alpha (and not beta).
     let tests = find_test_files(&store, alpha).await.unwrap();
     let test_ids: Vec<i64> = tests.iter().map(|t| t.id).collect();
-    assert!(test_ids.contains(&test_alpha), "find_test_files must return test_alpha, got {test_ids:?}");
-    assert!(!test_ids.contains(&beta), "find_test_files must not return the non-test beta");
+    assert!(
+        test_ids.contains(&test_alpha),
+        "find_test_files must return test_alpha, got {test_ids:?}"
+    );
+    assert!(
+        !test_ids.contains(&beta),
+        "find_test_files must not return the non-test beta"
+    );
 
     // Purity: find_callers(alpha) returns both callers via `calls` ONLY — test_of
     // must not leak in.
@@ -794,7 +880,11 @@ async fn test_scan_derives_test_of_edges() {
         .filter(|e| e.edge_type == "test_of")
         .map(|e| e.chunk_id)
         .collect();
-    assert_eq!(test_of_srcs, vec![test_alpha], "only test_alpha targets alpha via test_of");
+    assert_eq!(
+        test_of_srcs,
+        vec![test_alpha],
+        "only test_alpha targets alpha via test_of"
+    );
 }
 
 // ==================== Edge-depth DoD §2: tri-language E2E ====================
@@ -834,9 +924,11 @@ async fn test_trilang_end_to_end() {
     let store = setup_store().await;
     let repo = Path::new("tests/fixtures/edge_extraction/trilang");
 
-    scan_worktree(&store, "tri_repo", "main", repo, "HEAD", 4, None, None, None)
-        .await
-        .expect("Scan should succeed");
+    scan_worktree(
+        &store, "tri_repo", "main", repo, "HEAD", 4, None, None, None,
+    )
+    .await
+    .expect("Scan should succeed");
 
     // ---- cross-file calls edges (src.file != dst.file) per language ----
     for (lang, sfile, src, dfile, dst) in [
@@ -873,7 +965,13 @@ async fn test_trilang_end_to_end() {
 
     // ---- test_of per language ----
     for (lang, tfile, test, dfile, dst) in [
-        ("rust", "caller.rs", "test_r_caller", "caller.rs", "r_caller"),
+        (
+            "rust",
+            "caller.rs",
+            "test_r_caller",
+            "caller.rs",
+            "r_caller",
+        ),
         ("ts", "main.test.ts", "test_t_main", "main.ts", "t_main"),
         ("py", "test_app.py", "test_p_caller", "app.py", "p_caller"),
     ] {

@@ -491,13 +491,29 @@ enum Commands {
     },
 
     /// Full-text search against indexed chunks
+    ///
+    /// Repo scope (exactly one required):
+    ///   --repo <name>        Search a single repo (existing behavior).
+    ///   --repo A --repo B    Repeatable: search these repos; hits grouped by repo, k per repo (D-8c).
+    ///   --all-repos          Search every repo in the index (D-8d).
+    ///
+    /// --k is per-repo in multi-repo mode (D-8c).
+    /// Multi-repo search is FTS-only; use --mode fts (the default) with --repo/--all-repos.
     Search {
-        #[arg(long)]
-        repo: String,
+        /// Repository name to search.  Repeatable: --repo A --repo B searches both.
+        /// Conflicts with --all-repos.  At least one of --repo / --all-repos is required.
+        #[arg(long, action = clap::ArgAction::Append, conflicts_with = "all_repos")]
+        repo: Vec<String>,
+        /// Search every repo in the index (D-8d).
+        /// Conflicts with --repo.
+        #[arg(long, default_value_t = false, conflicts_with = "repo")]
+        all_repos: bool,
         #[arg(long)]
         worktree: Option<String>,
         #[arg(long)]
         query: String,
+        /// Number of results to return.
+        /// In multi-repo mode (--repo repeatable or --all-repos) this is the per-repo cap (D-8c).
         #[arg(long, default_value_t = 10)]
         k: i64,
         /// Include score breakdown (base_fts, kind_multiplier, exact_match_multiplier, final)
@@ -517,6 +533,7 @@ enum Commands {
         /// vector/hybrid build a query embedding via the configured provider;
         /// hybrid degrades gracefully to fts (with a stderr notice) when the
         /// provider is unavailable, vector errors instead.
+        /// NOTE: multi-repo mode (--repo repeatable / --all-repos) only supports fts (D-8g).
         #[arg(long, value_enum, default_value_t = SearchMode::Fts)]
         mode: SearchMode,
         /// Include content preview in search results
@@ -546,6 +563,9 @@ enum Commands {
         ///
         ///   # Agent format filtered by kind
         ///   maproom search --repo X --query Y --format agent --kind func
+        ///
+        ///   # All-repos sweep
+        ///   maproom search --all-repos --query "embedding pipeline" --k 3 --format agent
         #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
         format: OutputFormat,
     },
@@ -1253,7 +1273,9 @@ async fn real_main() -> anyhow::Result<()> {
                 if !missing.is_empty() {
                     let hint = match backend {
                         "SQLite" => "delete the database file and re-run 'maproom scan'",
-                        _ => "restore from backup or recreate the database and re-run 'maproom scan'",
+                        _ => {
+                            "restore from backup or recreate the database and re-run 'maproom scan'"
+                        }
                     };
                     // Review [14]: ONE stderr report (via the top-level
                     // R-EXIT-5 handler), hint included — the old eprintln +
@@ -1955,6 +1977,7 @@ async fn real_main() -> anyhow::Result<()> {
 
         Commands::Search {
             repo,
+            all_repos,
             worktree,
             query,
             k,
@@ -1967,6 +1990,22 @@ async fn real_main() -> anyhow::Result<()> {
             preview_length,
             format,
         } => {
+            // D-8a: validate scope: exactly one of --repo / --all-repos required.
+            // clap's conflicts_with ensures repo and all_repos can't both be set.
+            // But we still need at least one.
+            let is_multi = all_repos || repo.len() > 1;
+            if !all_repos && repo.is_empty() {
+                eprintln!(
+                    "Configuration error: at least one --repo <name> or --all-repos is required"
+                );
+                std::process::exit(EXIT_CONFIG_ERROR);
+            }
+            // D-8g: multi-repo supports FTS only
+            if is_multi && mode != SearchMode::Fts {
+                eprintln!("Configuration error: multi-repo search (--all-repos or multiple --repo) only supports --mode fts (D-8g)");
+                std::process::exit(EXIT_CONFIG_ERROR);
+            }
+
             // MRIMP-5: Implicit preview enable for agent format (parameter preprocessing)
             // Agent format always needs preview data; default length is 120 chars (token-optimized).
             // Explicit --preview-length overrides the agent default.
@@ -1977,110 +2016,167 @@ async fn real_main() -> anyhow::Result<()> {
             };
 
             let store = handle_agent_error!(db::connect().await, format);
-            // Fetch extra results if deduplication is enabled
-            let fetch_k = if deduplicate { k * 3 } else { k };
 
-            // F01: mode routing. vector/hybrid need a query embedding; a
-            // provider failure degrades hybrid to fts (stderr notice, honest
-            // effective-mode metadata) and hard-errors vector — the user
-            // asked for semantics only vectors can deliver.
+            // F01: track effective mode (may degrade from hybrid→fts in single-repo path).
+            // Declared before the if/else so it's in scope for the metadata output below.
             let mut effective_mode = mode;
-            let query_embedding: Option<Vec<f32>> = match mode {
-                SearchMode::Fts => None,
-                SearchMode::Vector | SearchMode::Hybrid => {
-                    use maproom::embedding::EmbeddingService;
-                    let embed_result = match EmbeddingService::from_env().await {
-                        Ok(svc) => svc.embed_text(&query).await.map_err(|e| {
-                            anyhow::Error::from(e).context("Failed to generate query embedding")
-                        }),
-                        Err(e) => Err(anyhow::Error::from(e)
-                            .context("Failed to create embedding service")),
-                    };
-                    match embed_result {
-                        Ok(embedding) => Some(embedding),
-                        Err(e) if mode == SearchMode::Hybrid => {
-                            eprintln!(
-                                "Note: embedding provider unavailable; hybrid degraded to FTS ({e:#})"
-                            );
-                            effective_mode = SearchMode::Fts;
-                            None
-                        }
-                        Err(e) => {
-                            Some(handle_agent_error!(Err::<Vec<f32>, anyhow::Error>(e), format))
-                        }
-                    }
-                }
-            };
 
-            let (hits, total_count) = match (effective_mode, query_embedding) {
-                (SearchMode::Hybrid, Some(embedding)) => {
-                    let hits = handle_agent_error!(
-                        store
-                            .search_chunks_hybrid(
-                                &repo,
-                                worktree.as_deref(),
-                                &query,
-                                &embedding,
-                                fetch_k,
-                                debug,
-                                kind.as_deref(),
-                                lang.as_deref(),
-                            )
-                            .await,
-                        format
-                    );
-                    let total = hits.len();
-                    (hits, total)
-                }
-                (SearchMode::Vector, Some(embedding)) => {
-                    let hits = handle_agent_error!(
-                        store
-                            .search_chunks_vector(
-                                &repo,
-                                worktree.as_deref(),
-                                &embedding,
-                                fetch_k,
-                                debug,
-                                kind.as_deref(),
-                                lang.as_deref(),
-                            )
-                            .await,
-                        format
-                    );
-                    let total = hits.len();
-                    (hits, total)
-                }
-                _ => handle_agent_error!(
-                    store
-                        .search_chunks_fts(
-                            &repo,
-                            worktree.as_deref(),
+            // ── Multi-repo / all-repos path ──────────────────────────────────
+            let (hits, total_count) = if is_multi {
+                // Resolve repo names -> repo IDs
+                let all_db_repos = handle_agent_error!(store.list_repos().await, format);
+
+                let repo_ids: Vec<i64> = if all_repos {
+                    all_db_repos.iter().map(|r| r.id).collect()
+                } else {
+                    let mut ids = Vec::new();
+                    for name in &repo {
+                        let name_lower = name.to_ascii_lowercase();
+                        let suffix = format!("/{name_lower}");
+                        let matched: Vec<i64> = all_db_repos
+                            .iter()
+                            .filter(|r| {
+                                r.name.eq_ignore_ascii_case(name)
+                                    || r.name.to_ascii_lowercase().ends_with(&suffix)
+                            })
+                            .map(|r| r.id)
+                            .collect();
+                        if matched.is_empty() {
+                            let e = anyhow::anyhow!("Repository not found: {name}");
+                            handle_agent_error!(Err::<(), _>(e), format);
+                        }
+                        ids.extend(matched);
+                    }
+                    ids
+                };
+
+                if repo_ids.is_empty() {
+                    (Vec::new(), 0)
+                } else {
+                    // Single SQL query; k is per-repo cap (D-8c)
+                    let hits_result = store
+                        .search_fts_multi_repo(
+                            &repo_ids,
                             &query,
-                            fetch_k,
-                            debug,
+                            k,
                             kind.as_deref(),
                             lang.as_deref(),
                         )
-                        .await,
-                    format
-                ),
-            };
-
-            // Apply deduplication if enabled
-            let hits = if deduplicate {
-                deduplicate_search_hits(hits, k as usize)
+                        .await;
+                    let hits = handle_agent_error!(hits_result, format);
+                    let total = hits.len();
+                    (hits, total)
+                }
             } else {
-                hits
-            };
+                // ── Single-repo path (existing behavior) ─────────────────────
+                // Fetch extra results if deduplication is enabled
+                let fetch_k = if deduplicate { k * 3 } else { k };
+                let single_repo = repo.first().map(|s| s.as_str()).unwrap_or("");
 
-            // F01: vector/hybrid have no corpus-total statistic — their
-            // pre-dedup fetch count (k*3 over-fetch) would masquerade as
-            // one. Report the post-dedup result count instead; FTS keeps
-            // its real corpus estimate.
-            let total_count = if effective_mode == SearchMode::Fts {
-                total_count
-            } else {
-                hits.len()
+                // F01: mode routing. vector/hybrid need a query embedding; a
+                // provider failure degrades hybrid to fts (stderr notice, honest
+                // effective-mode metadata) and hard-errors vector — the user
+                // asked for semantics only vectors can deliver.
+                // `effective_mode` is declared before the if/else block.
+                let query_embedding: Option<Vec<f32>> = match mode {
+                    SearchMode::Fts => None,
+                    SearchMode::Vector | SearchMode::Hybrid => {
+                        use maproom::embedding::EmbeddingService;
+                        let embed_result = match EmbeddingService::from_env().await {
+                            Ok(svc) => svc.embed_text(&query).await.map_err(|e| {
+                                anyhow::Error::from(e).context("Failed to generate query embedding")
+                            }),
+                            Err(e) => Err(anyhow::Error::from(e)
+                                .context("Failed to create embedding service")),
+                        };
+                        match embed_result {
+                            Ok(embedding) => Some(embedding),
+                            Err(e) if mode == SearchMode::Hybrid => {
+                                eprintln!(
+                                    "Note: embedding provider unavailable; hybrid degraded to FTS ({e:#})"
+                                );
+                                effective_mode = SearchMode::Fts;
+                                None
+                            }
+                            Err(e) => Some(handle_agent_error!(
+                                Err::<Vec<f32>, anyhow::Error>(e),
+                                format
+                            )),
+                        }
+                    }
+                };
+
+                let (raw_hits, raw_total) = match (effective_mode, query_embedding) {
+                    (SearchMode::Hybrid, Some(embedding)) => {
+                        let hits = handle_agent_error!(
+                            store
+                                .search_chunks_hybrid(
+                                    single_repo,
+                                    worktree.as_deref(),
+                                    &query,
+                                    &embedding,
+                                    fetch_k,
+                                    debug,
+                                    kind.as_deref(),
+                                    lang.as_deref(),
+                                )
+                                .await,
+                            format
+                        );
+                        let total = hits.len();
+                        (hits, total)
+                    }
+                    (SearchMode::Vector, Some(embedding)) => {
+                        let hits = handle_agent_error!(
+                            store
+                                .search_chunks_vector(
+                                    single_repo,
+                                    worktree.as_deref(),
+                                    &embedding,
+                                    fetch_k,
+                                    debug,
+                                    kind.as_deref(),
+                                    lang.as_deref(),
+                                )
+                                .await,
+                            format
+                        );
+                        let total = hits.len();
+                        (hits, total)
+                    }
+                    _ => handle_agent_error!(
+                        store
+                            .search_chunks_fts(
+                                single_repo,
+                                worktree.as_deref(),
+                                &query,
+                                fetch_k,
+                                debug,
+                                kind.as_deref(),
+                                lang.as_deref(),
+                            )
+                            .await,
+                        format
+                    ),
+                };
+
+                // Apply deduplication if enabled
+                let raw_hits = if deduplicate {
+                    deduplicate_search_hits(raw_hits, k as usize)
+                } else {
+                    raw_hits
+                };
+
+                // F01: vector/hybrid have no corpus-total statistic — their
+                // pre-dedup fetch count (k*3 over-fetch) would masquerade as
+                // one. Report the post-dedup result count instead; FTS keeps
+                // its real corpus estimate.
+                let total_count = if effective_mode == SearchMode::Fts {
+                    raw_total
+                } else {
+                    raw_hits.len()
+                };
+                (raw_hits, total_count)
             };
 
             // Post-process preview field
@@ -2100,16 +2196,25 @@ async fn real_main() -> anyhow::Result<()> {
                 })
                 .collect();
 
-            // MRIMP-5: Route output through format module
-            let meta = SearchMetadata {
-                query: query.clone(),
-                // F01: report the EFFECTIVE mode (hybrid may have degraded)
-                mode: match effective_mode {
+            // Resolve effective_mode string for metadata.
+            // In multi-repo path, mode is always fts (validated above).
+            // In single-repo path, use `effective_mode` (which may have degraded
+            // from hybrid to fts inside the else branch) — not the requested `mode`.
+            // F01: honest effective-mode reporting (search_hybrid_degrades_without_provider).
+            let effective_mode_str = if is_multi {
+                "fts"
+            } else {
+                match effective_mode {
                     SearchMode::Fts => "fts",
                     SearchMode::Vector => "vector",
                     SearchMode::Hybrid => "hybrid",
                 }
-                .to_string(),
+            };
+
+            // MRIMP-5: Route output through format module
+            let meta = SearchMetadata {
+                query: query.clone(),
+                mode: effective_mode_str.to_string(),
                 hits: hits.len(),
                 total_estimate: total_count,
             };
@@ -3173,9 +3278,9 @@ mod tests {
         {
             assert_eq!(chunk_id, 12345);
             assert_eq!(budget, 6000); // default
-            // F81: the positive flags parse false when absent (they are
-            // redundant back-compat flags); the EFFECTIVE default is ON via
-            // the --no-* inversion in the handler.
+                                      // F81: the positive flags parse false when absent (they are
+                                      // redundant back-compat flags); the EFFECTIVE default is ON via
+                                      // the --no-* inversion in the handler.
             assert_eq!(callers, false);
             assert_eq!(no_callers, false);
             assert_eq!(callees, false);
@@ -4239,14 +4344,15 @@ mod tests {
     fn test_classify_repository_not_found() {
         // F15: typed store error, even when context-wrapped, classifies as
         // repository_not_found — not `unknown`.
-        let error: anyhow::Error = maproom::db::StoreError::RepositoryNotFound(
-            "definitely-a-typo-xyz".to_string(),
-        )
-        .into();
+        let error: anyhow::Error =
+            maproom::db::StoreError::RepositoryNotFound("definitely-a-typo-xyz".to_string()).into();
         let error = error.context("FTS search execution failed");
         let (error_type, suggestion, exit_code) = classify_error(&error);
         assert_eq!(error_type, "repository_not_found");
-        assert!(suggestion.contains("maproom status"), "actionable: {suggestion}");
+        assert!(
+            suggestion.contains("maproom status"),
+            "actionable: {suggestion}"
+        );
         assert_eq!(exit_code, 1);
     }
 

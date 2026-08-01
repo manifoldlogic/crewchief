@@ -215,7 +215,10 @@ fn collect_python_imports(
     chunks_with_ids: &[edges::ChunkWithId],
 ) -> Option<PendingPyImports> {
     // C1: source chunk id from this file's in-memory chunks (kind match).
-    let src_chunk_id = chunks_with_ids.iter().find(|c| c.kind == "imports").map(|c| c.id)?;
+    let src_chunk_id = chunks_with_ids
+        .iter()
+        .find(|c| c.kind == "imports")
+        .map(|c| c.id)?;
 
     // The import list lives in the SymbolChunk metadata (ChunkWithId carries none);
     // chunks and chunks_with_ids are index-parallel.
@@ -809,16 +812,18 @@ pub async fn scan_worktree(
             // `imports` edges cleared here.
             if edges::supports_call_extraction(language) {
                 if let Err(e) = store.delete_edges_for_file(file_id).await {
-                    warn!("Failed to clear stale edges for {}: {}", relpath.display(), e);
+                    warn!(
+                        "Failed to clear stale edges for {}: {}",
+                        relpath.display(),
+                        e
+                    );
                 }
             }
 
             // Capture Python imports; resolved in a post-pass once every file is
             // indexed (cross-file targets may be walked after the importer).
             if language == "py" {
-                if let Some(pending) =
-                    collect_python_imports(relpath, &chunks, &chunks_with_ids)
-                {
+                if let Some(pending) = collect_python_imports(relpath, &chunks, &chunks_with_ids) {
                     pending_py_imports.push(pending);
                 }
             }
@@ -1154,16 +1159,18 @@ pub async fn upsert_files(
             // `imports` edges cleared here.
             if edges::supports_call_extraction(language) {
                 if let Err(e) = store.delete_edges_for_file(file_id).await {
-                    warn!("Failed to clear stale edges for {}: {}", relpath.display(), e);
+                    warn!(
+                        "Failed to clear stale edges for {}: {}",
+                        relpath.display(),
+                        e
+                    );
                 }
             }
 
             // Capture Python imports; resolved in a post-pass once every file is
             // indexed (cross-file targets may be walked after the importer).
             if language == "py" {
-                if let Some(pending) =
-                    collect_python_imports(&relpath, &chunks, &chunks_with_ids)
-                {
+                if let Some(pending) = collect_python_imports(&relpath, &chunks, &chunks_with_ids) {
                     pending_py_imports.push(pending);
                 }
             }
@@ -1226,7 +1233,10 @@ pub async fn upsert_files(
                         });
                 }
             }
-            Err(e) => warn!("Failed to load worktree symbols for cross-file resolution: {}", e),
+            Err(e) => warn!(
+                "Failed to load worktree symbols for cross-file resolution: {}",
+                e
+            ),
         }
         let (cross_file, dropped) = resolve_cross_file_calls(&symbol_index, &pending_calls);
         let mut all_calls = same_file_calls;
@@ -1361,7 +1371,10 @@ mod tests {
         // Absolute `from pkg.utils import x` -> pkg/utils.{py,__init__}.
         assert_eq!(
             python_module_candidate_relpaths(importing, "pkg.utils", None),
-            vec!["pkg/utils.py".to_string(), "pkg/utils/__init__.py".to_string()],
+            vec![
+                "pkg/utils.py".to_string(),
+                "pkg/utils/__init__.py".to_string()
+            ],
         );
 
         // Absolute single-component module.
@@ -1373,7 +1386,10 @@ mod tests {
         // `from . import ...` in app/service.py: one dot = app package.
         assert_eq!(
             python_module_candidate_relpaths(importing, "helpers", Some(1)),
-            vec!["app/helpers.py".to_string(), "app/helpers/__init__.py".to_string()],
+            vec![
+                "app/helpers.py".to_string(),
+                "app/helpers/__init__.py".to_string()
+            ],
         );
 
         // `from ..pkg import ...` in app/sub/mod.py: two dots climb to app.

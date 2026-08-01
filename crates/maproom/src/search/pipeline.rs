@@ -745,10 +745,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl crate::embedding::EmbeddingProvider for MockEmbedProvider {
-        async fn embed(
-            &self,
-            _text: String,
-        ) -> Result<Vec<f32>, crate::embedding::EmbeddingError> {
+        async fn embed(&self, _text: String) -> Result<Vec<f32>, crate::embedding::EmbeddingError> {
             Ok(vec![0.0; 768])
         }
         async fn embed_batch(
@@ -767,11 +764,22 @@ mod tests {
 
     async fn seeded_pipeline_with_two_chunks() -> (SearchPipeline, i64, i64) {
         use crate::db::traits::{StoreChunks, StoreCore, StoreMigration};
-        let store = crate::db::sqlite::SqliteStore::connect(":memory:").await.unwrap();
+        let store = crate::db::sqlite::SqliteStore::connect(":memory:")
+            .await
+            .unwrap();
         store.migrate().await.unwrap();
-        let repo = store.get_or_create_repo("acme/f34", "/src/f34").await.unwrap();
-        let wt = store.get_or_create_worktree(repo, "main", "/wt/f34").await.unwrap();
-        let commit = store.get_or_create_commit(repo, "sha-f34", None).await.unwrap();
+        let repo = store
+            .get_or_create_repo("acme/f34", "/src/f34")
+            .await
+            .unwrap();
+        let wt = store
+            .get_or_create_worktree(repo, "main", "/wt/f34")
+            .await
+            .unwrap();
+        let commit = store
+            .get_or_create_commit(repo, "sha-f34", None)
+            .await
+            .unwrap();
         let file = store
             .upsert_file(&crate::db::FileRecord {
                 repo_id: repo,
@@ -805,13 +813,11 @@ mod tests {
         let c2 = store.insert_chunk(&mk("beta_f34", 10)).await.unwrap();
 
         let store: Arc<dyn crate::db::Store + Send + Sync> = Arc::new(store);
-        let cache = crate::embedding::EmbeddingCache::new(
-            crate::embedding::config::CacheConfig {
-                max_entries: 16,
-                ttl_seconds: 60,
-                enable_metrics: false,
-            },
-        )
+        let cache = crate::embedding::EmbeddingCache::new(crate::embedding::config::CacheConfig {
+            max_entries: 16,
+            ttl_seconds: 60,
+            enable_metrics: false,
+        })
         .unwrap();
         let service =
             crate::embedding::EmbeddingService::new(Box::new(MockEmbedProvider), Arc::new(cache));
@@ -825,7 +831,10 @@ mod tests {
     #[tokio::test]
     async fn fetch_chunk_details_returns_enriched_rows() {
         let (pipeline, c1, c2) = seeded_pipeline_with_two_chunks().await;
-        let details = pipeline.fetch_chunk_details(&[c1, c2, 999_999]).await.unwrap();
+        let details = pipeline
+            .fetch_chunk_details(&[c1, c2, 999_999])
+            .await
+            .unwrap();
         assert_eq!(details.len(), 2, "both real ids found, missing id absent");
         let d1 = &details[&c1];
         assert_eq!(d1.relpath, "src/f34.rs");

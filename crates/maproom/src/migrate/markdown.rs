@@ -669,7 +669,9 @@ mod tests {
         assert!(!is_valid_backup_table_name("chunks_backup_bogus"));
         assert!(!is_valid_backup_table_name("chunks_backup_2026070_123456"));
         assert!(!is_valid_backup_table_name("chunks_backup_20260702-123456"));
-        assert!(!is_valid_backup_table_name("chunks_backup_20260702_1234567"));
+        assert!(!is_valid_backup_table_name(
+            "chunks_backup_20260702_1234567"
+        ));
         assert!(!is_valid_backup_table_name("files"));
         assert!(!is_valid_backup_table_name(""));
     }

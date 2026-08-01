@@ -72,5 +72,8 @@ fn stdout_has_no_ansi_when_piped() {
     let url = format!("sqlite://{}/x.db", db.path().display());
     let (stdout, stderr) = serve_with_log(&url, &[r#"{"jsonrpc":"2.0","method":"ping","id":1}"#]);
     assert!(!stdout.contains(&0x1b), "no ANSI escapes on piped stdout");
-    assert!(!stderr.contains(&0x1b), "no ANSI escapes on piped stderr (not a terminal)");
+    assert!(
+        !stderr.contains(&0x1b),
+        "no ANSI escapes on piped stderr (not a terminal)"
+    );
 }

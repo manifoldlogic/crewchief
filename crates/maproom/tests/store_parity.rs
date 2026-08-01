@@ -647,19 +647,42 @@ async fn check_get_chunks_by_ids(store: &(dyn Store + Send + Sync)) {
     let b = unique_base();
     let s = seed(store, "byids").await;
     let c1 = store
-        .insert_chunk(&chunk(s.file, s.wt, &format!("BI1{b}"), "byids_one", "one", 1, 4))
+        .insert_chunk(&chunk(
+            s.file,
+            s.wt,
+            &format!("BI1{b}"),
+            "byids_one",
+            "one",
+            1,
+            4,
+        ))
         .await
         .unwrap();
     let c2 = store
-        .insert_chunk(&chunk(s.file, s.wt, &format!("BI2{b}"), "byids_two", "two", 6, 9))
+        .insert_chunk(&chunk(
+            s.file,
+            s.wt,
+            &format!("BI2{b}"),
+            "byids_two",
+            "two",
+            6,
+            9,
+        ))
         .await
         .unwrap();
 
-    let got = store.get_chunks_by_ids(&[c1, c2, 987_654_321]).await.unwrap();
+    let got = store
+        .get_chunks_by_ids(&[c1, c2, 987_654_321])
+        .await
+        .unwrap();
     assert_eq!(got.len(), 2, "two found, phantom id absent: {got:?}");
     let one = got.iter().find(|c| c.id == c1).expect("c1 present");
     assert_eq!(one.symbol_name.as_deref(), Some("byids_one"));
-    assert!(one.file_path.contains("src/"), "relpath joined: {}", one.file_path);
+    assert!(
+        one.file_path.contains("src/"),
+        "relpath joined: {}",
+        one.file_path
+    );
     assert!(!one.preview.is_empty());
     assert!(store.get_chunks_by_ids(&[]).await.unwrap().is_empty());
 }
@@ -679,7 +702,15 @@ async fn check_search_unknown_repo_errors(store: &(dyn Store + Send + Sync)) {
     assert!(err.to_string().contains("Repository not found"), "{err}");
 
     let verr = store
-        .search_chunks_vector("no-such-repo-zz", None, &vec![0.01f32; 768], 5, false, None, None)
+        .search_chunks_vector(
+            "no-such-repo-zz",
+            None,
+            &vec![0.01f32; 768],
+            5,
+            false,
+            None,
+            None,
+        )
         .await
         .expect_err("vector: unknown repo must error");
     assert!(verr.to_string().contains("Repository not found"), "{verr}");
@@ -693,12 +724,26 @@ async fn check_embedding_dim_breakdown(store: &(dyn Store + Send + Sync)) {
     for (i, dim) in [(0usize, 768usize), (1, 768), (2, 1024)] {
         let blob = format!("DIM{i}{b}");
         store
-            .insert_chunk(&chunk(s.file, s.wt, &blob, &format!("dim_fn{i}"), "d", (i as i32) * 10 + 1, (i as i32) * 10 + 5))
+            .insert_chunk(&chunk(
+                s.file,
+                s.wt,
+                &blob,
+                &format!("dim_fn{i}"),
+                "d",
+                (i as i32) * 10 + 1,
+                (i as i32) * 10 + 5,
+            ))
             .await
             .unwrap();
-        store.upsert_embedding(&blob, &vec![0.01f32; dim], "m").await.unwrap();
+        store
+            .upsert_embedding(&blob, &vec![0.01f32; dim], "m")
+            .await
+            .unwrap();
     }
-    let breakdown = store.get_worktree_embedding_dim_breakdown(s.wt).await.unwrap();
+    let breakdown = store
+        .get_worktree_embedding_dim_breakdown(s.wt)
+        .await
+        .unwrap();
     assert_eq!(
         breakdown,
         vec![(768, 2), (1024, 1)],
@@ -1204,7 +1249,15 @@ async fn check_edge_batch_and_test_of(name: &str, store: &(dyn Store + Send + Sy
         .await
         .unwrap();
     let test = store
-        .insert_chunk(&chunk(s.file, s.wt, &format!("CT{b}"), "test_caller", "c", 7, 11))
+        .insert_chunk(&chunk(
+            s.file,
+            s.wt,
+            &format!("CT{b}"),
+            "test_caller",
+            "c",
+            7,
+            11,
+        ))
         .await
         .unwrap();
 
@@ -1246,12 +1299,10 @@ async fn check_edge_batch_and_test_of(name: &str, store: &(dyn Store + Send + Sy
     // list_symbols_for_worktree returns the worktree's named chunks with relpath+kind.
     let symbols = store.list_symbols_for_worktree(s.wt).await.unwrap();
     assert!(
-        symbols
-            .iter()
-            .any(|(id, sym, rel, kind)| *id == callee
-                && sym == "callee"
-                && rel.contains("other_")
-                && kind == "function"),
+        symbols.iter().any(|(id, sym, rel, kind)| *id == callee
+            && sym == "callee"
+            && rel.contains("other_")
+            && kind == "function"),
         "[{name}] list_symbols must return the callee row, got {symbols:?}"
     );
     assert!(
@@ -1290,11 +1341,27 @@ async fn check_unmap_superseded_file_chunks(store: &(dyn Store + Send + Sync)) {
         .await
         .unwrap();
     store
-        .insert_chunk(&chunk(file_a, s.wt, &format!("A1{b}"), "old_fn_one", "old one", 1, 5))
+        .insert_chunk(&chunk(
+            file_a,
+            s.wt,
+            &format!("A1{b}"),
+            "old_fn_one",
+            "old one",
+            1,
+            5,
+        ))
         .await
         .unwrap();
     store
-        .insert_chunk(&chunk(file_a, s.wt, &format!("A2{b}"), "old_fn_two", "old two", 6, 9))
+        .insert_chunk(&chunk(
+            file_a,
+            s.wt,
+            &format!("A2{b}"),
+            "old_fn_two",
+            "old two",
+            6,
+            9,
+        ))
         .await
         .unwrap();
 
@@ -1316,9 +1383,20 @@ async fn check_unmap_superseded_file_chunks(store: &(dyn Store + Send + Sync)) {
         })
         .await
         .unwrap();
-    assert_ne!(file_a, file_b, "distinct generations must be distinct file rows");
+    assert_ne!(
+        file_a, file_b,
+        "distinct generations must be distinct file rows"
+    );
     store
-        .insert_chunk(&chunk(file_b, s.wt, &format!("B1{b}"), "new_fn", "new fn", 1, 4))
+        .insert_chunk(&chunk(
+            file_b,
+            s.wt,
+            &format!("B1{b}"),
+            "new_fn",
+            "new fn",
+            1,
+            4,
+        ))
         .await
         .unwrap();
 
@@ -1335,7 +1413,11 @@ async fn check_unmap_superseded_file_chunks(store: &(dyn Store + Send + Sync)) {
         .into_iter()
         .filter(|(_, r)| r == &relpath)
         .collect();
-    assert_eq!(rels.len(), 1, "only the surviving generation's chunk remains: {rels:?}");
+    assert_eq!(
+        rels.len(),
+        1,
+        "only the surviving generation's chunk remains: {rels:?}"
+    );
 }
 
 /// R09: keep_file_id = None removes every generation (file deleted).
@@ -1357,7 +1439,15 @@ async fn check_unmap_superseded_none_removes_all_generations(store: &(dyn Store 
         .await
         .unwrap();
     store
-        .insert_chunk(&chunk(file_a, s.wt, &format!("N1{b}"), "gone_fn", "gone", 1, 3))
+        .insert_chunk(&chunk(
+            file_a,
+            s.wt,
+            &format!("N1{b}"),
+            "gone_fn",
+            "gone",
+            1,
+            3,
+        ))
         .await
         .unwrap();
 
@@ -1437,7 +1527,15 @@ async fn check_unmap_superseded_preserves_shared_and_pool(store: &(dyn Store + S
         .await
         .unwrap();
     store
-        .insert_chunk(&chunk(file_b, s.wt, &format!("SB{b}"), "shared_fn_v2", "v2", 1, 6))
+        .insert_chunk(&chunk(
+            file_b,
+            s.wt,
+            &format!("SB{b}"),
+            "shared_fn_v2",
+            "v2",
+            1,
+            6,
+        ))
         .await
         .unwrap();
     store
@@ -1450,10 +1548,18 @@ async fn check_unmap_superseded_preserves_shared_and_pool(store: &(dyn Store + S
     // BOTH backends (get_chunks_for_worktree is file-ownership-based on
     // SQLite — a pre-existing backend divergence, unsuitable here).
     let _ = wt2; // id used via the worktree NAME below
-    // Query on the ts-doc word ("shared") — tokenization of symbol names
-    // differs across backends; the ts text matches on both.
+                 // Query on the ts-doc word ("shared") — tokenization of symbol names
+                 // differs across backends; the ts text matches on both.
     let (wt2_hits, _) = store
-        .search_chunks_fts(&s.repo_name, Some("feature"), "shared", 10, false, None, None)
+        .search_chunks_fts(
+            &s.repo_name,
+            Some("feature"),
+            "shared",
+            10,
+            false,
+            None,
+            None,
+        )
         .await
         .unwrap();
     assert!(
@@ -1462,7 +1568,10 @@ async fn check_unmap_superseded_preserves_shared_and_pool(store: &(dyn Store + S
     );
     // The embeddings pool is untouched.
     let pool_after = store.get_global_embedding_count().await.unwrap();
-    assert_eq!(pool_before, pool_after, "code_embeddings pool must never shrink on re-index");
+    assert_eq!(
+        pool_before, pool_after,
+        "code_embeddings pool must never shrink on re-index"
+    );
 }
 
 /// R05 / R-STALE-1: delete_worktree_data removes the worktree REGISTRATION so
@@ -1471,7 +1580,15 @@ async fn check_delete_worktree_data_removes_registration(store: &(dyn Store + Se
     let b = unique_base();
     let s = seed(store, "stalereg").await;
     store
-        .insert_chunk(&chunk(s.file, s.wt, &format!("SR{b}"), "stale_fn", "stale", 1, 3))
+        .insert_chunk(&chunk(
+            s.file,
+            s.wt,
+            &format!("SR{b}"),
+            "stale_fn",
+            "stale",
+            1,
+            3,
+        ))
         .await
         .unwrap();
 
@@ -1501,19 +1618,46 @@ async fn check_search_unknown_worktree_returns_empty(store: &(dyn Store + Send +
     let b = unique_base();
     let s = seed(store, "wtf").await;
     store
-        .insert_chunk(&chunk(s.file, s.wt, &format!("WT{b}"), "wtf_probe_fn", "wtf probe fn", 1, 3))
+        .insert_chunk(&chunk(
+            s.file,
+            s.wt,
+            &format!("WT{b}"),
+            "wtf_probe_fn",
+            "wtf probe fn",
+            1,
+            3,
+        ))
         .await
         .unwrap();
 
     let (hits, total) = store
-        .search_chunks_fts(&s.repo_name, Some("no-such-wt"), "wtf_probe_fn", 10, false, None, None)
+        .search_chunks_fts(
+            &s.repo_name,
+            Some("no-such-wt"),
+            "wtf_probe_fn",
+            10,
+            false,
+            None,
+            None,
+        )
         .await
         .unwrap();
-    assert!(hits.is_empty(), "fts: unknown worktree must be empty, got {hits:?}");
+    assert!(
+        hits.is_empty(),
+        "fts: unknown worktree must be empty, got {hits:?}"
+    );
     assert_eq!(total, 0);
 
     let vhits = store
-        .search_chunks_vector(&s.repo_name, Some("no-such-wt"), &vec![0.01f32; 768], 10, false, None, None)
+        .search_chunks_vector(
+            &s.repo_name,
+            Some("no-such-wt"),
+            &vec![0.01f32; 768],
+            10,
+            false,
+            None,
+            None,
+        )
         .await
         .unwrap();
     assert!(vhits.is_empty(), "vector: unknown worktree must be empty");
@@ -1535,7 +1679,15 @@ async fn check_search_unknown_worktree_returns_empty(store: &(dyn Store + Send +
 
     // Control: the KNOWN worktree still finds the probe.
     let (known_hits, _) = store
-        .search_chunks_fts(&s.repo_name, Some("main"), "wtf_probe_fn", 10, false, None, None)
+        .search_chunks_fts(
+            &s.repo_name,
+            Some("main"),
+            "wtf_probe_fn",
+            10,
+            false,
+            None,
+            None,
+        )
         .await
         .unwrap();
     assert!(!known_hits.is_empty(), "control: known worktree must match");
@@ -1545,7 +1697,11 @@ async fn check_search_unknown_worktree_returns_empty(store: &(dyn Store + Send +
 /// OWN required-table list (SQLite 12 incl. context_cache; PG 11 core).
 async fn check_verify_schema_clean(store: &(dyn Store + Send + Sync)) {
     let missing = store.verify_schema().await.unwrap();
-    assert_eq!(missing, Vec::<String>::new(), "fresh schema must verify clean");
+    assert_eq!(
+        missing,
+        Vec::<String>::new(),
+        "fresh schema must verify clean"
+    );
 }
 
 #[tokio::test]
@@ -1557,28 +1713,35 @@ async fn parity_unmap_superseded_file_chunks() {
 #[tokio::test]
 #[ignore]
 async fn parity_unmap_superseded_none_removes_all_generations() {
-    for_each(|_n, s| async move { check_unmap_superseded_none_removes_all_generations(s.as_ref()).await })
-        .await;
+    for_each(|_n, s| async move {
+        check_unmap_superseded_none_removes_all_generations(s.as_ref()).await
+    })
+    .await;
 }
 
 #[tokio::test]
 #[ignore]
 async fn parity_unmap_superseded_preserves_shared_and_pool() {
-    for_each(|_n, s| async move { check_unmap_superseded_preserves_shared_and_pool(s.as_ref()).await })
-        .await;
+    for_each(
+        |_n, s| async move { check_unmap_superseded_preserves_shared_and_pool(s.as_ref()).await },
+    )
+    .await;
 }
 
 #[tokio::test]
 #[ignore]
 async fn parity_delete_worktree_data_removes_registration() {
-    for_each(|_n, s| async move { check_delete_worktree_data_removes_registration(s.as_ref()).await })
-        .await;
+    for_each(
+        |_n, s| async move { check_delete_worktree_data_removes_registration(s.as_ref()).await },
+    )
+    .await;
 }
 
 #[tokio::test]
 #[ignore]
 async fn parity_search_unknown_worktree_returns_empty() {
-    for_each(|_n, s| async move { check_search_unknown_worktree_returns_empty(s.as_ref()).await }).await;
+    for_each(|_n, s| async move { check_search_unknown_worktree_returns_empty(s.as_ref()).await })
+        .await;
 }
 
 #[tokio::test]
@@ -1593,7 +1756,15 @@ async fn check_fts_hit_includes_preview(store: &(dyn Store + Send + Sync)) {
     let b = unique_base();
     let s = seed(store, "prev").await;
     store
-        .insert_chunk(&chunk(s.file, s.wt, &format!("PV{b}"), "preview_probe_fn", "preview probe body", 1, 4))
+        .insert_chunk(&chunk(
+            s.file,
+            s.wt,
+            &format!("PV{b}"),
+            "preview_probe_fn",
+            "preview probe body",
+            1,
+            4,
+        ))
         .await
         .unwrap();
     let (hits, _) = store
@@ -1639,12 +1810,28 @@ async fn check_get_chunks_for_worktree_junction_scoped(store: &(dyn Store + Send
         .await
         .unwrap();
     store
-        .insert_chunk(&chunk(file_a, s.wt, &format!("J1{b}"), "junc_fn", "junc fn", 1, 3))
+        .insert_chunk(&chunk(
+            file_a,
+            s.wt,
+            &format!("J1{b}"),
+            "junc_fn",
+            "junc fn",
+            1,
+            3,
+        ))
         .await
         .unwrap();
     // Map the SAME chunk to wt2 via the junction (no wt2-owned files row).
     store
-        .insert_chunk(&chunk(file_a, wt2, &format!("J1{b}"), "junc_fn", "junc fn", 1, 3))
+        .insert_chunk(&chunk(
+            file_a,
+            wt2,
+            &format!("J1{b}"),
+            "junc_fn",
+            "junc fn",
+            1,
+            3,
+        ))
         .await
         .unwrap();
 
@@ -1666,6 +1853,8 @@ async fn check_get_chunks_for_worktree_junction_scoped(store: &(dyn Store + Send
 #[tokio::test]
 #[ignore]
 async fn parity_get_chunks_for_worktree_junction_scoped() {
-    for_each(|_n, s| async move { check_get_chunks_for_worktree_junction_scoped(s.as_ref()).await })
-        .await;
+    for_each(
+        |_n, s| async move { check_get_chunks_for_worktree_junction_scoped(s.as_ref()).await },
+    )
+    .await;
 }

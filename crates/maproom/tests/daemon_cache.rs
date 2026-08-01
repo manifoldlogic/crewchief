@@ -95,8 +95,11 @@ fn daemon_search_cache_hits_and_warm_rpc() {
         .unwrap();
     assert!(scan.status.success());
 
-    let search =
-        |id: i64, q: &str| format!(r#"{{"jsonrpc":"2.0","method":"search","params":{{"repo":"fx","query":"{q}","mode":"fts"}},"id":{id}}}"#);
+    let search = |id: i64, q: &str| {
+        format!(
+            r#"{{"jsonrpc":"2.0","method":"search","params":{{"repo":"fx","query":"{q}","mode":"fts"}},"id":{id}}}"#
+        )
+    };
     let lines = vec![
         search(1, "cacheProbeOne"),                // miss -> executes + populates
         search(2, "cacheProbeOne"),                // identical -> CACHE HIT
@@ -121,7 +124,11 @@ fn daemon_search_cache_hits_and_warm_rpc() {
 
     // stats after the pair: exactly 1 hit (search 2), >=1 miss (search 1).
     let s3 = &by_id[&3]["result"];
-    assert_eq!(s3["hits"].as_u64(), Some(1), "second identical search is a cache HIT: {s3}");
+    assert_eq!(
+        s3["hits"].as_u64(),
+        Some(1),
+        "second identical search is a cache HIT: {s3}"
+    );
     assert!(s3["misses"].as_u64().unwrap_or(0) >= 1, "{s3}");
 
     // warm reports real work, no fiction.
@@ -145,8 +152,11 @@ fn serve_warm_queries_flag_populates_cache() {
     let repo = tempfile::TempDir::new().unwrap();
     let db = tempfile::TempDir::new().unwrap();
     git(repo.path(), &["init", "-q", "-b", "main"]);
-    std::fs::write(repo.path().join("a.ts"), "export function warmStartProbe() { return 1; }\n")
-        .unwrap();
+    std::fs::write(
+        repo.path().join("a.ts"),
+        "export function warmStartProbe() { return 1; }\n",
+    )
+    .unwrap();
     git(repo.path(), &["add", "a.ts"]);
     git(repo.path(), &["commit", "-qm", "i"]);
     let url = format!("sqlite://{}/f69w.db", db.path().display());
@@ -195,7 +205,11 @@ fn serve_warm_queries_flag_populates_cache() {
         use std::io::BufRead as _;
         use std::io::Write as _;
         id += 1;
-        writeln!(stdin, r#"{{"jsonrpc":"2.0","method":"cache.stats","id":{id}}}"#).unwrap();
+        writeln!(
+            stdin,
+            r#"{{"jsonrpc":"2.0","method":"cache.stats","id":{id}}}"#
+        )
+        .unwrap();
         stdin.flush().unwrap();
         last.clear();
         if reader.read_line(&mut last).unwrap() == 0 {

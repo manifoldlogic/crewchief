@@ -187,7 +187,10 @@ pub struct TransferStats {
 pub fn decode_embedding(b64: &str) -> Result<Vec<f32>> {
     let bytes = Base64::decode_vec(b64).map_err(|e| anyhow::anyhow!("bad base64: {e}"))?;
     if bytes.len() % 4 != 0 {
-        anyhow::bail!("embedding byte length {} is not a multiple of 4", bytes.len());
+        anyhow::bail!(
+            "embedding byte length {} is not a multiple of 4",
+            bytes.len()
+        );
     }
     Ok(bytes
         .chunks_exact(4)
@@ -228,7 +231,11 @@ pub async fn export_sqlite<W: Write + Send + 'static>(
             {
                 let mut stmt = conn.prepare("SELECT id, name, root_path FROM repos ORDER BY id")?;
                 let rows = stmt.query_map([], |r| {
-                    Ok(RepoRow { id: r.get(0)?, name: r.get(1)?, root_path: r.get(2)? })
+                    Ok(RepoRow {
+                        id: r.get(0)?,
+                        name: r.get(1)?,
+                        root_path: r.get(2)?,
+                    })
                 })?;
                 for row in rows {
                     write_rec(&mut w, &Record::Repo(row?))?;
@@ -236,8 +243,8 @@ pub async fn export_sqlite<W: Write + Send + 'static>(
                 }
             }
             {
-                let mut stmt = conn
-                    .prepare("SELECT id, repo_id, name, abs_path FROM worktrees ORDER BY id")?;
+                let mut stmt =
+                    conn.prepare("SELECT id, repo_id, name, abs_path FROM worktrees ORDER BY id")?;
                 let rows = stmt.query_map([], |r| {
                     Ok(WorktreeRow {
                         id: r.get(0)?,
@@ -252,8 +259,8 @@ pub async fn export_sqlite<W: Write + Send + 'static>(
                 }
             }
             {
-                let mut stmt = conn
-                    .prepare("SELECT id, repo_id, sha, committed_at FROM commits ORDER BY id")?;
+                let mut stmt =
+                    conn.prepare("SELECT id, repo_id, sha, committed_at FROM commits ORDER BY id")?;
                 let rows = stmt.query_map([], |r| {
                     Ok(CommitRow {
                         id: r.get(0)?,
@@ -326,7 +333,12 @@ pub async fn export_sqlite<W: Write + Send + 'static>(
                 )?;
                 let rows = stmt.query_map([], |r| {
                     let blob: Option<Vec<u8>> = r.get(1)?;
-                    Ok((r.get::<_, String>(0)?, blob, r.get::<_, i64>(2)?, r.get::<_, String>(3)?))
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        blob,
+                        r.get::<_, i64>(2)?,
+                        r.get::<_, String>(3)?,
+                    ))
                 })?;
                 for row in rows {
                     let (blob_sha, blob, embedding_dim, model_version) = row?;
@@ -345,10 +357,14 @@ pub async fn export_sqlite<W: Write + Send + 'static>(
                 }
             }
             {
-                let mut stmt = conn
-                    .prepare("SELECT chunk_id, worktree_id FROM chunk_worktrees ORDER BY chunk_id")?;
+                let mut stmt = conn.prepare(
+                    "SELECT chunk_id, worktree_id FROM chunk_worktrees ORDER BY chunk_id",
+                )?;
                 let rows = stmt.query_map([], |r| {
-                    Ok(ChunkWorktreeRow { chunk_id: r.get(0)?, worktree_id: r.get(1)? })
+                    Ok(ChunkWorktreeRow {
+                        chunk_id: r.get(0)?,
+                        worktree_id: r.get(1)?,
+                    })
                 })?;
                 for row in rows {
                     write_rec(&mut w, &Record::ChunkWorktree(row?))?;

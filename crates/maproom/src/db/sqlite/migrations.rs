@@ -595,7 +595,10 @@ mod tests {
             .chain(crate::db::traits::SQLITE_EXTRA_TABLES.iter())
             .copied()
             .collect();
-        assert_eq!(missing_tables(&conn, &required).unwrap(), Vec::<String>::new());
+        assert_eq!(
+            missing_tables(&conn, &required).unwrap(),
+            Vec::<String>::new()
+        );
     }
 
     #[test]
@@ -801,7 +804,10 @@ mod tests {
                 |_| Ok(true),
             )
             .unwrap_or(false);
-        assert!(dst_index_exists, "Index idx_chunk_edges_dst should exist (F84)");
+        assert!(
+            dst_index_exists,
+            "Index idx_chunk_edges_dst should exist (F84)"
+        );
 
         // F84 acceptance: the reverse-traversal shape actually USES the index.
         let plan: String = conn

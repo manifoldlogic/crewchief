@@ -83,7 +83,9 @@ fn search_unknown_worktree_returns_invalid_params() {
     let (_repo, _db, url) = scanned_fixture();
     let (stdout, _stderr) = serve(
         &url,
-        &[r#"{"jsonrpc":"2.0","method":"search","params":{"repo":"fx","query":"alphaOne","worktree":"no-such-wt"},"id":7}"#],
+        &[
+            r#"{"jsonrpc":"2.0","method":"search","params":{"repo":"fx","query":"alphaOne","worktree":"no-such-wt"},"id":7}"#,
+        ],
     );
     assert!(
         stdout.contains("-32602"),
@@ -97,7 +99,9 @@ fn search_unknown_worktree_returns_invalid_params() {
     // Control: the KNOWN worktree still searches fine.
     let (ok_out, _) = serve(
         &url,
-        &[r#"{"jsonrpc":"2.0","method":"search","params":{"repo":"fx","query":"alphaOne","worktree":"main","mode":"fts"},"id":8}"#],
+        &[
+            r#"{"jsonrpc":"2.0","method":"search","params":{"repo":"fx","query":"alphaOne","worktree":"main","mode":"fts"},"id":8}"#,
+        ],
     );
     assert!(
         ok_out.contains("alphaOne") && !ok_out.contains("-32602"),
@@ -149,7 +153,10 @@ fn missing_jsonrpc_field_rejected_32600() {
     let db = tempfile::TempDir::new().unwrap();
     let url = format!("sqlite://{}/x.db", db.path().display());
     let (stdout, _stderr) = serve(&url, &[r#"{"method":"ping","id":24}"#]);
-    assert!(stdout.contains("-32600"), "missing version is an invalid REQUEST, not a parse error; got: {stdout}");
+    assert!(
+        stdout.contains("-32600"),
+        "missing version is an invalid REQUEST, not a parse error; got: {stdout}"
+    );
     assert!(!stdout.contains("-32700"), "got: {stdout}");
 }
 
@@ -162,5 +169,128 @@ fn batch_array_rejected_32600() {
     assert!(
         stdout.contains("Batch requests are not supported") && stdout.contains("-32600"),
         "got: {stdout}"
+    );
+}
+
+// ============================================================================
+// R5 / D-8e: daemon round-trip backward-compat + new scope shapes
+// ============================================================================
+
+/// R5 / D-8e: existing single-repo {repo: "name"} payload is byte-compatible
+/// with the 0.2.0 response shape — the serde-additive change must not break it.
+#[test]
+fn old_shape_single_repo_compat() {
+    let (_repo, _db, url) = scanned_fixture();
+    // Old-shape: {"repo": "fx", "query": "..."} — no `repos` or `all_repos` fields.
+    let (stdout, _stderr) = serve(
+        &url,
+        &[
+            r#"{"jsonrpc":"2.0","method":"search","params":{"repo":"fx","query":"alphaOne","mode":"fts"},"id":42}"#,
+        ],
+    );
+    assert!(
+        !stdout.contains("-32602") && !stdout.contains("-32000"),
+        "old-shape must search without error; got: {stdout}"
+    );
+    assert!(
+        stdout.contains("alphaOne"),
+        "old-shape must find indexed content; got: {stdout}"
+    );
+    // Response must have "result" key (not "error") — backward-compatible shape.
+    assert!(
+        stdout.contains("\"result\""),
+        "response must carry 'result' key; got: {stdout}"
+    );
+}
+
+/// R5 / D-8e: new {repos: [...]} list shape dispatches correctly.
+#[test]
+fn new_repos_list_shape_searches() {
+    let (_repo, _db, url) = scanned_fixture();
+    let (stdout, _stderr) = serve(
+        &url,
+        &[
+            r#"{"jsonrpc":"2.0","method":"search","params":{"repos":["fx"],"query":"alphaOne","mode":"fts"},"id":43}"#,
+        ],
+    );
+    assert!(
+        !stdout.contains("-32602") && !stdout.contains("-32000"),
+        "repos-list shape must search without error; got: {stdout}"
+    );
+    assert!(
+        stdout.contains("alphaOne"),
+        "repos-list shape must find indexed content; got: {stdout}"
+    );
+}
+
+/// R5 / D-8e: new {all_repos: true} shape dispatches correctly.
+#[test]
+fn new_all_repos_shape_searches() {
+    let (_repo, _db, url) = scanned_fixture();
+    let (stdout, _stderr) = serve(
+        &url,
+        &[
+            r#"{"jsonrpc":"2.0","method":"search","params":{"all_repos":true,"query":"alphaOne","mode":"fts"},"id":44}"#,
+        ],
+    );
+    assert!(
+        !stdout.contains("-32602") && !stdout.contains("-32000"),
+        "all_repos shape must search without error; got: {stdout}"
+    );
+    assert!(
+        stdout.contains("alphaOne"),
+        "all_repos shape must find indexed content; got: {stdout}"
+    );
+}
+
+/// R3 / D-8a: supplying both repo and repos returns JSON-RPC -32602 (not -32000).
+#[test]
+fn scope_conflict_returns_invalid_params_32602() {
+    let (_repo, _db, url) = scanned_fixture();
+    // Both repo + repos supplied → exactly-one-of violation → -32602.
+    let (stdout, _stderr) = serve(
+        &url,
+        &[
+            r#"{"jsonrpc":"2.0","method":"search","params":{"repo":"fx","repos":["fy"],"query":"x","mode":"fts"},"id":45}"#,
+        ],
+    );
+    assert!(
+        stdout.contains("-32602"),
+        "scope conflict must return -32602 Invalid params (not -32000); got: {stdout}"
+    );
+    assert!(
+        !stdout.contains("-32000"),
+        "must not be -32000 Internal error; got: {stdout}"
+    );
+}
+
+/// R3 / D-8a: no scope supplied returns JSON-RPC -32602 (not -32000).
+#[test]
+fn no_scope_returns_invalid_params_32602() {
+    let (_repo, _db, url) = scanned_fixture();
+    // Neither repo, repos, nor all_repos supplied → -32602.
+    let (stdout, _stderr) = serve(
+        &url,
+        &[r#"{"jsonrpc":"2.0","method":"search","params":{"query":"x","mode":"fts"},"id":46}"#],
+    );
+    assert!(
+        stdout.contains("-32602"),
+        "no scope must return -32602 Invalid params (not -32000); got: {stdout}"
+    );
+}
+
+/// D-8g: vector mode with multi-repo scope returns -32602.
+#[test]
+fn multi_repo_vector_mode_returns_32602() {
+    let (_repo, _db, url) = scanned_fixture();
+    let (stdout, _stderr) = serve(
+        &url,
+        &[
+            r#"{"jsonrpc":"2.0","method":"search","params":{"all_repos":true,"query":"x","mode":"vector"},"id":47}"#,
+        ],
+    );
+    assert!(
+        stdout.contains("-32602"),
+        "multi-repo vector mode must return -32602; got: {stdout}"
     );
 }

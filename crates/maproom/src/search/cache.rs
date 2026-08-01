@@ -390,7 +390,6 @@ where
 
         count
     }
-
 }
 
 /// CacheKey-specific invalidation (needs the key's repo/worktree fields).
