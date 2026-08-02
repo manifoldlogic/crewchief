@@ -185,7 +185,31 @@ jobs:
       - name: Verify package
         run: |
           cd packages/maproom-mcp
-          TARBALL=$(ls maproom-mcp-*.tgz | head -1)
+          # Discover by extension, not by a guessed name. `pnpm pack` names the
+          # tarball after the package, and for a scoped package that name has
+          # changed shape over time: this globbed `maproom-mcp-*.tgz`, but
+          # pnpm 10 emits `crewchief-maproom-mcp-<version>.tgz` (scope
+          # flattened, matching npm).
+          #
+          # Loop rather than `TARBALL=$(ls *.tgz)`: under `bash -e` a failing
+          # `ls` aborts the step before the error below can print, so the
+          # operator sees a bare "cannot access" instead of the real problem --
+          # which is exactly how the 3.6.0 failure presented.
+          TARBALL=""
+          TARBALL_COUNT=0
+          for candidate in ./*.tgz; do
+            [ -f "$candidate" ] || continue
+            TARBALL="${candidate#./}"
+            TARBALL_COUNT=$((TARBALL_COUNT + 1))
+          done
+          if [ "$TARBALL_COUNT" -eq 0 ]; then
+            echo "ERROR: no tarball produced by pnpm pack"
+            exit 1
+          fi
+          if [ "$TARBALL_COUNT" -ne 1 ]; then
+            echo "ERROR: expected exactly one tarball, found $TARBALL_COUNT"
+            exit 1
+          fi
           echo "Package created: $TARBALL"
           tar -tzf "$TARBALL" | head -20
 
@@ -196,6 +220,10 @@ jobs:
           tar -tzf "$TARBALL" | grep "package/bin/darwin-x64/maproom"
           tar -tzf "$TARBALL" | grep "package/bin/darwin-arm64/maproom"
           echo "✓ All binaries present in tarball"
+
+          # Hand the exact verified filename to the publish step, so discovery
+          # happens once and publish cannot pick a different file.
+          echo "TARBALL=$TARBALL" >> "$GITHUB_ENV"
 
       - name: Publish to npm
         if: ${{ !inputs.dry_run }}
@@ -214,7 +242,12 @@ jobs:
         # Packing stays with pnpm, so any workspace-protocol rewriting still
         # happens at pack time.
         run: |
-          TARBALL=$(ls maproom-mcp-*.tgz | head -1)
+          # Set by "Verify package" -- publish the exact file that was verified,
+          # including its four-binary check.
+          if [ -z "${TARBALL:-}" ]; then
+            echo "ERROR: TARBALL not set by the Verify package step"
+            exit 1
+          fi
           echo "Publishing $TARBALL"
           npm publish "$TARBALL" --access public
 
