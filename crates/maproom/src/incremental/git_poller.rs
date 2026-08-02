@@ -384,9 +384,18 @@ impl GitPoller {
     }
 
     /// Execute git status command with timeout.
+    ///
+    /// `--no-optional-locks` is required, not cosmetic: a plain `git status`
+    /// takes `.git/index.lock` to opportunistically write back its refreshed
+    /// stat cache. Since this poller runs every `poll_interval` for the life of
+    /// the watcher, that lock collides with whatever the user is doing in the
+    /// same repo — `git add`, `commit`, `pull`, and release scripts all fail
+    /// with "Another git process seems to be running". Suppressing the
+    /// optional lock costs nothing (same output, same runtime) and makes the
+    /// watcher invisible to concurrent git usage.
     async fn run_git_status(&self) -> Result<String, GitPollerError> {
         let mut cmd = Command::new("git");
-        cmd.args(["status", "--porcelain"]);
+        cmd.args(["--no-optional-locks", "status", "--porcelain"]);
 
         if self.config.detect_renames {
             cmd.arg("-M");
