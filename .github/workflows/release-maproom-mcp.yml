@@ -56,7 +56,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Must stay >= 22.22.2: the npm upgrade below installs npm@latest,
+          # and npm 12 requires ^22.22.2 || ^24.15.0 || >=26.0.0. On Node 20
+          # that step fails with EBADENGINE. Node 20 also reached EOL 2026-04-30.
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org/'
 
       - name: Upgrade npm for OIDC support
