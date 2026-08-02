@@ -56,14 +56,18 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          # Must stay >= 22.22.2: the npm upgrade below installs npm@latest,
-          # and npm 12 requires ^22.22.2 || ^24.15.0 || >=26.0.0. On Node 20
-          # that step fails with EBADENGINE. Node 20 also reached EOL 2026-04-30.
+          # Keep in sync with the npm pin below: npm 12 requires
+          # ^22.22.2 || ^24.15.0 || >=26.0.0. Node 20 (EOL 2026-04-30) fails
+          # that with EBADENGINE. Latest 22.x is 22.23.2, so '22' clears it.
           node-version: '22'
           registry-url: 'https://registry.npmjs.org/'
 
       - name: Upgrade npm for OIDC support
-        run: npm install -g npm@latest
+        # Pinned to a major deliberately. An unpinned npm@latest broke this
+        # job with no change on our side when npm 12 dropped Node 20. npm 12
+        # provides the OIDC trusted publishing this step exists for.
+        # Bump this and node-version above together.
+        run: npm install -g npm@12
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
