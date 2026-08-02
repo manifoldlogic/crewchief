@@ -391,8 +391,13 @@ impl GitPoller {
     /// the watcher, that lock collides with whatever the user is doing in the
     /// same repo — `git add`, `commit`, `pull`, and release scripts all fail
     /// with "Another git process seems to be running". Suppressing the
-    /// optional lock costs nothing (same output, same runtime) and makes the
-    /// watcher invisible to concurrent git usage.
+    /// optional lock makes the watcher invisible to concurrent git usage.
+    ///
+    /// The output is identical; the cost is not strictly zero. That write-back
+    /// is an optimization that lets subsequent git processes skip re-stat'ing
+    /// unchanged files, so declining it can mean each poll redoes refresh work
+    /// a previous poll would have cached. Not blocking the user's own git
+    /// commands is worth more than that cached stat data.
     async fn run_git_status(&self) -> Result<String, GitPollerError> {
         let mut cmd = Command::new("git");
         cmd.args(["--no-optional-locks", "status", "--porcelain"]);
