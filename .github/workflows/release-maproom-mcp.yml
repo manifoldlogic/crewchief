@@ -185,7 +185,17 @@ jobs:
       - name: Verify package
         run: |
           cd packages/maproom-mcp
-          TARBALL=$(ls maproom-mcp-*.tgz | head -1)
+          # Match by extension, not by a guessed name. `pnpm pack` names the
+          # tarball after the package, and for a scoped package that name has
+          # changed shape over time: this globbed `maproom-mcp-*.tgz`, but
+          # pnpm 10 emits `crewchief-maproom-mcp-<version>.tgz` (scope
+          # flattened, matching npm). The Pack step runs `rm -f *.tgz` first,
+          # so exactly one tarball exists here.
+          TARBALL=$(ls *.tgz)
+          if [ ! -f "$TARBALL" ]; then
+            echo "ERROR: no tarball produced by pnpm pack"
+            exit 1
+          fi
           echo "Package created: $TARBALL"
           tar -tzf "$TARBALL" | head -20
 
@@ -214,7 +224,7 @@ jobs:
         # Packing stays with pnpm, so any workspace-protocol rewriting still
         # happens at pack time.
         run: |
-          TARBALL=$(ls maproom-mcp-*.tgz | head -1)
+          TARBALL=$(ls *.tgz)
           echo "Publishing $TARBALL"
           npm publish "$TARBALL" --access public
 
