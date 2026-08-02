@@ -24,6 +24,10 @@ jobs:
       package_name: cli
       binary_name: maproom
       crate_path: crates/maproom
+      # Ship the PostgreSQL backend. Without this the published binary is
+      # SQLite-only and any postgres:// URL fails with
+      # "built without --features postgres".
+      features: postgres
 
   # Job 2: Build TypeScript (reusable)
   build-typescript:

@@ -24,6 +24,9 @@ jobs:
       package_name: maproom-mcp
       binary_name: maproom
       crate_path: crates/maproom
+      # maproom-mcp bundles its OWN copy of the binary (it does not reuse the
+      # CLI's), so it needs the same flag or the MCP server stays SQLite-only.
+      features: postgres
 
   # Job 2: Build TypeScript (reusable)
   build-typescript:

@@ -206,7 +206,8 @@ fn write_rec<W: Write>(w: &mut W, rec: &Record) -> Result<()> {
 
 /// Export a SQLite index to the NDJSON artifact `w`, streaming row-by-row through a
 /// single connection (bounded memory, §S1.3). Returns `w` (so a caller can flush an
-/// owned writer) plus per-entity counts. Runs on the shipped SQLite-only binary.
+/// owned writer) plus per-entity counts. Runs on a binary built without
+/// `--features postgres`.
 pub async fn export_sqlite<W: Write + Send + 'static>(
     store: &SqliteStore,
     mut w: W,
