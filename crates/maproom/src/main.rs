@@ -57,8 +57,12 @@ const EXIT_CONFIG_ERROR: i32 = 2;
 fn validate_provider(s: &str) -> Result<String, String> {
     match s.to_lowercase().as_str() {
         "ollama" | "openai" | "google" => Ok(s.to_lowercase()),
+        // Normalize the Bedrock aliases here so everything downstream — the
+        // MAPROOM_EMBEDDING_PROVIDER env var this is written into, and the
+        // factory that reads it — sees exactly one spelling.
+        "bedrock" | "aws" | "aws-bedrock" => Ok("bedrock".to_string()),
         _ => Err(format!(
-            "Invalid provider: '{}'. Supported providers: ollama, openai, google",
+            "Invalid provider: '{}'. Supported providers: ollama, openai, google, bedrock",
             s
         )),
     }
@@ -428,13 +432,13 @@ enum Commands {
                          Full-text search works without embeddings and is the default mode.\n\n\
                          Use --generate-embeddings to opt in when:\n\
                          - You want semantic/vector search capabilities\n\
-                         - You have an embedding provider configured (Ollama, OpenAI, or Google Vertex)"
+                         - You have an embedding provider configured (Ollama, OpenAI, Google Vertex, or AWS Bedrock)"
         )]
         generate_embeddings: bool,
         /// Embedding batch size for generation (default: 50)
         #[arg(long, default_value_t = 50)]
         embedding_batch_size: usize,
-        /// Embedding provider: ollama, openai, or google (overrides MAPROOM_EMBEDDING_PROVIDER env var)
+        /// Embedding provider: ollama, openai, google, or bedrock (overrides MAPROOM_EMBEDDING_PROVIDER env var)
         #[arg(long, value_parser = validate_provider)]
         provider: Option<String>,
         /// Show detailed output (currently same as default, reserved for future enhancements)
@@ -463,7 +467,7 @@ enum Commands {
         /// Embedding batch size for generation (default: 50)
         #[arg(long, default_value_t = 50)]
         embedding_batch_size: usize,
-        /// Embedding provider: ollama, openai, or google (overrides MAPROOM_EMBEDDING_PROVIDER env var)
+        /// Embedding provider: ollama, openai, google, or bedrock (overrides MAPROOM_EMBEDDING_PROVIDER env var)
         #[arg(long, value_parser = validate_provider)]
         provider: Option<String>,
     },
@@ -931,7 +935,7 @@ async fn auto_generate_embeddings(
                 // Try to detect if Ollama is configured
                 tracing::warn!("Embedding service unavailable: {}", e);
                 return Err(anyhow::anyhow!(
-                    "Embedding service not available. Configure MAPROOM_EMBEDDING_PROVIDER (openai/ollama/google) and API keys in .env file."
+                    "Embedding service not available. Configure MAPROOM_EMBEDDING_PROVIDER (ollama/openai/google/bedrock) and the matching credentials. Bedrock uses the standard AWS credential chain; the others read an API key from the environment or .env file."
                 ));
             }
             return Err(e.into());
@@ -2267,7 +2271,9 @@ async fn real_main() -> anyhow::Result<()> {
                 .to_string();
             if provider.is_empty() {
                 eprintln!("Configuration error: MAPROOM_EMBEDDING_PROVIDER not set or empty");
-                eprintln!("Set MAPROOM_EMBEDDING_PROVIDER to 'openai', 'voyage', or another supported provider");
+                eprintln!(
+                    "Set MAPROOM_EMBEDDING_PROVIDER to one of: ollama, openai, google, bedrock"
+                );
                 std::process::exit(EXIT_CONFIG_ERROR);
             }
 
@@ -2491,7 +2497,9 @@ async fn real_main() -> anyhow::Result<()> {
                 .to_string();
             if provider.is_empty() {
                 eprintln!("Configuration error: MAPROOM_EMBEDDING_PROVIDER not set or empty");
-                eprintln!("Set MAPROOM_EMBEDDING_PROVIDER to 'openai', 'voyage', or another supported provider");
+                eprintln!(
+                    "Set MAPROOM_EMBEDDING_PROVIDER to one of: ollama, openai, google, bedrock"
+                );
                 std::process::exit(EXIT_CONFIG_ERROR);
             }
 

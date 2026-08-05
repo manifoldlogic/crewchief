@@ -622,3 +622,179 @@ fn search_all_repos_hybrid_mode_exits_2() {
         "multi-repo hybrid mode must be exit 2 (D-8g); stderr: {stderr}"
     );
 }
+
+// ── AWS Bedrock provider configuration ────────────────────────────────────
+
+/// Build a command with every AWS credential source neutralized.
+///
+/// Without this, a developer machine with `~/.aws/credentials` or an EC2
+/// builder with an instance role would resolve real credentials and these
+/// tests would assert the wrong thing — or worse, make a billable API call.
+fn bedrock_cmd() -> Command {
+    let mut cmd = maproom_cmd();
+    for variable in [
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "AWS_PROFILE",
+        "MAPROOM_AWS_PROFILE",
+        "AWS_ROLE_ARN",
+        "AWS_WEB_IDENTITY_TOKEN_FILE",
+        "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+        "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+        "MAPROOM_BEDROCK_ENDPOINT_URL",
+        "AWS_ENDPOINT_URL",
+        "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+    ] {
+        cmd.env_remove(variable);
+    }
+    // Point the shared-config lookups at nothing, and keep IMDS from being
+    // probed at all (it would otherwise cost a 2s timeout per test).
+    cmd.env("AWS_CONFIG_FILE", "/nonexistent/aws/config");
+    cmd.env("AWS_SHARED_CREDENTIALS_FILE", "/nonexistent/aws/credentials");
+    cmd.env("AWS_EC2_METADATA_DISABLED", "true");
+    cmd.env("MAPROOM_BEDROCK_REGION", "us-east-1");
+    cmd
+}
+
+/// A Bedrock model id we cannot infer a dimension for is a config error (2).
+///
+/// Guessing would silently build an index at the wrong width, which only
+/// surfaces much later as vector search returning nothing.
+#[test]
+fn bedrock_unknown_model_without_dimension_exits_2() {
+    let db = tempfile::TempDir::new().unwrap();
+    let url = format!("sqlite://{}/bedrock-model.db", db.path().display());
+    let migrate = bedrock_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args(["db", "migrate"])
+        .output()
+        .unwrap();
+    assert!(migrate.status.success());
+
+    let out = bedrock_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .env("MAPROOM_EMBEDDING_PROVIDER", "bedrock")
+        .env("MAPROOM_EMBEDDING_MODEL", "some.unknown-embed-model")
+        .args(["vector-search", "--repo", "fx", "--query", "x"])
+        .output()
+        .unwrap();
+
+    assert_eq!(out.status.code(), Some(2), "config errors must exit 2");
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        combined.contains("MAPROOM_EMBEDDING_DIMENSION"),
+        "the error must say how to fix it: {combined}"
+    );
+}
+
+/// Bedrock with no credentials anywhere is a config error (2), and the message
+/// enumerates every source that was tried.
+#[test]
+fn bedrock_without_credentials_exits_2_and_lists_what_it_tried() {
+    let db = tempfile::TempDir::new().unwrap();
+    let url = format!("sqlite://{}/bedrock-creds.db", db.path().display());
+    let migrate = bedrock_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args(["db", "migrate"])
+        .output()
+        .unwrap();
+    assert!(migrate.status.success());
+
+    let out = bedrock_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .env("MAPROOM_EMBEDDING_PROVIDER", "bedrock")
+        .args(["vector-search", "--repo", "fx", "--query", "x"])
+        .output()
+        .unwrap();
+
+    assert_eq!(out.status.code(), Some(2), "config errors must exit 2");
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        combined.contains("No AWS credentials found"),
+        "expected the credential-chain diagnostic: {combined}"
+    );
+    for expected in ["environment", "web identity", "default profile", "IMDSv2"] {
+        assert!(
+            combined.contains(expected),
+            "the diagnostic must list the '{expected}' source it tried: {combined}"
+        );
+    }
+    assert!(
+        combined.contains("aws sts get-caller-identity"),
+        "the diagnostic should name the command that verifies a fix: {combined}"
+    );
+}
+
+/// An explicitly named profile that does not exist is a hard error, never a
+/// silent fallback to some other credential source.
+#[test]
+fn bedrock_named_profile_that_is_missing_exits_2() {
+    let db = tempfile::TempDir::new().unwrap();
+    let url = format!("sqlite://{}/bedrock-profile.db", db.path().display());
+    let migrate = bedrock_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .args(["db", "migrate"])
+        .output()
+        .unwrap();
+    assert!(migrate.status.success());
+
+    let out = bedrock_cmd()
+        .env("MAPROOM_DATABASE_URL", &url)
+        .env("MAPROOM_EMBEDDING_PROVIDER", "bedrock")
+        .env("MAPROOM_AWS_PROFILE", "no-such-profile")
+        .args(["vector-search", "--repo", "fx", "--query", "x"])
+        .output()
+        .unwrap();
+
+    assert_eq!(out.status.code(), Some(2));
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        combined.contains("no-such-profile"),
+        "the error must name the profile that was requested: {combined}"
+    );
+}
+
+/// `--provider aws` and `--provider aws-bedrock` are accepted aliases.
+#[test]
+fn bedrock_provider_aliases_are_accepted_by_the_cli() {
+    for alias in ["bedrock", "aws", "aws-bedrock"] {
+        let out = maproom_cmd()
+            .args(["scan", "--path", "/nonexistent", "--provider", alias])
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            !stderr.contains("Invalid provider"),
+            "'{alias}' must be accepted as a Bedrock alias: {stderr}"
+        );
+    }
+}
+
+/// An unsupported provider name is still rejected, and the message lists the
+/// real set including bedrock.
+#[test]
+fn unknown_provider_name_lists_bedrock_as_an_option() {
+    let out = maproom_cmd()
+        .args(["scan", "--path", "/tmp", "--provider", "voyage"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("Invalid provider"), "{stderr}");
+    assert!(
+        stderr.contains("bedrock"),
+        "the supported-provider list must mention bedrock: {stderr}"
+    );
+}

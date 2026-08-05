@@ -173,6 +173,21 @@ pub struct BedrockProvider {
     semaphore: Arc<Semaphore>,
 }
 
+// Written by hand rather than derived: the provider holds a credentials
+// provider, and a derived Debug would risk rendering secrets into a log line.
+impl std::fmt::Debug for BedrockProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BedrockProvider")
+            .field("model", &self.model)
+            .field("family", &self.family)
+            .field("dimension", &self.dimension)
+            .field("region", &self.region)
+            .field("endpoint", &self.endpoint)
+            .field("input_type", &self.input_type)
+            .finish_non_exhaustive()
+    }
+}
+
 impl BedrockProvider {
     /// Default model: the current-generation Titan text embedding model.
     ///
