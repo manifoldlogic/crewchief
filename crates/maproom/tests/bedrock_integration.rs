@@ -734,3 +734,84 @@ async fn titan_does_not_claim_to_distinguish_queries() {
     let as_query = provider.embed_query("same text".to_string()).await.unwrap();
     assert_eq!(as_document, as_query);
 }
+
+#[tokio::test]
+#[serial]
+async fn titan_batch_still_splits_when_parallel_processing_is_disabled() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path_regex(r"^/model/.*/invoke$"))
+        .respond_with(|request: &Request| {
+            let body: Value = serde_json::from_slice(&request.body).unwrap();
+            let text = body["inputText"].as_str().unwrap();
+            let index: f32 = text.parse().unwrap();
+            let mut embedding = vec![0.0_f32; 1024];
+            embedding[0] = index;
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "embedding": embedding, "inputTextTokenCount": 1 }))
+        })
+        // Titan's payload carries a single `inputText`, so five texts is five
+        // requests even with the concurrency machinery switched off. Sending
+        // the whole batch in one call would embed only the first text.
+        .expect(5)
+        .mount(&server)
+        .await;
+
+    let provider = provider_for(
+        &server.uri(),
+        "amazon.titan-embed-text-v2:0",
+        1024,
+        ParallelConfig {
+            enabled: false,
+            ..ParallelConfig::bedrock_defaults()
+        },
+    )
+    .await;
+
+    let texts: Vec<String> = (0..5).map(|index| index.to_string()).collect();
+    let embeddings = provider.embed_batch(texts).await.unwrap();
+
+    assert_eq!(embeddings.len(), 5);
+    for (index, embedding) in embeddings.iter().enumerate() {
+        assert_eq!(
+            embedding[0], index as f32,
+            "serial sub-batches must preserve input order"
+        );
+    }
+}
+
+#[tokio::test]
+#[serial]
+async fn cohere_batch_respects_the_api_limit_when_parallel_is_disabled() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path_regex(r"^/model/.*/invoke$"))
+        .respond_with(|request: &Request| {
+            let body: Value = serde_json::from_slice(&request.body).unwrap();
+            let texts = body["texts"].as_array().unwrap();
+            assert!(
+                texts.len() <= 96,
+                "Bedrock rejects Cohere batches above 96; got {}",
+                texts.len()
+            );
+            ResponseTemplate::new(200).set_body_json(cohere_body(texts.len(), 1024))
+        })
+        // 150 texts / 96 per request = 2 requests, even serially.
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let provider = provider_for(
+        &server.uri(),
+        "cohere.embed-english-v3",
+        1024,
+        ParallelConfig {
+            enabled: false,
+            ..ParallelConfig::bedrock_defaults()
+        },
+    )
+    .await;
+
+    let texts: Vec<String> = (0..150).map(|index| format!("text {index}")).collect();
+    assert_eq!(provider.embed_batch(texts).await.unwrap().len(), 150);
+}

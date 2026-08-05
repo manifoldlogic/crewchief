@@ -16,7 +16,7 @@ export interface ValidationResult {
  * `Provider` enum in crates/maproom/src/embedding/config.rs. `aws` and
  * `aws-bedrock` are accepted aliases for `bedrock`.
  */
-const VALID_PROVIDERS = ['ollama', 'openai', 'google', 'bedrock', 'aws', 'aws-bedrock'] as const
+export const VALID_PROVIDERS = ['ollama', 'openai', 'google', 'bedrock', 'aws', 'aws-bedrock'] as const
 
 /**
  * Validate maproom environment configuration

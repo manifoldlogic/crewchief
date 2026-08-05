@@ -605,6 +605,18 @@ describe('AWS Bedrock provider', () => {
       // A wrong dimension builds an index that silently returns nothing.
       expect(inferBedrockDimension('meta.llama-embed-v9')).toBeNull()
     })
+
+    it('does not treat a near-miss id as a match', () => {
+      // A bare startsWith would call these Titan v2 and hand back 1024.
+      expect(inferBedrockDimension('amazon.titan-embed-text-v20')).toBeNull()
+      expect(inferBedrockDimension('amazon.titan-embed-text-v2x')).toBeNull()
+    })
+
+    it('still resolves the real suffixed ids AWS ships', () => {
+      expect(inferBedrockDimension('amazon.titan-embed-text-v2:0')).toBe(1024)
+      expect(inferBedrockDimension('amazon.titan-embed-g1-text-02')).toBe(1536)
+      expect(inferBedrockDimension('amazon.titan-embed-text-v2')).toBe(1024)
+    })
   })
 
   describe('validateExplicitProvider', () => {
@@ -642,6 +654,22 @@ describe('AWS Bedrock provider', () => {
       expect(() => validateExplicitProvider('bedrock')).toThrow(
         /MAPROOM_EMBEDDING_DIMENSION/
       )
+    })
+
+    it('rejects a dimension override that is not a whole positive integer', () => {
+      // Number.parseInt('1024junk') is 1024, so a malformed value would
+      // otherwise be accepted and index at a plausible-looking width.
+      for (const bad of ['1024junk', '1536.5', '0', '-1024', 'abc', ' ']) {
+        process.env.MAPROOM_EMBEDDING_DIMENSION = bad
+        expect(() => validateExplicitProvider('bedrock')).toThrow(
+          /must be a positive integer/
+        )
+      }
+    })
+
+    it('accepts a well-formed dimension override with surrounding whitespace', () => {
+      process.env.MAPROOM_EMBEDDING_DIMENSION = ' 1024 '
+      expect(validateExplicitProvider('bedrock').dimension).toBe(1024)
     })
 
     it('still lists bedrock when rejecting an unknown provider', () => {

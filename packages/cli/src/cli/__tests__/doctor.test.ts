@@ -273,11 +273,31 @@ describe('checkEmbeddingProvider: AWS Bedrock', () => {
     delete process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI
   })
 
+  // Mirrors beforeEach exactly. A test that sets OPENAI_API_KEY (the
+  // precedence cases below do) must not leak it into a later suite in the same
+  // file, where it would silently satisfy a different provider check.
   afterEach(() => {
     delete process.env.MAPROOM_EMBEDDING_PROVIDER
+    delete process.env.OPENAI_API_KEY
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS
     delete process.env.AWS_ACCESS_KEY_ID
     delete process.env.AWS_PROFILE
     delete process.env.AWS_WEB_IDENTITY_TOKEN_FILE
+    delete process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI
+    delete process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI
+  })
+
+  it('reports no provider for an unsupported explicit name', async () => {
+    // doctor must not claim readiness for a provider maproom would reject —
+    // the first search would exit 2.
+    process.env.MAPROOM_EMBEDDING_PROVIDER = 'voyage'
+    await expect(checkEmbeddingProvider()).resolves.toBeNull()
+  })
+
+  it('does not let an invalid explicit name mask a real credential', async () => {
+    process.env.MAPROOM_EMBEDDING_PROVIDER = 'not-a-provider'
+    process.env.OPENAI_API_KEY = 'sk-test-key'
+    await expect(checkEmbeddingProvider()).resolves.toBeNull()
   })
 
   it('reports bedrock when AWS_PROFILE is set', async () => {

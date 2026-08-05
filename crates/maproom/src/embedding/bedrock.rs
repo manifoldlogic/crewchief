@@ -308,6 +308,21 @@ impl BedrockProvider {
     ///
     /// Titan takes exactly one text; Cohere takes the whole slice.
     fn request_body(&self, texts: &[String]) -> Result<Vec<u8>, EmbeddingError> {
+        // Enforce the per-request limit here, at the point where exceeding it
+        // would silently drop text. Titan serializes only `texts[0]`, so
+        // without this a caller that skipped splitting would see a confusing
+        // "returned 1 embeddings for N inputs" instead of the real cause.
+        if texts.len() > self.family.max_batch_size() {
+            return Err(EmbeddingError::InvalidInput(format!(
+                "{} accepts at most {} text(s) per request, got {}. \
+                 This is an internal batching error — the batch should have been \
+                 split before reaching the request builder.",
+                self.family.label(),
+                self.family.max_batch_size(),
+                texts.len(),
+            )));
+        }
+
         let body = match self.family {
             ModelFamily::TitanV1 => json!({ "inputText": texts[0] }),
             ModelFamily::TitanV2 => json!({
@@ -654,6 +669,30 @@ impl BedrockProvider {
             .collect()
     }
 
+    /// Walk a batch through sequential `InvokeModel` calls at the family limit.
+    ///
+    /// Used when `MAPROOM_EMBEDDING_PARALLEL_ENABLED=false`. Splitting is still
+    /// mandatory — it is the per-request text limit that requires it, not the
+    /// concurrency strategy — so this differs from the parallel path only in
+    /// issuing one request at a time.
+    async fn embed_batch_serial(&self, texts: Vec<String>) -> Result<Vec<Vector>, EmbeddingError> {
+        let batch_size = self.family.max_batch_size();
+        let total = texts.len();
+
+        tracing::info!(
+            "Bedrock serial batch embedding: {} texts in {} requests (size: {}, parallelism disabled)",
+            total,
+            total.div_ceil(batch_size),
+            batch_size,
+        );
+
+        let mut embeddings = Vec::with_capacity(total);
+        for chunk in texts.chunks(batch_size) {
+            embeddings.extend(self.invoke_with_retry(chunk.to_vec()).await?);
+        }
+        Ok(embeddings)
+    }
+
     /// Split a batch across concurrent `InvokeModel` calls, preserving order.
     ///
     /// Sub-batch size is capped by the family's per-request limit — 1 for Titan,
@@ -767,8 +806,18 @@ impl EmbeddingProvider for BedrockProvider {
         let texts = self.truncate(texts);
 
         // A batch that fits one request skips the spawn/semaphore machinery.
-        if !self.parallel_config.enabled || texts.len() <= self.family.max_batch_size() {
+        //
+        // The family limit gates this, NOT `parallel_config.enabled`. Disabling
+        // parallelism must not disable *splitting*: Titan's payload carries a
+        // single `inputText`, so handing it the whole batch would embed only
+        // the first text and fail the response-length check, and an oversized
+        // Cohere batch would exceed the API's 96-text limit.
+        if texts.len() <= self.family.max_batch_size() {
             return self.invoke_with_retry(texts).await;
+        }
+
+        if !self.parallel_config.enabled {
+            return self.embed_batch_serial(texts).await;
         }
         self.embed_batch_parallel(texts).await
     }
@@ -828,16 +877,35 @@ fn normalize_model_id(model: &str) -> String {
 /// Determine the model family from a model id, if it is one we know.
 pub fn infer_model_family(model: &str) -> Option<ModelFamily> {
     let normalized = normalize_model_id(model);
-    if normalized.starts_with("amazon.titan-embed-text-v2") {
+    if matches_model_prefix(&normalized, "amazon.titan-embed-text-v2") {
         Some(ModelFamily::TitanV2)
-    } else if normalized.starts_with("amazon.titan-embed-text-v1")
-        || normalized.starts_with("amazon.titan-embed-g1-text")
+    } else if matches_model_prefix(&normalized, "amazon.titan-embed-text-v1")
+        || matches_model_prefix(&normalized, "amazon.titan-embed-g1-text")
     {
         Some(ModelFamily::TitanV1)
     } else if normalized.starts_with("cohere.embed-") {
         Some(ModelFamily::CohereV3)
     } else {
         None
+    }
+}
+
+/// Whether `model` is `prefix`, or `prefix` followed by a version delimiter.
+///
+/// A bare `starts_with` is too loose: it accepts `amazon.titan-embed-text-v20`
+/// as Titan v2 and hands back 1024 dimensions for a model id that does not
+/// exist. Since an unrecognized id is deliberately a hard error (a wrong
+/// dimension builds an index that silently returns nothing), a typo must not
+/// slip through as a near-match.
+///
+/// The delimiter must still permit the real suffixed ids AWS ships —
+/// `amazon.titan-embed-text-v2:0` and `amazon.titan-embed-g1-text-02` — so `:`
+/// and `-` both continue the match while an alphanumeric does not.
+fn matches_model_prefix(model: &str, prefix: &str) -> bool {
+    match model.strip_prefix(prefix) {
+        None => false,
+        Some("") => true,
+        Some(rest) => rest.starts_with(':') || rest.starts_with('-'),
     }
 }
 
@@ -957,6 +1025,24 @@ fn resolve_endpoint(region: &str) -> String {
             let trimmed = value.trim();
             if !trimmed.is_empty() {
                 tracing::info!("Using Bedrock endpoint {trimmed} from {variable}");
+                // Over plaintext, an on-path observer reads the request body —
+                // the source code being embedded — plus the access key id and,
+                // for temporary credentials, `x-amz-security-token`. SigV4
+                // never puts the secret key on the wire, so this is not a
+                // credential handover; the captured signature is bound to that
+                // one canonical request and is replayable only within AWS's
+                // clock-skew window. A local mock is a legitimate reason to use
+                // http://, so it stays allowed — but never silently, because
+                // the override can come from a compose file or CI config the
+                // operator did not write.
+                if trimmed.starts_with("http://") {
+                    tracing::warn!(
+                        "Bedrock endpoint {trimmed} (from {variable}) uses plaintext HTTP. \
+                         Indexed source code and the AWS access key id will be sent \
+                         unencrypted and are readable by anyone on the network path. \
+                         Use https:// for anything other than a local mock."
+                    );
+                }
                 return trimmed.trim_end_matches('/').to_string();
             }
         }
@@ -1196,6 +1282,30 @@ mod tests {
     fn cohere_input_type_distinguishes_documents_from_queries() {
         assert_eq!(InputType::Document.as_cohere_str(), "search_document");
         assert_eq!(InputType::Query.as_cohere_str(), "search_query");
+    }
+
+    #[test]
+    fn near_miss_model_ids_do_not_resolve_to_a_family() {
+        // A typo must not inherit a real model's dimension — an index built at
+        // the wrong width succeeds and then returns nothing.
+        assert_eq!(infer_model_family("amazon.titan-embed-text-v20"), None);
+        assert_eq!(infer_model_family("amazon.titan-embed-text-v2x"), None);
+        assert_eq!(infer_bedrock_dimension("amazon.titan-embed-text-v20"), None);
+
+        // The real suffixed ids AWS ships must still resolve.
+        assert_eq!(
+            infer_model_family("amazon.titan-embed-text-v2:0"),
+            Some(ModelFamily::TitanV2)
+        );
+        assert_eq!(
+            infer_model_family("amazon.titan-embed-g1-text-02"),
+            Some(ModelFamily::TitanV1)
+        );
+        assert_eq!(
+            infer_model_family("amazon.titan-embed-text-v2"),
+            Some(ModelFamily::TitanV2),
+            "the bare prefix is itself a valid id"
+        );
     }
 
     #[test]

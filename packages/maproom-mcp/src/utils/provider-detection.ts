@@ -56,11 +56,31 @@ export function inferBedrockDimension(model: string): number | null {
     ''
   )
   for (const [prefix, dimension] of Object.entries(BEDROCK_MODEL_DIMENSIONS)) {
-    if (normalized.startsWith(prefix)) {
+    if (matchesModelPrefix(normalized, prefix)) {
       return dimension
     }
   }
   return null
+}
+
+/**
+ * Whether `model` is `prefix`, or `prefix` followed by a version delimiter.
+ *
+ * A bare `startsWith` is too loose: it accepts `amazon.titan-embed-text-v20` as
+ * Titan v2 and returns 1024 for a model id that does not exist. An
+ * unrecognized id is deliberately a hard error, because a wrong dimension
+ * builds an index that succeeds and then returns nothing — so a typo must not
+ * slip through as a near-match.
+ *
+ * `:` and `-` still continue the match so the real suffixed ids AWS ships
+ * (`amazon.titan-embed-text-v2:0`, `amazon.titan-embed-g1-text-02`) resolve.
+ *
+ * Mirrors `matches_model_prefix` in crates/maproom/src/embedding/bedrock.rs.
+ */
+function matchesModelPrefix(model: string, prefix: string): boolean {
+  if (!model.startsWith(prefix)) return false
+  const rest = model.slice(prefix.length)
+  return rest === '' || rest.startsWith(':') || rest.startsWith('-')
 }
 
 /**
@@ -272,11 +292,26 @@ export function validateExplicitProvider(provider: string): ProviderConfig {
       // resolution actually fails.
       const model = process.env.MAPROOM_EMBEDDING_MODEL || BEDROCK_DEFAULT_MODEL
       const explicitDimension = process.env.MAPROOM_EMBEDDING_DIMENSION
-      const dimension = explicitDimension
-        ? Number.parseInt(explicitDimension, 10)
-        : inferBedrockDimension(model)
 
-      if (dimension === null || Number.isNaN(dimension)) {
+      if (explicitDimension !== undefined) {
+        // Number.parseInt('1024junk') is 1024, so it would accept a malformed
+        // value and silently index at a plausible-looking width. Require the
+        // whole string to be a positive integer instead.
+        if (!/^[1-9]\d*$/.test(explicitDimension.trim())) {
+          throw new Error(
+            `MAPROOM_EMBEDDING_DIMENSION must be a positive integer, got ` +
+            `"${explicitDimension}". See docs/providers/aws-bedrock-setup.md.`
+          )
+        }
+        return {
+          provider: 'bedrock',
+          dimension: Number(explicitDimension.trim()),
+          available: true,
+        }
+      }
+
+      const dimension = inferBedrockDimension(model)
+      if (dimension === null) {
         throw new Error(
           `MAPROOM_EMBEDDING_PROVIDER set to "bedrock" but the dimension for model ` +
           `"${model}" could not be inferred. Set MAPROOM_EMBEDDING_DIMENSION to the ` +

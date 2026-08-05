@@ -22,7 +22,10 @@ Amazon Bedrock embeddings for maproom, using the standard AWS credential chain.
 Bedrock does not use an API key. maproom signs each request with AWS Signature
 Version 4 using whatever credentials the machine already has, resolved through
 the same chain the AWS CLI and SDKs use. If `aws sts get-caller-identity`
-works, maproom will work.
+works, maproom can resolve credentials the same way.
+
+That covers authentication only. Model access and the `bedrock:InvokeModel`
+permission are separate gates — see [Prerequisites](#prerequisites).
 
 This is the point: no new secret is created, stored, rotated, or leaked.
 
@@ -327,7 +330,12 @@ export MAPROOM_BEDROCK_REGION=us-east-1
 or list what is actually offered where you are:
 
 ```bash
-aws bedrock list-foundation-models --region "$AWS_REGION" \
+# Resolve the region maproom will actually use, following the same precedence
+# as above. Querying $AWS_REGION alone can inspect a different region than the
+# one maproom embeds in, which is exactly the confusion this is meant to settle.
+region="${MAPROOM_BEDROCK_REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-$(aws configure get region)}}}"
+
+aws bedrock list-foundation-models --region "${region:-us-east-1}" \
   --query "modelSummaries[?outputModalities[0]=='EMBEDDING'].modelId"
 ```
 

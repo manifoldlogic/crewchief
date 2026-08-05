@@ -3,6 +3,9 @@ import chalk from 'chalk'
 import { Command } from 'commander'
 import { runCommand } from '../utils/exec.js'
 import { findMaproomBinary } from '../utils/maproom-binary.js'
+// Reused rather than duplicated: this list is the sync point with
+// validate_provider in crates/maproom/src/main.rs.
+import { VALID_PROVIDERS } from './maproom-validation.js'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -85,8 +88,15 @@ export function checkITermAvailable(): { ok: boolean; notMacOS: boolean } {
 
 export async function checkEmbeddingProvider(): Promise<{ provider: string } | null> {
   // An explicit choice wins over any sniffing below — the user already told us.
+  //
+  // It must still be a provider that exists. Reporting semantic search as
+  // "ready [voyage]" for a typo'd value would tell the operator the opposite of
+  // what doctor is for: maproom would exit 2 on the first search.
   const explicit = process.env.MAPROOM_EMBEDDING_PROVIDER?.toLowerCase()
   if (explicit) {
+    if (!VALID_PROVIDERS.includes(explicit as (typeof VALID_PROVIDERS)[number])) {
+      return null
+    }
     const normalized = explicit === 'aws' || explicit === 'aws-bedrock' ? 'bedrock' : explicit
     return { provider: normalized }
   }

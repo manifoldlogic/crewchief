@@ -134,7 +134,7 @@ File Discovery → Tree-sitter Parsing → Chunk Extraction → Embedding → Da
 
 ### Multi-Provider Architecture
 
-Maproom supports **four embedding providers** with automatic detection and failover:
+Maproom supports **four embedding providers**:
 
 | Provider | Dimension | Table | Use Case |
 |----------|-----------|--------|----------|
@@ -156,15 +156,28 @@ construction rather than at insert time.
 
 **Location**: `packages/maproom-mcp/src/utils/provider-detection.ts`, `crates/maproom/src/embedding/factory.rs`
 
+The Rust indexer (`crates/maproom/src/embedding/factory.rs`) and the MCP server
+(`packages/maproom-mcp/src/utils/provider-detection.ts`) resolve providers
+differently. This is deliberate, not drift:
+
+**Rust indexer** — the process that spends money embedding a whole repository:
+
 ```
-1. Check MAPROOM_EMBEDDING_PROVIDER environment variable
-   (bedrock | aws | aws-bedrock all select AWS Bedrock)
-2. If not set, auto-detect:
-   - Google: Check GOOGLE_APPLICATION_CREDENTIALS
-   - OpenAI: Check OPENAI_API_KEY
-   - Ollama: Check http://ollama:11434 connectivity
-3. Fall back to Ollama (default zero-config)
-4. Cache selection for session performance
+1. Check MAPROOM_EMBEDDING_PROVIDER (bedrock | aws | aws-bedrock -> Bedrock)
+2. If not set, probe for a local Ollama endpoint
+3. If Ollama is not reachable, embedding is a configuration error (exit 2)
+```
+
+There is **no failover to a paid provider**. `openai`, `google`, and `bedrock`
+are only ever used when named explicitly, so a scan cannot start billing an
+account because a key happened to be present in the environment.
+
+**MCP server** — a per-session convenience layer that starts no bulk indexing:
+
+```
+1. Check MAPROOM_EMBEDDING_PROVIDER
+2. If not set, probe Ollama, then OPENAI_API_KEY, then GOOGLE_PROJECT_ID
+3. Cache the selection for the session
 ```
 
 **Bedrock is never auto-selected.** Its credentials come from the ambient AWS

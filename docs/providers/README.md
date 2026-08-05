@@ -82,17 +82,17 @@ High-quality embeddings from OpenAI's embedding models.
 
 ### Quick Comparison Table
 
-| Feature | Google Vertex AI | Ollama | OpenAI |
-|---------|------------------|--------|--------|
-| **Embedding Dimensions** | 768 | Varies by model | 1536 (text-embedding-3-small) |
-| **Pricing** | ~$0.00025 / 1K chars | Free | ~$0.00003 / 1K chars |
-| **Setup Complexity** | Medium (GCP setup) | Low (local install) | Low (API key) |
-| **Latency** | ~100-300ms | ~50-200ms (local) | ~100-300ms |
-| **Offline Support** | ❌ No | ✅ Yes | ❌ No |
-| **Production SLA** | ✅ Yes | ❌ No | ✅ Yes |
-| **Data Privacy** | Cloud (encrypted) | ✅ Local only | Cloud (encrypted) |
-| **Regional Support** | ✅ Multi-region | N/A | ✅ Global |
-| **Enterprise Compliance** | ✅ SOC 2, ISO | ✅ Self-hosted | ✅ SOC 2, ISO |
+| Feature | Google Vertex AI | Ollama | OpenAI | AWS Bedrock |
+|---------|------------------|--------|--------|-------------|
+| **Embedding Dimensions** | 768 | Varies by model | 1536 (text-embedding-3-small) | 1024 (Titan v2 / Cohere v3), 1536 (Titan v1) |
+| **Pricing** | ~$0.00025 / 1K chars | Free | ~$0.00003 / 1K chars | ~$0.00002 / 1K tokens (Titan v2) |
+| **Setup Complexity** | Medium (GCP setup) | Low (local install) | Low (API key) | Low if the AWS CLI already works (no new key) |
+| **Latency** | ~100-300ms | ~50-200ms (local) | ~100-300ms | ~100-300ms |
+| **Offline Support** | ❌ No | ✅ Yes | ❌ No | ❌ No |
+| **Production SLA** | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes |
+| **Data Privacy** | Cloud (encrypted) | ✅ Local only | Cloud (encrypted) | Cloud (encrypted); VPC endpoint capable |
+| **Regional Support** | ✅ Multi-region | N/A | ✅ Global | ✅ Multi-region (model availability varies) |
+| **Enterprise Compliance** | ✅ SOC 2, ISO | ✅ Self-hosted | ✅ SOC 2, ISO | ✅ SOC 2, ISO, FedRAMP, FIPS 140-3 |
 
 **[→ See detailed breakdown in Comparison Guide](./comparison.md)**
 

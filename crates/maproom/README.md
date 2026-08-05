@@ -12,7 +12,7 @@ Maproom indexes your codebase using tree-sitter, stores chunks in a local SQLite
 
 - **Semantic Code Search** - Find code by concept, not just keywords
 - **Full-Text Search** - Works immediately with no setup beyond indexing
-- **Multi-Provider Embeddings** - Ollama (free/local), OpenAI, or Google Vertex AI
+- **Multi-Provider Embeddings** - Ollama (free/local), OpenAI, Google Vertex AI, or AWS Bedrock
 - **Pluggable Storage** - SQLite (default; portable, zero-config, FTS5 + sqlite-vec) or PostgreSQL + pgvector (optional, behind `cargo build --features postgres`)
 - **Incremental Indexing** - Only re-indexes changed files
 - **MCP Server** - Integrates with Claude Code, Cursor, and other MCP-compatible tools

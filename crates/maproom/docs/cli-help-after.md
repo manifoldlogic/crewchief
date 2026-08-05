@@ -46,7 +46,9 @@ ENVIRONMENT VARIABLES:
     MAPROOM_EMBEDDING_PROVIDER
         Embedding provider: ollama, openai, google, or bedrock
         ('aws' and 'aws-bedrock' are accepted as aliases for bedrock)
-        Default: ollama (if detected), otherwise openai
+        Default: auto-detect Ollama. If no provider is detected, embedding
+        is a configuration error (exit 2) — openai, google, and bedrock are
+        never selected automatically and must be requested explicitly.
 
     MAPROOM_EMBEDDING_MODEL
         Model for embeddings. Provider defaults:
