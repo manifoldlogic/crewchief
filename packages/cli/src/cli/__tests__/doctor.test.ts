@@ -2,7 +2,12 @@ import chalk from 'chalk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runCommand } from '../../utils/exec.js'
 import { findMaproomBinary } from '../../utils/maproom-binary.js'
-import { type CapabilityTiers, buildCapabilityTiers, formatCapabilityTiers } from '../doctor.js'
+import {
+  type CapabilityTiers,
+  buildCapabilityTiers,
+  checkEmbeddingProvider,
+  formatCapabilityTiers,
+} from '../doctor.js'
 
 // Mock external dependencies
 vi.mock('../../utils/exec.js', () => ({
@@ -37,9 +42,20 @@ describe('buildCapabilityTiers', () => {
       return { exitCode: 1, stdout: '', stderr: '' }
     })
     mockFindMaproomBinary.mockReturnValue({ path: '/usr/local/bin/maproom', source: 'global' })
-    // Clear embedding env vars
+    // Clear embedding env vars.
+    //
+    // MAPROOM_EMBEDDING_PROVIDER and the AWS variables matter as much as the
+    // API keys: checkEmbeddingProvider honors an explicit provider choice and
+    // detects Bedrock from ambient AWS credentials, so leaving either set makes
+    // these assertions depend on the developer's shell.
+    delete process.env.MAPROOM_EMBEDDING_PROVIDER
     delete process.env.OPENAI_API_KEY
     delete process.env.GOOGLE_APPLICATION_CREDENTIALS
+    delete process.env.AWS_ACCESS_KEY_ID
+    delete process.env.AWS_PROFILE
+    delete process.env.AWS_WEB_IDENTITY_TOKEN_FILE
+    delete process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI
+    delete process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI
   })
 
   it('places worktree management, FTS, and tmux under ready when all available', async () => {
@@ -242,5 +258,55 @@ describe('formatCapabilityTiers', () => {
     const notApplicableIdx = output.indexOf('WHAT IS NOT APPLICABLE')
     expect(rightNowIdx).toBeLessThan(canAddIdx)
     expect(canAddIdx).toBeLessThan(notApplicableIdx)
+  })
+})
+
+describe('checkEmbeddingProvider: AWS Bedrock', () => {
+  beforeEach(() => {
+    delete process.env.MAPROOM_EMBEDDING_PROVIDER
+    delete process.env.OPENAI_API_KEY
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS
+    delete process.env.AWS_ACCESS_KEY_ID
+    delete process.env.AWS_PROFILE
+    delete process.env.AWS_WEB_IDENTITY_TOKEN_FILE
+    delete process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI
+    delete process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI
+  })
+
+  afterEach(() => {
+    delete process.env.MAPROOM_EMBEDDING_PROVIDER
+    delete process.env.AWS_ACCESS_KEY_ID
+    delete process.env.AWS_PROFILE
+    delete process.env.AWS_WEB_IDENTITY_TOKEN_FILE
+  })
+
+  it('reports bedrock when AWS_PROFILE is set', async () => {
+    process.env.AWS_PROFILE = 'my-profile'
+    await expect(checkEmbeddingProvider()).resolves.toEqual({ provider: 'bedrock' })
+  })
+
+  it('reports bedrock for EKS IRSA', async () => {
+    process.env.AWS_WEB_IDENTITY_TOKEN_FILE = '/var/run/secrets/token'
+    await expect(checkEmbeddingProvider()).resolves.toEqual({ provider: 'bedrock' })
+  })
+
+  it('prefers an explicit provider over credential sniffing', async () => {
+    // The user said bedrock; a stray OPENAI_API_KEY must not override that.
+    process.env.OPENAI_API_KEY = 'sk-test-key'
+    process.env.MAPROOM_EMBEDDING_PROVIDER = 'bedrock'
+    await expect(checkEmbeddingProvider()).resolves.toEqual({ provider: 'bedrock' })
+  })
+
+  it('normalizes the aws alias to bedrock', async () => {
+    process.env.MAPROOM_EMBEDDING_PROVIDER = 'aws-bedrock'
+    await expect(checkEmbeddingProvider()).resolves.toEqual({ provider: 'bedrock' })
+  })
+
+  it('prefers OpenAI over Bedrock when neither is explicit', async () => {
+    // Preserves the existing precedence; Bedrock is checked last because AWS
+    // credentials are ambient on far more machines than an OpenAI key is.
+    process.env.OPENAI_API_KEY = 'sk-test-key'
+    process.env.AWS_PROFILE = 'my-profile'
+    await expect(checkEmbeddingProvider()).resolves.toEqual({ provider: 'openai' })
   })
 })

@@ -780,6 +780,20 @@ impl EmbeddingProvider for BedrockProvider {
         "bedrock"
     }
 
+    fn distinguishes_queries(&self) -> bool {
+        // Only Cohere's Bedrock payload carries an input_type. Titan has no
+        // such parameter, so claiming the distinction would only cost callers
+        // a redundant cache namespace for identical vectors.
+        matches!(self.family, ModelFamily::CohereV3)
+    }
+
+    async fn embed_query(&self, text: String) -> Result<Vector, EmbeddingError> {
+        if !self.distinguishes_queries() {
+            return self.embed(text).await;
+        }
+        self.for_queries().embed(text).await
+    }
+
     fn metrics(&self) -> Option<ProviderMetrics> {
         // `metrics()` is sync but the state is behind an async lock; a blocking
         // read here would deadlock inside the runtime, so use the non-blocking

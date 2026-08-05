@@ -98,7 +98,7 @@ impl QueryProcessor {
         // Parallel processing: tokenization and embedding
         let (tokens, embedding_result) = tokio::join!(
             async move { tokenizer.tokenize_async(&query_for_tokenize).await },
-            async move { embedder.embed_text(&query_for_embed).await }
+            async move { embedder.embed_query(&query_for_embed).await }
         );
 
         let embedding = embedding_result.map_err(QueryProcessorError::Embedding)?;

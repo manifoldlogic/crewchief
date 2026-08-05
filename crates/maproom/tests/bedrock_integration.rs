@@ -673,3 +673,64 @@ fn header(request: &Request, name: &str) -> String {
         .unwrap_or_default()
         .to_string()
 }
+
+#[tokio::test]
+#[serial]
+async fn embed_query_marks_cohere_requests_as_queries() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path_regex(r"^/model/.*/invoke$"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(cohere_body(1, 1024)))
+        .mount(&server)
+        .await;
+
+    let provider = provider_for(
+        &server.uri(),
+        "cohere.embed-english-v3",
+        1024,
+        ParallelConfig::bedrock_defaults(),
+    )
+    .await;
+
+    // The trait method, not the `for_queries()` handle — this is what the
+    // search path actually calls.
+    assert!(provider.distinguishes_queries());
+    provider
+        .embed_query("where is auth handled".to_string())
+        .await
+        .unwrap();
+
+    let requests = server.received_requests().await.unwrap();
+    let body: Value = serde_json::from_slice(&requests[0].body).unwrap();
+    assert_eq!(
+        body["input_type"], "search_query",
+        "embed_query must reach the wire as a query, not a document"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn titan_does_not_claim_to_distinguish_queries() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path_regex(r"^/model/.*/invoke$"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(titan_body(1024)))
+        .mount(&server)
+        .await;
+
+    let provider = provider_for(
+        &server.uri(),
+        "amazon.titan-embed-text-v2:0",
+        1024,
+        ParallelConfig::bedrock_defaults(),
+    )
+    .await;
+
+    // Titan's payload has no input_type. Claiming the distinction would cost
+    // callers a second cache namespace for byte-identical vectors.
+    assert!(!provider.distinguishes_queries());
+
+    let as_document = provider.embed("same text".to_string()).await.unwrap();
+    let as_query = provider.embed_query("same text".to_string()).await.unwrap();
+    assert_eq!(as_document, as_query);
+}

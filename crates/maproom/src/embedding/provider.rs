@@ -245,6 +245,34 @@ pub trait EmbeddingProvider: Send + Sync {
     /// ```
     fn provider_name(&self) -> &'static str;
 
+    /// Whether this provider encodes search queries differently from documents.
+    ///
+    /// Some embedding models are trained asymmetrically: a document and a query
+    /// are projected into a shared space using different prompts, and telling
+    /// the model which one it is given measurably improves retrieval. Cohere's
+    /// `search_document` / `search_query` distinction (available on Bedrock) is
+    /// the case this exists for.
+    ///
+    /// The default is `false`, meaning [`embed_query`](Self::embed_query) is
+    /// exactly [`embed`](Self::embed) and callers may cache both under the same
+    /// key. Providers that return `true` must override `embed_query`.
+    fn distinguishes_queries(&self) -> bool {
+        false
+    }
+
+    /// Generate an embedding for a search query rather than a document.
+    ///
+    /// The default implementation delegates to [`embed`](Self::embed), which is
+    /// correct for every symmetric model. Providers that return `true` from
+    /// [`distinguishes_queries`](Self::distinguishes_queries) override this.
+    ///
+    /// # Errors
+    ///
+    /// Same conditions as [`embed`](Self::embed).
+    async fn embed_query(&self, text: String) -> Result<Vector, EmbeddingError> {
+        self.embed(text).await
+    }
+
     /// Get provider-specific metrics (optional).
     ///
     /// This method returns operational metrics about the provider's performance,

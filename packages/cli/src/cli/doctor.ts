@@ -84,6 +84,12 @@ export function checkITermAvailable(): { ok: boolean; notMacOS: boolean } {
 }
 
 export async function checkEmbeddingProvider(): Promise<{ provider: string } | null> {
+  // An explicit choice wins over any sniffing below — the user already told us.
+  const explicit = process.env.MAPROOM_EMBEDDING_PROVIDER?.toLowerCase()
+  if (explicit) {
+    const normalized = explicit === 'aws' || explicit === 'aws-bedrock' ? 'bedrock' : explicit
+    return { provider: normalized }
+  }
   // Check OpenAI
   if (process.env.OPENAI_API_KEY) {
     return { provider: 'openai' }
@@ -91,6 +97,21 @@ export async function checkEmbeddingProvider(): Promise<{ provider: string } | n
   // Check Google Vertex
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     return { provider: 'google-vertex' }
+  }
+  // Check AWS Bedrock.
+  //
+  // Only env-var-visible credentials are detected here. An EC2 instance role or
+  // EKS service account works with Bedrock but leaves nothing in the
+  // environment, so a negative result means "not detected", not "unavailable" —
+  // which is why this is reported as an addable capability rather than an error.
+  if (
+    process.env.AWS_ACCESS_KEY_ID ||
+    process.env.AWS_PROFILE ||
+    process.env.AWS_WEB_IDENTITY_TOKEN_FILE ||
+    process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI ||
+    process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI
+  ) {
+    return { provider: 'bedrock' }
   }
   // Check Ollama
   try {
@@ -170,6 +191,7 @@ export async function buildCapabilityTiers(): Promise<CapabilityTiers> {
       actions: [
         { label: 'Fastest:  ollama (local)', command: 'crewchief maproom setup --embeddings ollama' },
         { label: 'Simplest: openai (cloud)', command: 'crewchief maproom setup --embeddings openai' },
+        { label: 'On AWS:   bedrock (no new key)', command: 'export MAPROOM_EMBEDDING_PROVIDER=bedrock' },
       ],
     })
   }

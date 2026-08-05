@@ -2088,7 +2088,7 @@ async fn real_main() -> anyhow::Result<()> {
                     SearchMode::Vector | SearchMode::Hybrid => {
                         use maproom::embedding::EmbeddingService;
                         let embed_result = match EmbeddingService::from_env().await {
-                            Ok(svc) => svc.embed_text(&query).await.map_err(|e| {
+                            Ok(svc) => svc.embed_query(&query).await.map_err(|e| {
                                 anyhow::Error::from(e).context("Failed to generate query embedding")
                             }),
                             Err(e) => Err(anyhow::Error::from(e)
@@ -2285,7 +2285,7 @@ async fn real_main() -> anyhow::Result<()> {
             );
 
             let query_embedding = handle_agent_error!(
-                embedding_service.embed_text(&query).await.map_err(
+                embedding_service.embed_query(&query).await.map_err(
                     |e| anyhow::Error::from(e).context("Failed to generate query embedding")
                 ),
                 format
