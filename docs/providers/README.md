@@ -92,7 +92,7 @@ High-quality embeddings from OpenAI's embedding models.
 | **Production SLA** | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes |
 | **Data Privacy** | Cloud (encrypted) | ✅ Local only | Cloud (encrypted) | Cloud (encrypted); VPC endpoint capable |
 | **Regional Support** | ✅ Multi-region | N/A | ✅ Global | ✅ Multi-region (model availability varies) |
-| **Enterprise Compliance** | ✅ SOC 2, ISO | ✅ Self-hosted | ✅ SOC 2, ISO | ✅ SOC 2, ISO, FedRAMP, FIPS 140-3 |
+| **Enterprise Compliance** | ✅ SOC 2, ISO | ✅ Self-hosted | ✅ SOC 2, ISO | ✅ SOC 2, ISO; FedRAMP and FIPS 140-3 [where supported](https://aws.amazon.com/compliance/services-in-scope/FedRAMP/) — varies by model and region |
 
 **[→ See detailed breakdown in Comparison Guide](./comparison.md)**
 

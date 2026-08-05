@@ -245,8 +245,16 @@ traffic to it would be a security problem.
 export MAPROOM_BEDROCK_USE_FIPS=true
 ```
 
-Uses `bedrock-runtime-fips.<region>.amazonaws.com`. Available in US and Canada
-regions only.
+Uses `bedrock-runtime-fips.<region>.amazonaws.com`. FIPS endpoints exist only
+in selected regions — the US commercial regions, `ca-central-1`, and the
+GovCloud regions — so this fails in a region without one. Check the current
+list in
+[AWS FIPS endpoints](https://aws.amazon.com/compliance/fips/).
+
+FedRAMP coverage is likewise not a blanket property of Bedrock: authorization
+level and the set of approved models vary by region and partition. See the
+[AWS services in scope for FedRAMP](https://aws.amazon.com/compliance/services-in-scope/FedRAMP/)
+matrix before relying on it.
 
 ---
 

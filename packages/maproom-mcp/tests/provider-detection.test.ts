@@ -667,6 +667,30 @@ describe('AWS Bedrock provider', () => {
       }
     })
 
+    it('rejects values that lose integer precision or are absurdly large', () => {
+      // All digits, so the format check alone passes — but Number() rounds
+      // 9007199254740993 to ...992, and a long enough digit string becomes
+      // 1e+30. Storing either would be a silently wrong dimension.
+      for (const bad of [
+        '9007199254740993',
+        '900719925474099200',
+        '999999999999999999999999999999',
+        '65537',
+      ]) {
+        process.env.MAPROOM_EMBEDDING_DIMENSION = bad
+        expect(() => validateExplicitProvider('bedrock')).toThrow(
+          /must be a positive integer/
+        )
+      }
+    })
+
+    it('rejects scientific notation', () => {
+      process.env.MAPROOM_EMBEDDING_DIMENSION = '1e300'
+      expect(() => validateExplicitProvider('bedrock')).toThrow(
+        /must be a positive integer/
+      )
+    })
+
     it('accepts a well-formed dimension override with surrounding whitespace', () => {
       process.env.MAPROOM_EMBEDDING_DIMENSION = ' 1024 '
       expect(validateExplicitProvider('bedrock').dimension).toBe(1024)

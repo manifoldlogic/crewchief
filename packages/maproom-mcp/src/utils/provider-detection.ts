@@ -41,6 +41,17 @@ const BEDROCK_MODEL_DIMENSIONS: Record<string, number> = {
 const BEDROCK_DEFAULT_MODEL = 'amazon.titan-embed-text-v2:0'
 
 /**
+ * Sanity ceiling for a manually supplied embedding dimension.
+ *
+ * Far above any shipping model (Titan tops out at 1536, OpenAI at 3072) and
+ * far below the point where Number() loses integer precision. maproom's own
+ * vector storage only supports 768, 1024, and 1536; this bound exists to
+ * reject nonsense early with a clear message rather than to define the
+ * supported set.
+ */
+const MAX_EMBEDDING_DIMENSION = 65_536
+
+/**
  * Resolve the embedding dimension for a Bedrock model id.
  *
  * Strips cross-region inference-profile prefixes (`us.`, `eu.`, …) and ARN
@@ -294,20 +305,30 @@ export function validateExplicitProvider(provider: string): ProviderConfig {
       const explicitDimension = process.env.MAPROOM_EMBEDDING_DIMENSION
 
       if (explicitDimension !== undefined) {
+        const trimmed = explicitDimension.trim()
         // Number.parseInt('1024junk') is 1024, so it would accept a malformed
         // value and silently index at a plausible-looking width. Require the
-        // whole string to be a positive integer instead.
-        if (!/^[1-9]\d*$/.test(explicitDimension.trim())) {
+        // whole string to be a positive integer instead. This also rejects
+        // scientific notation ('1e300'), decimals, and signs.
+        //
+        // The digit check alone is not enough: '9007199254740993' is all
+        // digits but Number() rounds it to ...992, and a long-enough digit
+        // string becomes 1e+30. Bound it to a safe integer within a range no
+        // real embedding model approaches — maproom itself stores only 768,
+        // 1024, and 1536, and the Rust provider enforces the per-model width.
+        const parsed = Number(trimmed)
+        if (
+          !/^[1-9]\d*$/.test(trimmed) ||
+          !Number.isSafeInteger(parsed) ||
+          parsed > MAX_EMBEDDING_DIMENSION
+        ) {
           throw new Error(
-            `MAPROOM_EMBEDDING_DIMENSION must be a positive integer, got ` +
-            `"${explicitDimension}". See docs/providers/aws-bedrock-setup.md.`
+            `MAPROOM_EMBEDDING_DIMENSION must be a positive integer no greater ` +
+            `than ${MAX_EMBEDDING_DIMENSION}, got "${explicitDimension}". ` +
+            'See docs/providers/aws-bedrock-setup.md.'
           )
         }
-        return {
-          provider: 'bedrock',
-          dimension: Number(explicitDimension.trim()),
-          available: true,
-        }
+        return { provider: 'bedrock', dimension: parsed, available: true }
       }
 
       const dimension = inferBedrockDimension(model)

@@ -162,7 +162,7 @@ differently. This is deliberate, not drift:
 
 **Rust indexer** — the process that spends money embedding a whole repository:
 
-```
+```text
 1. Check MAPROOM_EMBEDDING_PROVIDER (bedrock | aws | aws-bedrock -> Bedrock)
 2. If not set, probe for a local Ollama endpoint
 3. If Ollama is not reachable, embedding is a configuration error (exit 2)
@@ -174,7 +174,7 @@ account because a key happened to be present in the environment.
 
 **MCP server** — a per-session convenience layer that starts no bulk indexing:
 
-```
+```text
 1. Check MAPROOM_EMBEDDING_PROVIDER
 2. If not set, probe Ollama, then OPENAI_API_KEY, then GOOGLE_PROJECT_ID
 3. Cache the selection for the session
