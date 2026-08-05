@@ -41,6 +41,8 @@
 //! }
 //! ```
 
+pub mod aws;
+pub mod bedrock;
 pub mod cache;
 pub mod client;
 pub mod config;
@@ -54,6 +56,8 @@ pub mod provider;
 pub mod service;
 
 // Re-export main types for convenience
+pub use aws::{AwsCredentials, CredentialSource, CredentialsProvider};
+pub use bedrock::{BedrockProvider, InputType, ModelFamily};
 pub use cache::{CacheMetrics, EmbeddingCache, Vector};
 pub use client::{CostMetrics, OpenAIClient};
 pub use config::{CacheConfig, EmbeddingConfig, ParallelConfig, Provider, RetryConfig};

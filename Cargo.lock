@@ -2035,6 +2035,7 @@ dependencies = [
  "futures",
  "gcp_auth",
  "globset",
+ "hmac",
  "humantime",
  "ignore",
  "lazy_static",

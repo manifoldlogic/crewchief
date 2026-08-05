@@ -79,6 +79,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crate::embedding::bedrock::BedrockProvider;
 use crate::embedding::client::OpenAIClient;
 use crate::embedding::config::{EmbeddingConfig, Provider};
 use crate::embedding::error::{ConfigError, EmbeddingError};
@@ -192,11 +193,24 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
                             format!("\nNote: configured {var}={val} was not reachable.")
                         })
                         .unwrap_or_default();
+                    // If the environment already carries AWS credentials, the
+                    // shortest path to a working setup is one variable — say so
+                    // instead of leading with "install Ollama".
+                    let aws_hint = detected_aws_environment()
+                        .map(|source| {
+                            format!(
+                                "\n\nAWS credentials detected ({source}). \
+                                 To use Amazon Bedrock:\n\
+                                 \x20 export MAPROOM_EMBEDDING_PROVIDER=bedrock"
+                            )
+                        })
+                        .unwrap_or_default();
                     return Err(EmbeddingError::Config(ConfigError::MissingConfig(format!(
                         "No embedding provider configured. Options:\n\
                          1. Install and start Ollama (https://ollama.ai) for zero-config local embeddings\n\
-                         2. Set MAPROOM_EMBEDDING_PROVIDER=openai and OPENAI_API_KEY=... for OpenAI\n\
-                         3. Set MAPROOM_EMBEDDING_PROVIDER=google and GOOGLE_PROJECT_ID=... for Google (future){configured}"
+                         2. Set MAPROOM_EMBEDDING_PROVIDER=bedrock for AWS Bedrock (uses the standard AWS credential chain)\n\
+                         3. Set MAPROOM_EMBEDDING_PROVIDER=openai and OPENAI_API_KEY=... for OpenAI\n\
+                         4. Set MAPROOM_EMBEDDING_PROVIDER=google and GOOGLE_PROJECT_ID=... for Google{configured}{aws_hint}"
                     ))));
                 }
             }
@@ -339,17 +353,51 @@ pub async fn create_provider_from_env() -> Result<Box<dyn EmbeddingProvider>, Em
 
             Ok(provider)
         }
+        "bedrock" | "aws" | "aws-bedrock" => {
+            tracing::debug!("Creating AWS Bedrock provider from environment configuration");
+
+            // Credentials are resolved lazily on first use rather than here, so
+            // that constructing the provider does not block on IMDS/STS. A
+            // misconfiguration still surfaces on the first embed call with the
+            // full "here is what I tried" diagnostic from the credential chain.
+            let provider = BedrockProvider::from_env().await?;
+            Ok(Box::new(provider))
+        }
         unknown => {
             tracing::error!("Unknown provider requested: {}", unknown);
             Err(EmbeddingError::Config(ConfigError::InvalidValue {
                 field: "MAPROOM_EMBEDDING_PROVIDER".to_string(),
                 reason: format!(
-                    "Unknown provider: '{}'. Supported providers: ollama, openai, google",
+                    "Unknown provider: '{}'. Supported providers: ollama, openai, google, bedrock",
                     unknown
                 ),
             }))
         }
     }
+}
+
+/// Describe the AWS credential source visible in the environment, if any.
+///
+/// Used only to enrich the "no provider configured" error. This deliberately
+/// inspects environment variables rather than running the full credential chain:
+/// the chain makes network calls (IMDS, STS), and an error path is the wrong
+/// place to spend two seconds discovering there is no instance role either.
+fn detected_aws_environment() -> Option<&'static str> {
+    if env_nonempty("AWS_ACCESS_KEY_ID").is_some() {
+        return Some("AWS_ACCESS_KEY_ID");
+    }
+    if env_nonempty("AWS_PROFILE").is_some() {
+        return Some("AWS_PROFILE");
+    }
+    if env_nonempty("AWS_WEB_IDENTITY_TOKEN_FILE").is_some() {
+        return Some("AWS_WEB_IDENTITY_TOKEN_FILE");
+    }
+    if env_nonempty("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI").is_some()
+        || env_nonempty("AWS_CONTAINER_CREDENTIALS_FULL_URI").is_some()
+    {
+        return Some("container credentials endpoint");
+    }
+    None
 }
 
 /// Validate service account JSON file structure.
