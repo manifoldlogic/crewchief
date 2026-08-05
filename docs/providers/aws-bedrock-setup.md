@@ -92,7 +92,7 @@ aws sts get-caller-identity
 
 | Model id | Dimensions | Texts per request | Notes |
 |----------|-----------:|------------------:|-------|
-| `amazon.titan-embed-text-v2:0` | 1024 (also 512, 256) | 1 | Default. Cheapest, widest regional availability. |
+| `amazon.titan-embed-text-v2:0` | 1024 | 1 | Default. Cheapest, widest regional availability. |
 | `amazon.titan-embed-text-v1` | 1536 | 1 | Previous generation. |
 | `cohere.embed-english-v3` | 1024 | 96 | Batches natively — far fewer requests per scan. |
 | `cohere.embed-multilingual-v3` | 1024 | 96 | Same, for non-English identifiers and comments. |
@@ -111,15 +111,18 @@ means 50,000 requests. Cohere accepts 96 texts per call — the same scan is
 ~520 requests. On a large repository, or under a tight requests-per-minute
 quota, Cohere finishes substantially sooner.
 
-Titan v2 is cheaper per token and supports shorter vectors (512 or 256) if you
-want a smaller index:
+Titan v2 is the cheaper of the two per token.
+
+Note that although Titan v2 can emit 512- and 256-dimensional vectors, maproom
+stores embeddings in per-dimension tables and has storage only for 768, 1024,
+and 1536. Requesting 512 or 256 is rejected at startup, with an error naming
+the widths that do work — rather than embedding an entire repository and then
+failing on the first database write.
 
 ```bash
+# Rejected at startup: Titan v2 supports it, maproom cannot store it.
 export MAPROOM_EMBEDDING_DIMENSION=512
 ```
-
-Only 256, 512, and 1024 are valid for Titan v2 — maproom rejects anything else
-at startup rather than letting you build an index the model cannot fill.
 
 ### Cross-region inference profiles and provisioned throughput
 

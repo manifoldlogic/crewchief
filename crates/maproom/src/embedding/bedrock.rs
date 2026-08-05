@@ -8,7 +8,7 @@
 //!
 //! | Model id | Dimensions | Texts per request |
 //! |----------|-----------:|------------------:|
-//! | `amazon.titan-embed-text-v2:0` (default) | 1024 (also 512, 256) | 1 |
+//! | `amazon.titan-embed-text-v2:0` (default) | 1024 | 1 |
 //! | `amazon.titan-embed-text-v1` | 1536 | 1 |
 //! | `cohere.embed-english-v3` | 1024 | 96 |
 //! | `cohere.embed-multilingual-v3` | 1024 | 96 |
@@ -16,6 +16,11 @@
 //! Any other model id is usable by setting `MAPROOM_EMBEDDING_DIMENSION`
 //! explicitly, which covers provisioned-throughput ARNs and models released
 //! after this crate.
+//!
+//! Titan v2 can also emit 512- and 256-dimensional vectors, but maproom stores
+//! embeddings in per-dimension tables and has column sets only for 768, 1024,
+//! and 1536. Those narrower widths are rejected at construction rather than
+//! after a full scan — see [`validate_dimension`].
 //!
 //! # Batching
 //!
@@ -830,31 +835,73 @@ pub fn infer_bedrock_dimension(model: &str) -> Option<usize> {
     infer_model_family(model).map(|family| family.default_dimension())
 }
 
-/// Reject a dimension the model cannot produce.
+/// Widths the model itself can emit.
+///
+/// Titan v2 is the only Bedrock embedding model with a selectable output width
+/// (Matryoshka truncation); the others are fixed.
+fn model_supported_dimensions(family: ModelFamily) -> &'static [usize] {
+    match family {
+        ModelFamily::TitanV2 => &[256, 512, 1024],
+        ModelFamily::TitanV1 => &[1536],
+        ModelFamily::CohereV3 => &[1024],
+    }
+}
+
+/// Widths maproom can actually persist.
+///
+/// Vector storage is per-dimension on both backends — SQLite needs a fixed
+/// dimension at virtual-table creation (`vec_code`, `vec_code_1024`,
+/// `vec_code_768`) and Postgres stores each width in its own typed column
+/// (`embedding_768`/`embedding_1024`/`embedding_1536`). A dimension outside
+/// this set embeds fine and then fails at insert.
+///
+/// Kept in sync with `db::select_columns_for_dimension` and
+/// `db::postgres::embeddings`; `bedrock_dimensions_are_all_storable` pins it.
+const STORABLE_DIMENSIONS: &[usize] = &[768, 1024, 1536];
+
+/// Reject a dimension the model cannot produce, or that maproom cannot store.
+///
+/// Both checks happen here rather than at insert time. Titan v2 genuinely
+/// supports 256 and 512, but maproom has no column set for them — accepting
+/// such a config would embed an entire repository before failing on the first
+/// write, which is a far worse experience than refusing at startup.
 fn validate_dimension(
     family: ModelFamily,
     model: &str,
     dimension: usize,
 ) -> Result<(), EmbeddingError> {
-    let acceptable: &[usize] = match family {
-        // Titan v2 is the only Bedrock embedding model with selectable output
-        // width (Matryoshka truncation).
-        ModelFamily::TitanV2 => &[256, 512, 1024],
-        ModelFamily::TitanV1 => &[1536],
-        ModelFamily::CohereV3 => &[1024],
-    };
-    if acceptable.contains(&dimension) {
-        return Ok(());
+    let model_widths = model_supported_dimensions(family);
+    if !model_widths.contains(&dimension) {
+        return Err(EmbeddingError::Config(ConfigError::InvalidValue {
+            field: "MAPROOM_EMBEDDING_DIMENSION".to_string(),
+            reason: format!(
+                "{model} ({}) supports {:?} dimensions, not {dimension}. \
+                 Unset MAPROOM_EMBEDDING_DIMENSION to use the model's default.",
+                family.label(),
+                model_widths,
+            ),
+        }));
     }
-    Err(EmbeddingError::Config(ConfigError::InvalidValue {
-        field: "MAPROOM_EMBEDDING_DIMENSION".to_string(),
-        reason: format!(
-            "{model} ({}) supports {:?} dimensions, not {dimension}. \
-             Unset MAPROOM_EMBEDDING_DIMENSION to use the model's default.",
-            family.label(),
-            acceptable,
-        ),
-    }))
+
+    if !STORABLE_DIMENSIONS.contains(&dimension) {
+        let usable: Vec<usize> = model_widths
+            .iter()
+            .copied()
+            .filter(|width| STORABLE_DIMENSIONS.contains(width))
+            .collect();
+        return Err(EmbeddingError::Config(ConfigError::InvalidValue {
+            field: "MAPROOM_EMBEDDING_DIMENSION".to_string(),
+            reason: format!(
+                "{model} can emit {dimension}-dimensional vectors, but maproom stores \
+                 embeddings in per-dimension tables and supports only {STORABLE_DIMENSIONS:?}. \
+                 Usable widths for this model: {usable:?}. \
+                 Rejecting now rather than after a full scan, since the failure would \
+                 otherwise appear on the first database write."
+            ),
+        }));
+    }
+
+    Ok(())
 }
 
 /// Error for a model id that matches no known family.
@@ -1026,15 +1073,57 @@ mod tests {
     }
 
     #[test]
-    fn titan_v2_accepts_only_matryoshka_dimensions() {
-        for dimension in [256, 512, 1024] {
-            assert!(
-                validate_dimension(ModelFamily::TitanV2, "m", dimension).is_ok(),
-                "{dimension} is a documented Titan v2 width"
-            );
-        }
+    fn titan_v2_rejects_widths_the_model_cannot_emit() {
+        // 768 is a perfectly storable width, but Titan v2 does not produce it.
         let error = validate_dimension(ModelFamily::TitanV2, "m", 768).unwrap_err();
         assert!(error.to_string().contains("768"));
+        assert!(
+            error.to_string().contains("supports"),
+            "should be reported as a model-capability problem"
+        );
+    }
+
+    #[test]
+    fn titan_v2_matryoshka_widths_maproom_cannot_store_are_rejected_up_front() {
+        // Titan v2 really does emit 256 and 512, but maproom's vector storage
+        // is per-dimension and has no table for either. Accepting the config
+        // would embed a whole repository before failing on the first write.
+        assert!(validate_dimension(ModelFamily::TitanV2, "m", 1024).is_ok());
+        for dimension in [256, 512] {
+            let error = validate_dimension(ModelFamily::TitanV2, "m", dimension).unwrap_err();
+            let message = error.to_string();
+            assert!(
+                message.contains("maproom stores"),
+                "should be reported as a storage limit, not a model limit: {message}"
+            );
+            assert!(
+                message.contains("[1024]"),
+                "should name the width that does work: {message}"
+            );
+        }
+    }
+
+    #[test]
+    fn bedrock_dimensions_are_all_storable() {
+        // Every default width this provider can select must map to a real
+        // column set. If someone adds a model family with a novel dimension,
+        // this fails here rather than at insert time.
+        for family in [
+            ModelFamily::TitanV1,
+            ModelFamily::TitanV2,
+            ModelFamily::CohereV3,
+        ] {
+            let dimension = family.default_dimension();
+            assert!(
+                STORABLE_DIMENSIONS.contains(&dimension),
+                "{} defaults to {dimension}, which maproom cannot store",
+                family.label()
+            );
+            assert!(
+                crate::db::select_columns_for_dimension(dimension).is_ok(),
+                "{dimension} must resolve to a column set in db::columns"
+            );
+        }
     }
 
     #[test]

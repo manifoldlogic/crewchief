@@ -221,7 +221,7 @@ fn canonical_uri(path: &str) -> String {
         return "/".to_string();
     }
     path.split('/')
-        .map(|segment| encode_path_segment(segment))
+        .map(encode_path_segment)
         .collect::<Vec<_>>()
         .join("/")
 }

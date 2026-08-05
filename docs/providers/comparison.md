@@ -14,7 +14,7 @@ This guide provides a comprehensive comparison of embedding providers supported 
 | **Speed** | Fast (local) | Medium (network) | Medium (network) | Medium (network) |
 | **Privacy** | Complete (offline) | High (GCP infra) | Medium (cloud) | High (AWS infra, VPC endpoint capable) |
 | **Setup** | Easy | Medium | Easy | Easy if AWS is already configured |
-| **Dimensions** | 1024 | 768 | 1536 | 1024 (512/256 optional) |
+| **Dimensions** | 1024 | 768 | 1536 | 1024 |
 | **Model** | mxbai-embed-large | textembedding-gecko@003 | text-embedding-3-small | amazon.titan-embed-text-v2:0 |
 | **Compliance** | N/A (local) | GDPR, SOC2, HIPAA* | GDPR, SOC2 | GDPR, SOC2, HIPAA*, FedRAMP, FIPS 140-3 |
 | **Credentials** | None | Service account JSON | API key | None new — standard AWS chain |

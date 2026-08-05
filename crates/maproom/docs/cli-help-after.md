@@ -57,6 +57,8 @@ ENVIRONMENT VARIABLES:
         Override the embedding dimension. Usually inferred from the model.
         Required for Bedrock model ids this build does not recognize
         (for example a provisioned-throughput ARN).
+        Storage supports 768, 1024, and 1536 only. Titan v2's narrower 512
+        and 256 widths are rejected up front for that reason.
 
     RUST_LOG
         Logging level: error, warn, info, debug, trace
@@ -92,7 +94,7 @@ AWS BEDROCK:
     must be enabled under Bedrock > Model access in the AWS console.
 
     Supported models (dimension, texts per request):
-        amazon.titan-embed-text-v2:0    1024 (or 512/256), 1   [default]
+        amazon.titan-embed-text-v2:0    1024, 1                [default]
         amazon.titan-embed-text-v1      1536, 1
         cohere.embed-english-v3         1024, 96
         cohere.embed-multilingual-v3    1024, 96

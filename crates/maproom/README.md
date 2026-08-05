@@ -88,7 +88,7 @@ maproom scan --generate-embeddings
 
 | Model | Dimensions | Texts per request |
 |-------|-----------:|------------------:|
-| `amazon.titan-embed-text-v2:0` (default) | 1024 (or 512, 256) | 1 |
+| `amazon.titan-embed-text-v2:0` (default) | 1024 | 1 |
 | `amazon.titan-embed-text-v1` | 1536 | 1 |
 | `cohere.embed-english-v3` | 1024 | 96 |
 | `cohere.embed-multilingual-v3` | 1024 | 96 |

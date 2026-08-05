@@ -154,26 +154,25 @@ async fn titan_v2_sends_dimensions_and_normalize() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path_regex(r"^/model/.*/invoke$"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(titan_body(512)))
+        .respond_with(ResponseTemplate::new(200).set_body_json(titan_body(1024)))
         .mount(&server)
         .await;
 
-    // 512 is a documented Titan v2 Matryoshka width.
     let provider = provider_for(
         &server.uri(),
         "amazon.titan-embed-text-v2:0",
-        512,
+        1024,
         ParallelConfig::bedrock_defaults(),
     )
     .await;
     let embedding = provider.embed("hello".to_string()).await.unwrap();
-    assert_eq!(embedding.len(), 512);
+    assert_eq!(embedding.len(), 1024);
 
     let requests = server.received_requests().await.unwrap();
     let body: Value = serde_json::from_slice(&requests[0].body).unwrap();
     assert_eq!(body["inputText"], "hello");
     assert_eq!(
-        body["dimensions"], 512,
+        body["dimensions"], 1024,
         "the configured width must be requested, not just validated locally"
     );
     assert_eq!(body["normalize"], true);
@@ -628,6 +627,25 @@ async fn unsupported_dimension_fails_at_construction() {
     .await
     .unwrap_err();
     assert!(error.to_string().contains("768"));
+}
+
+#[tokio::test]
+#[serial]
+async fn titan_v2_width_maproom_cannot_store_fails_at_construction() {
+    init_env();
+    // Titan v2 really does emit 512-dimensional vectors, but maproom's vector
+    // storage is per-dimension (768/1024/1536 only). Without this gate the
+    // scan would embed every chunk and then fail on the first insert.
+    let error = BedrockProvider::new(
+        "amazon.titan-embed-text-v2:0".to_string(),
+        512,
+        ParallelConfig::bedrock_defaults(),
+    )
+    .await
+    .unwrap_err();
+    let message = error.to_string();
+    assert!(message.contains("maproom stores"), "{message}");
+    assert!(message.contains("1024"), "must name a width that works: {message}");
 }
 
 #[tokio::test]
