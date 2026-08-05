@@ -19,6 +19,8 @@ import {
   getProviderConfig,
   clearProviderCache,
   getOllamaEndpoint,
+  inferBedrockDimension,
+  detectedAwsEnvironment,
 } from '../src/utils/provider-detection'
 
 describe('Provider Detection', () => {
@@ -34,6 +36,13 @@ describe('Provider Detection', () => {
     delete process.env.OPENAI_API_KEY
     delete process.env.GOOGLE_PROJECT_ID
     delete process.env.GOOGLE_APPLICATION_CREDENTIALS
+    delete process.env.MAPROOM_EMBEDDING_MODEL
+    delete process.env.MAPROOM_EMBEDDING_DIMENSION
+    delete process.env.AWS_ACCESS_KEY_ID
+    delete process.env.AWS_PROFILE
+    delete process.env.AWS_WEB_IDENTITY_TOKEN_FILE
+    delete process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI
+    delete process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI
 
     // Clear all mocks
     vi.restoreAllMocks()
@@ -539,6 +548,147 @@ describe('Provider Detection', () => {
       )
 
       consoleLogSpy.mockRestore()
+    })
+  })
+})
+
+describe('AWS Bedrock provider', () => {
+  const originalEnv = { ...process.env }
+
+  beforeEach(() => {
+    clearProviderCache()
+    for (const key of [
+      'MAPROOM_EMBEDDING_PROVIDER',
+      'MAPROOM_EMBEDDING_MODEL',
+      'MAPROOM_EMBEDDING_DIMENSION',
+      'AWS_ACCESS_KEY_ID',
+      'AWS_PROFILE',
+      'AWS_WEB_IDENTITY_TOKEN_FILE',
+      'AWS_CONTAINER_CREDENTIALS_RELATIVE_URI',
+      'AWS_CONTAINER_CREDENTIALS_FULL_URI',
+      'OPENAI_API_KEY',
+      'GOOGLE_PROJECT_ID',
+      'GOOGLE_APPLICATION_CREDENTIALS',
+    ]) {
+      delete process.env[key]
+    }
+    vi.restoreAllMocks()
+  })
+
+  afterEach(() => {
+    process.env = { ...originalEnv }
+  })
+
+  describe('inferBedrockDimension', () => {
+    it('resolves the documented widths for known models', () => {
+      expect(inferBedrockDimension('amazon.titan-embed-text-v2:0')).toBe(1024)
+      expect(inferBedrockDimension('amazon.titan-embed-text-v1')).toBe(1536)
+      expect(inferBedrockDimension('cohere.embed-english-v3')).toBe(1024)
+      expect(inferBedrockDimension('cohere.embed-multilingual-v3')).toBe(1024)
+    })
+
+    it('strips cross-region inference profile prefixes', () => {
+      expect(inferBedrockDimension('us.amazon.titan-embed-text-v2:0')).toBe(1024)
+      expect(inferBedrockDimension('eu.cohere.embed-multilingual-v3')).toBe(1024)
+      expect(inferBedrockDimension('apac.amazon.titan-embed-text-v2:0')).toBe(1024)
+    })
+
+    it('resolves a full inference-profile ARN', () => {
+      expect(
+        inferBedrockDimension(
+          'arn:aws:bedrock:us-east-1:123456789012:inference-profile/us.amazon.titan-embed-text-v2:0'
+        )
+      ).toBe(1024)
+    })
+
+    it('returns null for an unknown model rather than guessing', () => {
+      // A wrong dimension builds an index that silently returns nothing.
+      expect(inferBedrockDimension('meta.llama-embed-v9')).toBeNull()
+    })
+  })
+
+  describe('validateExplicitProvider', () => {
+    it('accepts bedrock with the default model', () => {
+      const config = validateExplicitProvider('bedrock')
+      expect(config.provider).toBe('bedrock')
+      expect(config.dimension).toBe(1024)
+      expect(config.available).toBe(true)
+    })
+
+    it('accepts the aws and aws-bedrock aliases', () => {
+      expect(validateExplicitProvider('aws').provider).toBe('bedrock')
+      expect(validateExplicitProvider('aws-bedrock').provider).toBe('bedrock')
+    })
+
+    it('does not require any AWS environment variable', () => {
+      // Instance roles and EKS service accounts leave nothing in the
+      // environment to check, so probing would reject working setups.
+      expect(() => validateExplicitProvider('bedrock')).not.toThrow()
+    })
+
+    it('infers the dimension from an explicitly chosen model', () => {
+      process.env.MAPROOM_EMBEDDING_MODEL = 'amazon.titan-embed-text-v1'
+      expect(validateExplicitProvider('bedrock').dimension).toBe(1536)
+    })
+
+    it('honors an explicit dimension override', () => {
+      process.env.MAPROOM_EMBEDDING_MODEL = 'amazon.titan-embed-text-v2:0'
+      process.env.MAPROOM_EMBEDDING_DIMENSION = '512'
+      expect(validateExplicitProvider('bedrock').dimension).toBe(512)
+    })
+
+    it('fails with guidance when the model is unknown and no dimension is set', () => {
+      process.env.MAPROOM_EMBEDDING_MODEL = 'meta.llama-embed-v9'
+      expect(() => validateExplicitProvider('bedrock')).toThrow(
+        /MAPROOM_EMBEDDING_DIMENSION/
+      )
+    })
+
+    it('still lists bedrock when rejecting an unknown provider', () => {
+      expect(() => validateExplicitProvider('voyage')).toThrow(/bedrock/)
+    })
+  })
+
+  describe('detectedAwsEnvironment', () => {
+    it('returns null when no AWS variable is present', () => {
+      expect(detectedAwsEnvironment()).toBeNull()
+    })
+
+    it('reports the variable that indicates credentials', () => {
+      process.env.AWS_ACCESS_KEY_ID = 'AKIAEXAMPLE'
+      expect(detectedAwsEnvironment()).toBe('AWS_ACCESS_KEY_ID')
+    })
+
+    it('recognizes EKS IRSA', () => {
+      process.env.AWS_WEB_IDENTITY_TOKEN_FILE = '/var/run/secrets/token'
+      expect(detectedAwsEnvironment()).toBe('AWS_WEB_IDENTITY_TOKEN_FILE')
+    })
+
+    it('recognizes the container credentials endpoint', () => {
+      process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI = '/v2/credentials/abc'
+      expect(detectedAwsEnvironment()).toBe('container credentials endpoint')
+    })
+  })
+
+  describe('auto-detection', () => {
+    it('never selects bedrock implicitly, even with AWS credentials present', async () => {
+      // Bedrock costs money and AWS credentials are ambient on many machines.
+      process.env.AWS_ACCESS_KEY_ID = 'AKIAEXAMPLE'
+      process.env.AWS_SECRET_ACCESS_KEY = 'secret'
+      vi.spyOn(global, 'fetch').mockRejectedValue(new Error('no ollama'))
+
+      await expect(detectProvider()).rejects.toThrow(
+        /No embedding provider available/
+      )
+    })
+
+    it('hints at bedrock when AWS credentials are detected', async () => {
+      process.env.AWS_PROFILE = 'my-profile'
+      vi.spyOn(global, 'fetch').mockRejectedValue(new Error('no ollama'))
+
+      await expect(detectProvider()).rejects.toThrow(
+        /MAPROOM_EMBEDDING_PROVIDER=bedrock/
+      )
     })
   })
 })

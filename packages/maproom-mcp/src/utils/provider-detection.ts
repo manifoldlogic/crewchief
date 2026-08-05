@@ -6,12 +6,82 @@
  * 2. Ollama (if running on localhost:11434)
  * 3. OpenAI (if OPENAI_API_KEY set)
  * 4. Google Vertex AI (if GOOGLE_PROJECT_ID and GOOGLE_APPLICATION_CREDENTIALS set)
+ *
+ * AWS Bedrock is supported but never auto-selected. Its credentials come from
+ * the ambient AWS chain (instance roles, SSO, EKS service accounts), so
+ * "credentials are present" is true on a great many machines that did not
+ * intend to spend money embedding — it must be requested explicitly via
+ * MAPROOM_EMBEDDING_PROVIDER. Detected AWS credentials are surfaced as a hint
+ * in the no-provider error instead.
  */
 
 export interface ProviderConfig {
-  provider: string // "ollama" | "openai" | "google"
-  dimension: number // 768 or 1536
+  provider: string // "ollama" | "openai" | "google" | "bedrock"
+  dimension: number // 768, 1024, or 1536
   available: boolean
+}
+
+/**
+ * Bedrock model id -> embedding dimension.
+ *
+ * Mirrors `infer_bedrock_dimension` in crates/maproom/src/embedding/bedrock.rs.
+ * Rust is the source of truth; keep these in sync.
+ */
+const BEDROCK_MODEL_DIMENSIONS: Record<string, number> = {
+  'amazon.titan-embed-text-v2': 1024,
+  'amazon.titan-embed-text-v1': 1536,
+  'amazon.titan-embed-g1-text': 1536,
+  'cohere.embed-english-v3': 1024,
+  'cohere.embed-multilingual-v3': 1024,
+}
+
+/**
+ * Default Bedrock model, matching BedrockProvider::DEFAULT_MODEL in Rust.
+ */
+const BEDROCK_DEFAULT_MODEL = 'amazon.titan-embed-text-v2:0'
+
+/**
+ * Resolve the embedding dimension for a Bedrock model id.
+ *
+ * Strips cross-region inference-profile prefixes (`us.`, `eu.`, …) and ARN
+ * resource paths so all spellings of the same model resolve alike.
+ *
+ * @param model - Bedrock model id, inference profile id, or ARN
+ * @returns The dimension, or null if the model is not recognized
+ */
+export function inferBedrockDimension(model: string): number | null {
+  const withoutArn = model.split('/').pop() ?? model
+  const normalized = withoutArn.replace(
+    /^(us|eu|apac|us-gov|ca|sa|jp|au)\./,
+    ''
+  )
+  for (const [prefix, dimension] of Object.entries(BEDROCK_MODEL_DIMENSIONS)) {
+    if (normalized.startsWith(prefix)) {
+      return dimension
+    }
+  }
+  return null
+}
+
+/**
+ * Describe the AWS credential source visible in the environment, if any.
+ *
+ * Deliberately env-var only: the full chain makes network calls (IMDS, STS)
+ * and this is used on an error path where a two-second timeout is not welcome.
+ *
+ * @returns The variable that indicates AWS credentials, or null
+ */
+export function detectedAwsEnvironment(): string | null {
+  if (process.env.AWS_ACCESS_KEY_ID) return 'AWS_ACCESS_KEY_ID'
+  if (process.env.AWS_PROFILE) return 'AWS_PROFILE'
+  if (process.env.AWS_WEB_IDENTITY_TOKEN_FILE) return 'AWS_WEB_IDENTITY_TOKEN_FILE'
+  if (
+    process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI ||
+    process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI
+  ) {
+    return 'container credentials endpoint'
+  }
+  return null
 }
 
 /**
@@ -67,12 +137,19 @@ export async function detectProvider(): Promise<ProviderConfig> {
   }
 
   // No provider available
+  const awsSource = detectedAwsEnvironment()
+  const awsHint = awsSource
+    ? `\n\nAWS credentials detected (${awsSource}). To use Amazon Bedrock:\n` +
+      '  export MAPROOM_EMBEDDING_PROVIDER=bedrock'
+    : ''
   throw new Error(
     'No embedding provider available. Options:\n' +
     '  1. Install Ollama: https://ollama.ai (zero-config)\n' +
-    '  2. Set OPENAI_API_KEY environment variable\n' +
-    '  3. Configure Google Vertex AI (see docs/providers/google-vertex-ai-setup.md)\n' +
-    '  4. Set MAPROOM_EMBEDDING_PROVIDER explicitly (ollama|openai|google)'
+    '  2. Set MAPROOM_EMBEDDING_PROVIDER=bedrock for AWS Bedrock (uses the standard AWS credential chain)\n' +
+    '  3. Set OPENAI_API_KEY environment variable\n' +
+    '  4. Configure Google Vertex AI (see docs/providers/google-vertex-ai-setup.md)\n' +
+    '  5. Set MAPROOM_EMBEDDING_PROVIDER explicitly (ollama|openai|google|bedrock)' +
+    awsHint
   )
 }
 
@@ -185,9 +262,33 @@ export function validateExplicitProvider(provider: string): ProviderConfig {
       }
       return { provider: 'google', dimension: 768, available: true }
 
+    case 'bedrock':
+    case 'aws':
+    case 'aws-bedrock': {
+      // No credential check here. Bedrock resolves credentials through the
+      // full AWS chain — instance roles and EKS service accounts leave no
+      // environment variable to test for — so probing env vars would reject
+      // working setups. The Rust provider reports precisely what it tried if
+      // resolution actually fails.
+      const model = process.env.MAPROOM_EMBEDDING_MODEL || BEDROCK_DEFAULT_MODEL
+      const explicitDimension = process.env.MAPROOM_EMBEDDING_DIMENSION
+      const dimension = explicitDimension
+        ? Number.parseInt(explicitDimension, 10)
+        : inferBedrockDimension(model)
+
+      if (dimension === null || Number.isNaN(dimension)) {
+        throw new Error(
+          `MAPROOM_EMBEDDING_PROVIDER set to "bedrock" but the dimension for model ` +
+          `"${model}" could not be inferred. Set MAPROOM_EMBEDDING_DIMENSION to the ` +
+          'model\'s output width. See docs/providers/aws-bedrock-setup.md.'
+        )
+      }
+      return { provider: 'bedrock', dimension, available: true }
+    }
+
     default:
       throw new Error(
-        `Unknown provider: "${provider}". Supported: ollama, openai, google`
+        `Unknown provider: "${provider}". Supported: ollama, openai, google, bedrock`
       )
   }
 }

@@ -22,6 +22,25 @@ Production-grade embeddings powered by Google's `text-embedding-gecko@003` model
 
 ---
 
+### [AWS Bedrock](./aws-bedrock-setup.md)
+
+Amazon Bedrock embeddings via `amazon.titan-embed-text-v2:0` (or Cohere Embed v3),
+signed with the standard AWS credential chain.
+
+**Best for:**
+- Organizations already running on AWS
+- Deployments that must avoid introducing a new API key or vendor
+- Keeping embedding traffic inside a VPC (PrivateLink) or on FIPS endpoints
+- Credential-less hosts: EC2 instance roles, EKS IRSA, ECS task roles
+
+**Pricing**: ~$0.00002 per 1,000 tokens (Titan v2, on-demand)
+
+**Setup Time**: ~5 minutes if the AWS CLI already works
+
+**[→ Read AWS Bedrock Setup Guide](./aws-bedrock-setup.md)**
+
+---
+
 ### [Ollama](./ollama-setup.md) (Local Embeddings)
 
 Free, local embeddings running on your own hardware. No API costs, complete privacy.

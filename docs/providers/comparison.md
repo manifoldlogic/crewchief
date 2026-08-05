@@ -8,17 +8,34 @@ This guide provides a comprehensive comparison of embedding providers supported 
 
 ## Quick Comparison Table
 
-| Feature | Ollama (Local) | Google Vertex AI | OpenAI |
-|---------|----------------|------------------|--------|
-| **Cost** | Free (compute only) | ~$0.0001/1K tokens | ~$0.0001/1K tokens |
-| **Speed** | Fast (local) | Medium (network) | Medium (network) |
-| **Privacy** | Complete (offline) | High (GCP infra) | Medium (cloud) |
-| **Setup** | Easy | Medium | Easy |
-| **Dimensions** | 1024 | 768 | 1536 |
-| **Model** | mxbai-embed-large | textembedding-gecko@003 | text-embedding-3-small |
-| **Compliance** | N/A (local) | GDPR, SOC2, HIPAA* | GDPR, SOC2 |
+| Feature | Ollama (Local) | Google Vertex AI | OpenAI | AWS Bedrock |
+|---------|----------------|------------------|--------|-------------|
+| **Cost** | Free (compute only) | ~$0.0001/1K tokens | ~$0.0001/1K tokens | ~$0.00002/1K tokens |
+| **Speed** | Fast (local) | Medium (network) | Medium (network) | Medium (network) |
+| **Privacy** | Complete (offline) | High (GCP infra) | Medium (cloud) | High (AWS infra, VPC endpoint capable) |
+| **Setup** | Easy | Medium | Easy | Easy if AWS is already configured |
+| **Dimensions** | 1024 | 768 | 1536 | 1024 (512/256 optional) |
+| **Model** | mxbai-embed-large | textembedding-gecko@003 | text-embedding-3-small | amazon.titan-embed-text-v2:0 |
+| **Compliance** | N/A (local) | GDPR, SOC2, HIPAA* | GDPR, SOC2 | GDPR, SOC2, HIPAA*, FedRAMP, FIPS 140-3 |
+| **Credentials** | None | Service account JSON | API key | None new — standard AWS chain |
 
 *With proper configuration and Business Associate Agreement (BAA)
+
+### When Bedrock is the right answer
+
+Bedrock is the cheapest per token of the cloud options and the only one that
+introduces **no new long-lived secret** — it signs with whatever already
+authenticates the AWS CLI on the host (SSO, instance role, EKS service account,
+`credential_process`). For an organization already on AWS, that usually means no
+new vendor review, no new secret to rotate, and traffic that can stay inside a
+VPC via PrivateLink.
+
+The trade-off is request volume: Bedrock's `InvokeModel` embeds one document
+per call for Titan models, so a large scan is request-bound rather than
+payload-bound. Choosing `cohere.embed-english-v3` on Bedrock restores native
+batching (96 texts per call) at a higher per-token price.
+
+See [aws-bedrock-setup.md](./aws-bedrock-setup.md) for the full guide.
 
 ---
 
