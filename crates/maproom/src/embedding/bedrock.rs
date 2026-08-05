@@ -438,16 +438,15 @@ impl BedrockProvider {
 
         // The model id goes in the path, so reserved characters — the `:0`
         // suffix on Titan v2, and every `:` and `/` in an ARN — must be encoded.
+        // An endpoint override may carry a path prefix (an egress proxy that
+        // mounts Bedrock under a subpath). The prefix must appear in the signed
+        // canonical URI and must NOT appear in the Host header, so derive both
+        // from one split rather than trimming the scheme off in place.
+        let (host, base_path) = split_endpoint(&self.endpoint);
         let path = format!(
-            "/model/{}/invoke",
+            "{base_path}/model/{}/invoke",
             sigv4::encode_path_segment(&self.model)
         );
-        let host = self
-            .endpoint
-            .trim_start_matches("https://")
-            .trim_start_matches("http://")
-            .trim_end_matches('/')
-            .to_string();
 
         let headers = vec![
             ("content-type".to_string(), "application/json".to_string()),
@@ -478,7 +477,9 @@ impl BedrockProvider {
 
         let mut request = self
             .http
-            .post(format!("{}{}", self.endpoint.trim_end_matches('/'), path))
+            // `path` already carries the endpoint's base path, so the URL is
+            // rebuilt from scheme + host rather than the full endpoint string.
+            .post(format!("{}{}{}", endpoint_scheme(&self.endpoint), host, path))
             .timeout(timeout)
             .body(body.clone());
         for (name, value) in &signed.headers {
@@ -970,6 +971,41 @@ fn resolve_endpoint(region: &str) -> String {
     format!("https://bedrock-runtime.{region}.amazonaws.com")
 }
 
+/// Split an endpoint URL into its host authority and any base path prefix.
+///
+/// `https://bedrock-runtime.us-east-1.amazonaws.com` splits into
+/// `("bedrock-runtime.us-east-1.amazonaws.com", "")`, while an egress proxy at
+/// `https://proxy.internal:8443/aws/bedrock` splits into
+/// `("proxy.internal:8443", "/aws/bedrock")`.
+///
+/// Both halves are needed separately: the authority is what gets signed as the
+/// `host` header, and the base path must prefix the canonical URI or the
+/// signature will not match what the server computes.
+fn split_endpoint(endpoint: &str) -> (String, String) {
+    let without_scheme = endpoint
+        .trim_start_matches("https://")
+        .trim_start_matches("http://");
+    match without_scheme.find('/') {
+        None => (without_scheme.to_string(), String::new()),
+        Some(index) => {
+            let (host, base_path) = without_scheme.split_at(index);
+            (host.to_string(), base_path.trim_end_matches('/').to_string())
+        }
+    }
+}
+
+/// The scheme prefix of an endpoint, defaulting to HTTPS.
+///
+/// Only a plaintext override — a local mock or an in-cluster proxy — is
+/// `http://`; anything unmarked is treated as TLS.
+fn endpoint_scheme(endpoint: &str) -> &'static str {
+    if endpoint.starts_with("http://") {
+        "http://"
+    } else {
+        "https://"
+    }
+}
+
 /// Estimate token usage for models that do not report it.
 ///
 /// Uses the same cl100k tokenizer the context assembler uses. This only feeds
@@ -1160,6 +1196,42 @@ mod tests {
     fn cohere_input_type_distinguishes_documents_from_queries() {
         assert_eq!(InputType::Document.as_cohere_str(), "search_document");
         assert_eq!(InputType::Query.as_cohere_str(), "search_query");
+    }
+
+    #[test]
+    fn endpoint_splits_into_host_and_base_path() {
+        assert_eq!(
+            split_endpoint("https://bedrock-runtime.us-east-1.amazonaws.com"),
+            (
+                "bedrock-runtime.us-east-1.amazonaws.com".to_string(),
+                String::new()
+            )
+        );
+        // An egress proxy may mount Bedrock under a subpath. The prefix belongs
+        // in the signed canonical URI, never in the Host header — getting this
+        // wrong yields an opaque SignatureDoesNotMatch.
+        assert_eq!(
+            split_endpoint("https://proxy.internal:8443/aws/bedrock"),
+            ("proxy.internal:8443".to_string(), "/aws/bedrock".to_string())
+        );
+        // A plaintext local mock keeps its port in the authority.
+        assert_eq!(
+            split_endpoint("http://127.0.0.1:41723"),
+            ("127.0.0.1:41723".to_string(), String::new())
+        );
+        // A trailing slash must not survive as an empty path segment, which
+        // would change the canonical URI and break the signature.
+        assert_eq!(
+            split_endpoint("https://host.example/base/"),
+            ("host.example".to_string(), "/base".to_string())
+        );
+    }
+
+    #[test]
+    fn endpoint_scheme_defaults_to_https() {
+        assert_eq!(endpoint_scheme("http://127.0.0.1:1"), "http://");
+        assert_eq!(endpoint_scheme("https://x.example"), "https://");
+        assert_eq!(endpoint_scheme("x.example"), "https://");
     }
 
     #[test]
