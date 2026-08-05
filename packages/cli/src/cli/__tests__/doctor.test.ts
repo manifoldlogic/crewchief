@@ -2,12 +2,7 @@ import chalk from 'chalk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runCommand } from '../../utils/exec.js'
 import { findMaproomBinary } from '../../utils/maproom-binary.js'
-import {
-  type CapabilityTiers,
-  buildCapabilityTiers,
-  checkEmbeddingProvider,
-  formatCapabilityTiers,
-} from '../doctor.js'
+import { type CapabilityTiers, buildCapabilityTiers, checkEmbeddingProvider, formatCapabilityTiers } from '../doctor.js'
 
 // Mock external dependencies
 vi.mock('../../utils/exec.js', () => ({

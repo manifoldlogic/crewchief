@@ -1,11 +1,11 @@
 import { spawnSync } from 'node:child_process'
 import chalk from 'chalk'
 import { Command } from 'commander'
-import { runCommand } from '../utils/exec.js'
-import { findMaproomBinary } from '../utils/maproom-binary.js'
-// Reused rather than duplicated: this list is the sync point with
+// VALID_PROVIDERS is reused rather than duplicated: it is the sync point with
 // validate_provider in crates/maproom/src/main.rs.
 import { VALID_PROVIDERS } from './maproom-validation.js'
+import { runCommand } from '../utils/exec.js'
+import { findMaproomBinary } from '../utils/maproom-binary.js'
 
 // ---------------------------------------------------------------------------
 // Types
