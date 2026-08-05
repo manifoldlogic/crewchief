@@ -12,7 +12,7 @@ Maproom indexes your codebase using tree-sitter, stores chunks in a local SQLite
 
 - **Semantic Code Search** - Find code by concept, not just keywords
 - **Full-Text Search** - Works immediately with no setup beyond indexing
-- **Multi-Provider Embeddings** - Ollama (free/local), OpenAI, or Google Vertex AI
+- **Multi-Provider Embeddings** - Ollama (free/local), OpenAI, Google Vertex AI, or AWS Bedrock
 - **Pluggable Storage** - SQLite (default; portable, zero-config, FTS5 + sqlite-vec) or PostgreSQL + pgvector (optional, behind `cargo build --features postgres`)
 - **Incremental Indexing** - Only re-indexes changed files
 - **MCP Server** - Integrates with Claude Code, Cursor, and other MCP-compatible tools
@@ -54,6 +54,7 @@ No API keys, no configuration, no costs.
 | **Ollama** | Free | 768 | Local dev, privacy |
 | **OpenAI** | ~$0.0001/1K tokens | 1536 | Proven quality |
 | **Google Vertex AI** | ~$0.00025/1K tokens | 768 | Enterprise, compliance |
+| **AWS Bedrock** | ~$0.00002/1K tokens | 1024 | Enterprise, existing AWS estate |
 
 ### Provider Selection
 
@@ -61,13 +62,40 @@ Maproom auto-detects your provider:
 
 1. Checks `MAPROOM_EMBEDDING_PROVIDER` env var
 2. Detects Ollama on localhost:11434
-3. Falls back to OpenAI if `OPENAI_API_KEY` is set
-4. Falls back to Google if `GOOGLE_PROJECT_ID` is set
+3. Otherwise reports which providers it could reach — if AWS credentials are
+   present in the environment, it points you at Bedrock
+
+Paid providers are never selected automatically; you opt in explicitly so a
+scan cannot start billing you by surprise.
 
 ```bash
 # Explicit selection
-export MAPROOM_EMBEDDING_PROVIDER=ollama  # or: openai, google
+export MAPROOM_EMBEDDING_PROVIDER=ollama  # or: openai, google, bedrock
 ```
+
+### AWS Bedrock
+
+Bedrock needs no maproom-specific secret. It uses the standard AWS credential
+chain, so whatever already authenticates the `aws` CLI on the machine — SSO,
+an EC2 instance role, an EKS service account, `credential_process` — works
+unchanged.
+
+```bash
+export MAPROOM_EMBEDDING_PROVIDER=bedrock
+export AWS_PROFILE=my-profile        # optional; the default chain is used otherwise
+maproom scan --generate-embeddings
+```
+
+| Model | Dimensions | Texts per request |
+|-------|-----------:|------------------:|
+| `amazon.titan-embed-text-v2:0` (default) | 1024 | 1 |
+| `amazon.titan-embed-text-v1` | 1536 | 1 |
+| `cohere.embed-english-v3` | 1024 | 96 |
+| `cohere.embed-multilingual-v3` | 1024 | 96 |
+
+Requires the `bedrock:InvokeModel` IAM permission and the model enabled under
+**Bedrock > Model access**. Full setup guide:
+[docs/providers/aws-bedrock-setup.md](../../docs/providers/aws-bedrock-setup.md)
 
 ## Usage
 
@@ -147,6 +175,13 @@ maproom db migrate
 - `GOOGLE_PROJECT_ID` - GCP project ID
 - `GOOGLE_APPLICATION_CREDENTIALS` - Service account key path
 - `MAPROOM_EMBEDDING_PROVIDER=google`
+
+**AWS Bedrock** (credentials come from the standard AWS chain):
+- `MAPROOM_EMBEDDING_PROVIDER=bedrock`
+- `MAPROOM_BEDROCK_REGION` - Region override (falls back to `AWS_REGION`, `AWS_DEFAULT_REGION`, the profile's region, then `us-east-1`)
+- `MAPROOM_AWS_PROFILE` - Shared-config profile (falls back to `AWS_PROFILE`)
+- `MAPROOM_BEDROCK_ENDPOINT_URL` - Endpoint override for VPC/PrivateLink or an egress proxy
+- `MAPROOM_BEDROCK_USE_FIPS` - Set to `true` for the region's FIPS 140-3 endpoint
 
 ### Tuning
 

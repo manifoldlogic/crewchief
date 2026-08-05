@@ -1,6 +1,6 @@
 [package]
 name = "maproom"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "Semantic code search powered by embeddings, with SQLite or PostgreSQL/pgvector storage"
 license = "MIT"
@@ -120,6 +120,19 @@ gcp_auth = "0.12"
 
 # Cache key hashing
 sha2 = "0.10"
+
+# AWS Bedrock request signing (BEDROCK).
+#
+# SigV4 is HMAC-SHA256 all the way down, so `hmac` + the existing `sha2` are
+# the entire cryptographic dependency. The AWS SDK (`aws-config` +
+# `aws-sdk-bedrockruntime`) was evaluated and rejected: its transitive
+# aws-sdk-{sso,ssooidc,sts} require rustc >= 1.88, which breaks this crate's
+# CI-enforced MSRV of 1.85 (.github/workflows/msrv.yml), and it pulls ~204
+# crates plus a second TLS stack (rustls + aws-lc-rs, needing cmake) into a
+# binary that already links vendored OpenSSL and cross-compiles to four
+# targets. Signing and the credential chain live in `src/embedding/aws/`
+# instead — the same trade this crate already made for the Postgres migrator.
+hmac = "0.12"
 
 # Parallel processing
 rayon = "1.10"

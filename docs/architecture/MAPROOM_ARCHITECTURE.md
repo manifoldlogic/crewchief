@@ -6,7 +6,7 @@
 
 ## Executive Summary
 
-Maproom is a **hybrid semantic code search engine** that combines full-text search (FTS), vector similarity search, graph-based importance signals, and temporal signals to provide highly relevant code search results. The system indexes codebases using tree-sitter parsing and stores everything in SQLite with sqlite-vec for efficient vector similarity queries. **FTS is the default search mode** — `maproom scan` indexes for full-text search without requiring any embedding provider configuration. Vector search is an optional upgrade enabled by passing `--generate-embeddings` with a configured provider (Ollama, Google Vertex AI, or OpenAI).
+Maproom is a **hybrid semantic code search engine** that combines full-text search (FTS), vector similarity search, graph-based importance signals, and temporal signals to provide highly relevant code search results. The system indexes codebases using tree-sitter parsing and stores everything in SQLite with sqlite-vec for efficient vector similarity queries. **FTS is the default search mode** — `maproom scan` indexes for full-text search without requiring any embedding provider configuration. Vector search is an optional upgrade enabled by passing `--generate-embeddings` with a configured provider (Ollama, Google Vertex AI, OpenAI, or AWS Bedrock).
 
 **Core Value Proposition**: Find code by _what it does_ (semantic search) rather than _what it's called_ (keyword search).
 
@@ -134,7 +134,7 @@ File Discovery → Tree-sitter Parsing → Chunk Extraction → Embedding → Da
 
 ### Multi-Provider Architecture
 
-Maproom supports **three embedding providers** with automatic detection and failover:
+Maproom supports **four embedding providers**:
 
 | Provider | Dimension | Table | Use Case |
 |----------|-----------|--------|----------|
@@ -142,22 +142,63 @@ Maproom supports **three embedding providers** with automatic detection and fail
 | **Ollama** (nomic-embed-text) | 768 | `vec_code_768` | Legacy support |
 | **Google Vertex AI** | 768 | `vec_code_768` | Production, enterprise |
 | **OpenAI** | 1536 | `vec_code` | High-quality embeddings |
+| **AWS Bedrock** (Titan v2, Cohere v3) | 1024 | `vec_code_1024` | Enterprise on AWS; no new secret |
+| **AWS Bedrock** (Titan v1) | 1536 | `vec_code` | Previous-generation Titan |
 
 **Key Design Decision**: Maproom uses **dimension-specific vector tables** (`vec_code_768`, `vec_code_1024`, `vec_code`) to support multiple embedding dimensions seamlessly.
 
+Because storage is per-dimension, the set of usable widths is fixed at 768,
+1024, and 1536. This constrains providers as well as tables: Bedrock's Titan v2
+can emit 512- and 256-dimensional vectors, but those are rejected at provider
+construction rather than at insert time.
+
 ### Provider Selection Logic
 
-**Location**: `packages/maproom-mcp/src/utils/provider-detection.ts`, `crates/maproom/src/embedding/providers.rs`
+**Location**: `packages/maproom-mcp/src/utils/provider-detection.ts`, `crates/maproom/src/embedding/factory.rs`
 
+The Rust indexer (`crates/maproom/src/embedding/factory.rs`) and the MCP server
+(`packages/maproom-mcp/src/utils/provider-detection.ts`) resolve providers
+differently. This is deliberate, not drift:
+
+**Rust indexer** — the process that spends money embedding a whole repository:
+
+```text
+1. Check MAPROOM_EMBEDDING_PROVIDER (bedrock | aws | aws-bedrock -> Bedrock)
+2. If not set, probe for a local Ollama endpoint
+3. If Ollama is not reachable, embedding is a configuration error (exit 2)
 ```
-1. Check MAPROOM_EMBEDDING_PROVIDER environment variable
-2. If not set, auto-detect:
-   - Google: Check GOOGLE_APPLICATION_CREDENTIALS
-   - OpenAI: Check OPENAI_API_KEY
-   - Ollama: Check http://ollama:11434 connectivity
-3. Fall back to Ollama (default zero-config)
-4. Cache selection for session performance
+
+There is **no failover to a paid provider**. `openai`, `google`, and `bedrock`
+are only ever used when named explicitly, so a scan cannot start billing an
+account because a key happened to be present in the environment.
+
+**MCP server** — a per-session convenience layer that starts no bulk indexing:
+
+```text
+1. Check MAPROOM_EMBEDDING_PROVIDER
+2. If not set, probe Ollama, then OPENAI_API_KEY, then GOOGLE_PROJECT_ID
+3. Cache the selection for the session
 ```
+
+**Bedrock is never auto-selected.** Its credentials come from the ambient AWS
+chain — an EC2 instance role or EKS service account makes credentials
+"available" on a great many machines that did not intend to spend money
+embedding — so it must be requested explicitly. When no provider is found and
+AWS credentials *are* visible, the error names Bedrock as the one-variable fix
+rather than silently choosing it.
+
+### Query vs Document Embeddings
+
+Most embedding models are symmetric: the same text produces the same vector
+whether it is being indexed or searched for. Cohere's Bedrock models are not —
+they take an `input_type` of `search_document` or `search_query`, and retrieval
+improves when told which is which.
+
+`EmbeddingProvider::embed_query` expresses this. It defaults to `embed`, and
+`distinguishes_queries()` defaults to `false`, so every symmetric provider is
+unaffected down to the cache entry. `EmbeddingService::embed_query` only
+allocates a separate cache namespace when the provider declares the
+distinction.
 
 ### Embedding Generation
 

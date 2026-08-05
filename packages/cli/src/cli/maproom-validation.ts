@@ -10,9 +10,13 @@ export interface ValidationResult {
 }
 
 /**
- * Valid embedding providers
+ * Valid embedding providers.
+ *
+ * Kept in sync with `validate_provider` in crates/maproom/src/main.rs and the
+ * `Provider` enum in crates/maproom/src/embedding/config.rs. `aws` and
+ * `aws-bedrock` are accepted aliases for `bedrock`.
  */
-const VALID_PROVIDERS = ['ollama', 'openai', 'google'] as const
+export const VALID_PROVIDERS = ['ollama', 'openai', 'google', 'bedrock', 'aws', 'aws-bedrock'] as const
 
 /**
  * Validate maproom environment configuration
@@ -29,8 +33,10 @@ export function validateMaproomEnvironment(): ValidationResult {
   // No validation performed here; the binary enforces the URL format and surfaces errors directly.
 
   // Embedding provider validation - defaults to Ollama (auto-detected)
-  // MAPROOM_EMBEDDING_PROVIDER can optionally override to "openai" or "google"
-  const provider = process.env.MAPROOM_EMBEDDING_PROVIDER
+  // MAPROOM_EMBEDDING_PROVIDER can optionally override to "openai", "google",
+  // or "bedrock". Compare case-insensitively: the Rust side lowercases before
+  // matching, so rejecting "Bedrock" here would be stricter than the binary.
+  const provider = process.env.MAPROOM_EMBEDDING_PROVIDER?.toLowerCase()
 
   if (provider) {
     // Validate provider value
@@ -57,7 +63,13 @@ export function validateMaproomEnvironment(): ValidationResult {
           )
         }
       }
-      // Ollama provider requires no additional configuration
+      // Ollama provider requires no additional configuration.
+      //
+      // Bedrock deliberately gets no check either. It resolves credentials
+      // through the full AWS chain — EC2 instance roles, EKS service accounts,
+      // and ECS task roles leave nothing in the environment to test for — so
+      // any env-var probe here would reject working configurations. The binary
+      // reports exactly which sources it tried if resolution actually fails.
     }
   }
 

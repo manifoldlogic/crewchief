@@ -975,7 +975,7 @@ async fn execute_search(
                 let query_embedding = state
                     .embedding_service()
                     .await?
-                    .embed_text(&params.query)
+                    .embed_query(&params.query)
                     .await
                     .context("Failed to generate query embedding")?;
 
@@ -1000,7 +1000,7 @@ async fn execute_search(
                 // gracefully in provider-less environments.
                 let query_embedding_result = match state.embedding_service().await {
                     Ok(svc) => svc
-                        .embed_text(&params.query)
+                        .embed_query(&params.query)
                         .await
                         .map_err(anyhow::Error::from),
                     Err(e) => Err(e),

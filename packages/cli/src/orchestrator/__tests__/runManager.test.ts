@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RETENTION_DAYS, RunManager } from '../runManager'
 
 // ---------------------------------------------------------------------------
@@ -193,6 +193,33 @@ describe('state file rotation', () => {
   })
 
   it('keeps runs at boundary (exactly 30 days)', () => {
+    // The clock must be pinned for this case, and only this case.
+    //
+    // `pruneOldRuns` keeps a run when `runTime >= cutoff`, with `cutoff`
+    // computed from `Date.now()` at write time. The fixture below computes its
+    // timestamp earlier, so by the time the prune runs the two differ by
+    // however long `writeFileSync` + the constructor took — and the margin here
+    // is exactly 0ms, so *any* elapsed time pushes the run outside the window
+    // and prunes it.
+    //
+    // That made this a coin flip: it passes on a fast filesystem and fails on a
+    // slower CI runner, having nothing to do with the boundary semantics it is
+    // meant to pin. Freezing the clock makes "exactly at the cutoff" exact.
+    //
+    // The instant is inside January deliberately: `daysAgo` does calendar
+    // arithmetic while `pruneOldRuns` subtracts a fixed 30x24h, so a window
+    // containing a DST transition would not be 30 days by both measures.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-31T12:00:00.000Z'))
+
+    try {
+      runBoundaryRetentionCase()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  function runBoundaryRetentionCase(): void {
     const stateFile = path.join(tmpDir, 'state.json')
     const boundaryRun = {
       id: 'boundary-run-id',
@@ -214,7 +241,7 @@ describe('state file rotation', () => {
     // Boundary run should be kept (>= cutoff, not strictly >)
     const runs = runManager.listRuns()
     expect(runs.find((r) => r.id === 'boundary-run-id')).toBeDefined()
-  })
+  }
 
   it('keeps runs without startedAt (defensive)', () => {
     const stateFile = path.join(tmpDir, 'state.json')
