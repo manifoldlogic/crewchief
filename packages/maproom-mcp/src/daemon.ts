@@ -75,6 +75,14 @@ export function getDaemonClient(): DaemonClient {
     // Get detected Ollama endpoint (from provider detection) or use explicit env var
     const ollamaEndpoint = getOllamaEndpoint() || process.env.OLLAMA_BASE_URL
 
+    // Only hand the daemon an Ollama endpoint when Ollama is actually the
+    // provider. MAPROOM_EMBEDDING_API_ENDPOINT is provider-agnostic in name,
+    // and injecting an Ollama URL while the user asked for a cloud provider is
+    // the cross-provider endpoint pollution that PROVFIX-1001 fixed on the Rust
+    // side. Keeping it out of the environment entirely is the cleaner guard.
+    const explicitProvider = process.env.MAPROOM_EMBEDDING_PROVIDER?.toLowerCase()
+    const usesOllamaEndpoint = !explicitProvider || explicitProvider === 'ollama'
+
     daemonClient = new DaemonClient({
       binaryPath,
       env: {
@@ -85,9 +93,14 @@ export function getDaemonClient(): DaemonClient {
         OPENAI_API_KEY: process.env.OPENAI_API_KEY,
         ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
         // Pass detected Ollama endpoint to Rust daemon (converts base URL to API endpoint)
-        ...(ollamaEndpoint && {
+        ...(usesOllamaEndpoint && ollamaEndpoint && {
           MAPROOM_EMBEDDING_API_ENDPOINT: `${ollamaEndpoint}/api/embed`,
         }),
+
+        // AWS Bedrock needs no credential passthrough here: the daemon
+        // inherits process.env, so AWS_PROFILE / AWS_REGION / the container
+        // and IRSA variables all reach it, and instance-role credentials are
+        // resolved by the daemon itself from the host metadata service.
 
         // Optional: Logging configuration
         RUST_LOG: process.env.RUST_LOG || 'info',

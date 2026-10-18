@@ -5,6 +5,29 @@ All notable changes to the Maproom indexer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-05
+
+### Added
+- **AWS Bedrock embedding provider** (`MAPROOM_EMBEDDING_PROVIDER=bedrock`; `aws` and `aws-bedrock` are accepted aliases). Supports `amazon.titan-embed-text-v2:0` (default, 1024-dim), `amazon.titan-embed-text-v1` (1536), and `cohere.embed-english-v3` / `cohere.embed-multilingual-v3` (1024, batching 96 texts per request). Cross-region inference-profile ids (`us.amazon.…`) and ARNs resolve to their base model for dimension inference.
+- **No new secret to manage**: Bedrock signs with AWS SigV4 over the standard credential chain — environment variables, a named profile (`MAPROOM_AWS_PROFILE`/`AWS_PROFILE`), `credential_process`, IAM Identity Center (SSO), `role_arn` + `source_profile` chaining, EKS IRSA web identity, ECS/EKS Pod Identity, and EC2 IMDSv2. Temporary credentials refresh automatically five minutes before expiry, so a long-running `watch` survives rotation.
+- Enterprise networking controls: `MAPROOM_BEDROCK_ENDPOINT_URL` (also honors the SDK-standard `AWS_ENDPOINT_URL_BEDROCK_RUNTIME` and `AWS_ENDPOINT_URL`) for VPC/PrivateLink endpoints and egress proxies, including proxies that mount Bedrock under a path prefix; `MAPROOM_BEDROCK_USE_FIPS=true` for FIPS 140-3 endpoints; `MAPROOM_BEDROCK_REGION` to embed in a region that has the model while the rest of your AWS tooling points elsewhere.
+- `EmbeddingProvider::embed_query` / `distinguishes_queries`, letting asymmetric models encode search queries differently from documents. Cohere on Bedrock uses `search_query` vs `search_document`; every other provider is unaffected down to the cache entry.
+- Setup guide at `docs/providers/aws-bedrock-setup.md`.
+
+### Changed
+- **BREAKING (library API)**: `embedding::config::Provider` gains a `Bedrock` variant. Downstream code matching exhaustively on `Provider` must add an arm.
+- `EmbeddingProvider` gains two defaulted methods (`embed_query`, `distinguishes_queries`); existing implementors need no changes.
+- The "no embedding provider configured" error now names Bedrock, and points at it directly when AWS credentials are already visible in the environment. Bedrock is never auto-selected — AWS credentials are ambient on many hosts, and silently choosing a paid provider could start billing unasked.
+- The TypeScript CLI's provider allowlist accepts `bedrock` and compares case-insensitively (it previously rejected valid values the Rust binary would have accepted); `crewchief doctor` reports an explicitly configured provider over credential sniffing.
+
+### Fixed
+- Replaced a stale `'voyage'` provider suggestion in two CLI error paths with the actual supported set.
+- The MCP server no longer injects an Ollama URL into `MAPROOM_EMBEDDING_API_ENDPOINT` when a different provider was requested.
+
+### Notes
+- Bedrock support adds exactly one dependency (`hmac`); SigV4 and credential resolution are implemented in `src/embedding/aws/`. The AWS SDK was evaluated and rejected: `aws-sdk-bedrockruntime`'s transitive `aws-sdk-{sso,ssooidc,sts}` require rustc 1.88, which breaks this crate's MSRV of 1.85, and it would add ~204 crates plus a second TLS stack. Signing is verified against AWS's published test vectors and an independent reference implementation in `tests/fixtures/`.
+- Vector storage remains per-dimension (768/1024/1536). Titan v2's narrower 512/256 widths are rejected at provider construction rather than failing on the first database write after a full scan.
+
 ## [0.2.0] - 2026-07-03
 
 ### Added

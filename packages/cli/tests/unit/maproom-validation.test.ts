@@ -117,3 +117,54 @@ describe('validateMaproomEnvironment', () => {
     expect(result.valid).toBe(true)
   })
 })
+
+describe('validateMaproomEnvironment: AWS Bedrock', () => {
+  beforeEach(() => {
+    delete process.env.MAPROOM_DATABASE_URL
+    delete process.env.MAPROOM_EMBEDDING_PROVIDER
+    delete process.env.OPENAI_API_KEY
+    delete process.env.MAPROOM_OPENAI_API_KEY
+    delete process.env.GOOGLE_PROJECT_ID
+    delete process.env.MAPROOM_GOOGLE_PROJECT_ID
+    delete process.env.AWS_ACCESS_KEY_ID
+    delete process.env.AWS_PROFILE
+  })
+
+  it('accepts bedrock as a provider', () => {
+    process.env.MAPROOM_EMBEDDING_PROVIDER = 'bedrock'
+    const result = validateMaproomEnvironment()
+    expect(result.valid).toBe(true)
+    expect(result.errors).toHaveLength(0)
+  })
+
+  it('accepts the aws and aws-bedrock aliases', () => {
+    for (const alias of ['aws', 'aws-bedrock']) {
+      process.env.MAPROOM_EMBEDDING_PROVIDER = alias
+      expect(validateMaproomEnvironment().valid).toBe(true)
+    }
+  })
+
+  it('accepts bedrock case-insensitively, matching the Rust binary', () => {
+    // validate_provider in main.rs lowercases before matching, so rejecting
+    // "Bedrock" here would make the wrapper stricter than the thing it wraps.
+    process.env.MAPROOM_EMBEDDING_PROVIDER = 'Bedrock'
+    expect(validateMaproomEnvironment().valid).toBe(true)
+  })
+
+  it('requires no AWS environment variable', () => {
+    // EC2 instance roles, EKS service accounts, and ECS task roles all leave
+    // nothing in the environment. Probing here would reject working setups.
+    process.env.MAPROOM_EMBEDDING_PROVIDER = 'bedrock'
+    const result = validateMaproomEnvironment()
+    expect(result.valid).toBe(true)
+    expect(result.errors).toHaveLength(0)
+    expect(result.warnings).toHaveLength(0)
+  })
+
+  it('still rejects an unknown provider and lists bedrock as an option', () => {
+    process.env.MAPROOM_EMBEDDING_PROVIDER = 'voyage'
+    const result = validateMaproomEnvironment()
+    expect(result.valid).toBe(false)
+    expect(result.errors[0]).toContain('bedrock')
+  })
+})

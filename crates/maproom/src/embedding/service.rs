@@ -113,6 +113,38 @@ impl EmbeddingService {
         Ok(embedding)
     }
 
+    /// Embed a search query, letting asymmetric models encode it as a query.
+    ///
+    /// For every provider that does not distinguish queries from documents this
+    /// is exactly [`embed_text`](Self::embed_text) — same provider call, same
+    /// cache entry — so nothing changes for Ollama, OpenAI, Google, or Bedrock
+    /// with a Titan model.
+    ///
+    /// When the provider *does* distinguish (Cohere on Bedrock), the query
+    /// vector differs from the document vector for identical text, so it is
+    /// cached under a separate namespace. Sharing the key would let a document
+    /// embedding satisfy a query lookup and quietly undo the improvement.
+    pub async fn embed_query(&self, text: &str) -> Result<Vector, EmbeddingError> {
+        if !self.provider.distinguishes_queries() {
+            return self.embed_text(text).await;
+        }
+
+        // U+001F (unit separator) cannot appear in source text, so this cannot
+        // collide with a document whose content happens to start with "query".
+        let cache_key = format!("query\u{1f}{text}");
+
+        if let Some(cached) = self.cache.get(&cache_key).await {
+            debug!("Cache hit for query text");
+            return Ok(cached);
+        }
+        self.cache.record_miss().await;
+
+        let embedding = self.provider.embed_query(text.to_string()).await?;
+        self.cache.put(&cache_key, embedding.clone()).await?;
+
+        Ok(embedding)
+    }
+
     /// Embed a batch of texts efficiently with caching.
     pub async fn embed_batch(&self, texts: Vec<String>) -> Result<Vec<Vector>, EmbeddingError> {
         self.embed_batch_inner(texts).await.map(|(v, _cached)| v)

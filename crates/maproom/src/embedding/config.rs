@@ -17,6 +17,8 @@ pub enum Provider {
     Ollama,
     /// Google Vertex AI embedding API
     Google,
+    /// AWS Bedrock embedding API
+    Bedrock,
     /// Local embedding model
     Local,
 }
@@ -30,11 +32,14 @@ impl std::str::FromStr for Provider {
             "cohere" => Ok(Self::Cohere),
             "ollama" => Ok(Self::Ollama),
             "google" => Ok(Self::Google),
+            // `aws` and `aws-bedrock` are accepted because they are what people
+            // reach for first; all three name the same provider.
+            "bedrock" | "aws" | "aws-bedrock" => Ok(Self::Bedrock),
             "local" => Ok(Self::Local),
             _ => Err(ConfigError::InvalidValue {
                 field: "provider".to_string(),
                 reason: format!(
-                    "Unknown provider: {}. Supported: openai, cohere, ollama, google, local",
+                    "Unknown provider: {}. Supported: openai, cohere, ollama, google, bedrock, local",
                     s
                 ),
             }),
@@ -151,6 +156,22 @@ impl EmbeddingConfig {
             tracing::debug!("Defaulting to mxbai-embed-large for Ollama provider");
         }
 
+        // Same treatment for Bedrock: the OpenAI-shaped default model name is
+        // meaningless there, so swap in the Bedrock default before inference.
+        if config.provider == Provider::Bedrock {
+            if config.model == "text-embedding-3-small" {
+                config.model =
+                    crate::embedding::bedrock::BedrockProvider::DEFAULT_MODEL.to_string();
+                tracing::debug!(
+                    "Defaulting to {} for Bedrock provider",
+                    crate::embedding::bedrock::BedrockProvider::DEFAULT_MODEL
+                );
+            }
+            // Applied here rather than at construction so the explicit
+            // MAPROOM_EMBEDDING_PARALLEL_* variables read below still win.
+            config.parallel = ParallelConfig::bedrock_defaults();
+        }
+
         // Track whether dimension was explicitly set (clearer than checking is_err() later)
         let explicit_dimension = env::var("MAPROOM_EMBEDDING_DIMENSION").ok();
 
@@ -173,6 +194,36 @@ impl EmbeddingConfig {
                     config.model,
                     config.dimension
                 );
+            }
+        }
+
+        // Bedrock model widths differ per family (1024 for Titan v2 and Cohere,
+        // 1536 for Titan v1), so inference is required — the OpenAI-shaped 1536
+        // default would silently index Titan v2 at the wrong width.
+        if explicit_dimension.is_none() && config.provider == Provider::Bedrock {
+            match crate::embedding::bedrock::infer_bedrock_dimension(&config.model) {
+                Some(inferred_dim) => {
+                    tracing::debug!(
+                        "Inferred dimension {} for Bedrock model '{}'",
+                        inferred_dim,
+                        config.model
+                    );
+                    config.dimension = inferred_dim;
+                }
+                None => {
+                    // Unlike Ollama, guessing here is not survivable: an
+                    // unrecognized Bedrock id is usually a provisioned ARN whose
+                    // width we cannot know, and a wrong width produces an index
+                    // that silently returns nothing.
+                    return Err(EmbeddingError::Config(ConfigError::MissingConfig(format!(
+                        "Cannot infer the embedding dimension for Bedrock model '{}'.\n\
+                         Set MAPROOM_EMBEDDING_DIMENSION to the model's output width.\n\
+                         Known models: amazon.titan-embed-text-v2:0 (1024), \
+                         amazon.titan-embed-text-v1 (1536), cohere.embed-english-v3 (1024), \
+                         cohere.embed-multilingual-v3 (1024).",
+                        config.model
+                    ))));
+                }
             }
         }
 
@@ -230,6 +281,7 @@ impl EmbeddingConfig {
                 .ok(),
             Provider::Ollama => None, // Ollama runs locally, no API key needed
             Provider::Google => None, // Google uses service account JSON, not API key
+            Provider::Bedrock => None, // Bedrock uses SigV4 over the AWS credential chain
             Provider::Local => None,  // Local models don't need API keys
         };
 
@@ -277,6 +329,13 @@ impl EmbeddingConfig {
                     // Google doesn't use EMBEDDING_API_ENDPOINT
                     // Endpoint is constructed from region/project
                     // Ignore any endpoint setting
+                }
+                Provider::Bedrock => {
+                    // Bedrock's endpoint is region-derived and its override has a
+                    // dedicated variable (MAPROOM_BEDROCK_ENDPOINT_URL). Ignoring
+                    // the generic one is the same cross-provider pollution guard
+                    // described above: a DevContainer exporting an Ollama URL
+                    // must not redirect signed AWS traffic.
                 }
             }
         }
@@ -393,6 +452,20 @@ impl EmbeddingConfig {
                         env::var("GOOGLE_PROJECT_ID").unwrap_or_else(|_| "unknown".to_string());
                     format!("https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/textembedding-gecko@003:predict",
                             region, project, region)
+                }
+                Provider::Bedrock => {
+                    // Bedrock's endpoint is regional and the model id is part of
+                    // the path; BedrockProvider builds the real URL. This value
+                    // is display-only, so it uses the same region resolution
+                    // without touching the shared config files.
+                    let region = env::var("MAPROOM_BEDROCK_REGION")
+                        .or_else(|_| env::var("AWS_REGION"))
+                        .or_else(|_| env::var("AWS_DEFAULT_REGION"))
+                        .unwrap_or_else(|_| crate::embedding::aws::DEFAULT_REGION.to_string());
+                    format!(
+                        "https://bedrock-runtime.{}.amazonaws.com/model/{}/invoke",
+                        region, self.model
+                    )
                 }
                 Provider::Local => "http://localhost:8080/embeddings".to_string(),
             }
@@ -515,6 +588,45 @@ impl ParallelConfig {
             enabled: true,
             sub_batch_size: 200,
             max_concurrency: 16,
+        }
+    }
+
+    /// Create a parallel config optimized for AWS Bedrock.
+    ///
+    /// # Default Values
+    ///
+    /// - `enabled`: `true`
+    /// - `sub_batch_size`: `96` — Cohere's per-request maximum on Bedrock
+    /// - `max_concurrency`: `12`
+    ///
+    /// # Rationale
+    ///
+    /// **Sub-batch size (96):** Cohere Embed on Bedrock accepts 96 texts per
+    /// `InvokeModel` call. Titan has no batch form at all, so
+    /// [`BedrockProvider`](crate::embedding::bedrock::BedrockProvider) clamps
+    /// this to 1 for Titan models — this value only takes effect for Cohere.
+    ///
+    /// **Concurrency (12):** Bedrock enforces a requests-per-minute quota per
+    /// model per region, and Titan issues one request per text, so a large scan
+    /// is request-bound rather than payload-bound. 12 keeps a scan fast while
+    /// staying under the default on-demand quota; throttling is retried with
+    /// backoff rather than surfaced, but sustained 429s mean this should come
+    /// down or the account quota should go up.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use maproom::embedding::config::ParallelConfig;
+    ///
+    /// let config = ParallelConfig::bedrock_defaults();
+    /// assert_eq!(config.sub_batch_size, 96);
+    /// assert_eq!(config.max_concurrency, 12);
+    /// ```
+    pub fn bedrock_defaults() -> Self {
+        Self {
+            enabled: true,
+            sub_batch_size: 96,
+            max_concurrency: 12,
         }
     }
 

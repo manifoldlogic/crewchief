@@ -235,6 +235,16 @@ impl OpenAIClient {
                              Use create_provider_from_env() for Google support.".to_string(),
                 }));
             }
+            Provider::Bedrock => {
+                // Bedrock needs SigV4-signed requests and the AWS credential
+                // chain, neither of which this bearer-token client can express.
+                return Err(EmbeddingError::Config(crate::embedding::error::ConfigError::InvalidValue {
+                    field: "provider".to_string(),
+                    reason: "Bedrock provider requires using MAPROOM_EMBEDDING_PROVIDER=bedrock. \
+                             The legacy OpenAIClient cannot sign AWS requests. \
+                             Use create_provider_from_env() for Bedrock support.".to_string(),
+                }));
+            }
             Provider::Local => {
                 // Local models don't require API key
                 self.client
@@ -342,6 +352,7 @@ impl OpenAIClient {
             Provider::Ollama => "Ollama",
             Provider::Cohere => "Cohere",
             Provider::Google => "Google",
+            Provider::Bedrock => "Bedrock",
             Provider::Local => "Local",
         };
 
