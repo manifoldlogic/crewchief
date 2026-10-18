@@ -8,7 +8,7 @@ Only the latest version receives security updates:
 |---------|-----------|
 | @crewchief/cli | Latest only |
 | maproom (Rust binary) | Latest only |
-| @crewchief/maproom-mcp | No (deprecated) |
+| @crewchief/maproom-mcp | Latest only |
 | vscode-maproom | No (deprecated) |
 
 ## Reporting a Vulnerability

@@ -2,7 +2,8 @@
   "$schema": "./release-config.schema.json",
   "description": "Coordinated release configuration for CrewChief packages",
   "releaseOrder": [
-    "@crewchief/cli"
+    "@crewchief/cli",
+    "@crewchief/maproom-mcp"
   ],
   "packages": {
     "@crewchief/cli": {
@@ -18,8 +19,7 @@
       "dependencies": ["@crewchief/cli"],
       "requiredCliVersion": ">=1.5.0",
       "schemaVersion": 1,
-      "deprecated": true,
-      "notes": "MCP server - docs reference CLI for migrations/scanning"
+      "notes": "MCP server - actively maintained. The recommended integration path for LLM agents and the universal way to connect Maproom to other systems, per the 'Clean Up and Promote' disposition in docs/decisions/component-disposition-matrix.md. Docs reference CLI for migrations/scanning."
     },
     "vscode-maproom": {
       "path": "packages/vscode-maproom",

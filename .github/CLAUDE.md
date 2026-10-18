@@ -47,7 +47,9 @@ my-new-test:
 
 ## Release System
 
-**Required order**: `@crewchief/cli` → `@crewchief/daemon-client` → `@crewchief/maproom-mcp` → `vscode-maproom`
+**Required order**: `@crewchief/cli` → `@crewchief/maproom-mcp` (matches `releaseOrder` in `/release-config.json`)
+
+`@crewchief/daemon-client` is workspace-internal and has never been published — nothing outside the monorepo depends on it. `vscode-maproom` is retired (`private: true`) and is not published. Neither belongs in the release order.
 
 Configuration in `/release-config.json` defines order, version requirements, and validation rules.
 
